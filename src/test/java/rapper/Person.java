@@ -18,7 +18,28 @@ public class Person implements DomainObject<Integer> {
     }
 
     @Override
+    public String toString() {
+        return "Person{" +
+                "nif=" + nif +
+                ", name='" + name + '\'' +
+                ", birthday=" + birthday +
+                '}';
+    }
+
+    @Override
     public Integer getIdentityKey() {
         return nif;
+    }
+
+    public int getNif() {
+        return nif;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public Date getBirthday() {
+        return birthday;
     }
 }

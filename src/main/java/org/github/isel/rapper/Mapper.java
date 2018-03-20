@@ -1,10 +1,11 @@
 package org.github.isel.rapper;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
-public interface Mapper<T, K> {
-    CompletableFuture<T> getById(K id);
+public interface Mapper<T extends DomainObject<K>, K> {
+    CompletableFuture<Optional<T>> getById(K id);
     CompletableFuture<List<T>> getAll();
     void insert(T obj);
     void update(T obj);
