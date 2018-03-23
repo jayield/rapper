@@ -6,12 +6,12 @@ import java.sql.SQLException;
 import java.util.function.Consumer;
 
 public interface SqlConsumer<T> {
-    void accept(T t) throws SQLException;
+    void accept(T t) throws SQLException, NoSuchFieldException, IllegalAccessException;
 
     default Consumer<T> wrap(){
         return t -> {
             try{ this.accept(t);}
-            catch (SQLException e){
+            catch (Exception e){//TODO
                 throw new DataMapperException(e);
             }
         };

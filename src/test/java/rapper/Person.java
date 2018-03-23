@@ -31,6 +31,11 @@ public class Person implements DomainObject<Integer> {
         return nif;
     }
 
+    @Override
+    public long getVersion() {
+        return 0;
+    }
+
     public int getNif() {
         return nif;
     }

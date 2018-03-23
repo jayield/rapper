@@ -5,6 +5,7 @@ import org.github.isel.rapper.utils.UnitOfWork;
 public interface DomainObject<K> {
 
     K getIdentityKey();
+    long getVersion();
 
     default void markNew() {
         UnitOfWork.getCurrent().registerNew(this);

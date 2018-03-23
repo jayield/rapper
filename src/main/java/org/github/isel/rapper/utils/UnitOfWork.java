@@ -3,6 +3,7 @@ package org.github.isel.rapper.utils;
 
 import org.github.isel.rapper.DataMapper;
 import org.github.isel.rapper.DomainObject;
+import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -112,31 +113,30 @@ public class UnitOfWork {
     public static UnitOfWork getCurrent() {
         UnitOfWork ret = current.get();//test porpuses
         if(ret == null)
-//            ret = new UnitOfWork(ConnectionManager::getConnection2);
-            ;
+            ret = new UnitOfWork(ConnectionManager::getConnection2);
         return ret;
     }
 
     //TODO does it catch the concurrentyException?
     //TODO update IdentityMaps only after all transactions succeeded?
     public void commit() throws SQLException {
-//        try {
-//            insertNew();
-//            updateDirty();
-//            deleteRemoved();
-//
-//            connection.commit();
-//        } catch (ConcurrencyException e) {
-//            rollback();
-//            throw e;
-//        }
-//        finally {
-//            //closeConnection();
-//            newObjects.clear();
-//            clonedObjects.clear();
-//            dirtyObjects.clear();
-//            removedObjects.clear();
-//        }
+        try {
+            insertNew();
+            updateDirty();
+            deleteRemoved();
+
+            connection.commit();
+        } catch (ConcurrencyException e) {
+            rollback();
+            throw e;
+        }
+        finally {
+            //closeConnection();
+            newObjects.clear();
+            clonedObjects.clear();
+            dirtyObjects.clear();
+            removedObjects.clear();
+        }
     }
 
     private void insertNew() {

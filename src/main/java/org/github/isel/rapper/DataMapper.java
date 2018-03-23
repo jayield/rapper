@@ -1,5 +1,6 @@
 package org.github.isel.rapper;
 
+import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
 import org.github.isel.rapper.utils.*;
 
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -35,7 +37,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         this.subClass = type.getSuperclass();
         this.mapperSettings = new MapperSettings(type);
     }
-
 
     private Stream<T> stream(Statement statement, ResultSet rs, Function<ResultSet, T> func) throws DataMapperException{
         return StreamSupport.stream(new Spliterators.AbstractSpliterator<T>(
@@ -89,33 +90,23 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return null;
     }
 
-    private <U> CompletableFuture<U> execute(String sqlQuery, SqlFunction<PreparedStatement, U> handleStatement){
-        Connection con = UnitOfWork.getCurrent().getConnection();
-        try{
-            PreparedStatement preparedStatement = con.prepareStatement(sqlQuery);
-            return CompletableFuture.supplyAsync(()-> handleStatement.wrap().apply(preparedStatement));
-        } catch (SQLException e) {
-            throw new DataMapperException(e);
-        }
-    }
-
-    public void getById2(K id){
-        Function<Field, Object> func;
-        if(mapperSettings.getId().size()>1){
-            func = f -> {
-                try {
-                    f.setAccessible(true);
-                    return f.get(id);
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-            };
-        } else {
-            func = f -> id;
-        }
-        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry-> System.out.println(entry.getKey() + ":" + func.apply(entry.getValue()));
-        CollectionUtils.zipWithIndex(mapperSettings.getId().stream()).forEach(consumer.wrap());
-    }
+//    public void getById2(K id){
+//        Function<Field, Object> func;
+//        if(mapperSettings.getId().size()>1){
+//            func = f -> {
+//                try {
+//                    f.setAccessible(true);
+//                    return f.get(id);
+//                } catch (IllegalAccessException e) {
+//                    throw new RuntimeException(e);
+//                }
+//            };
+//        } else {
+//            func = f -> id;
+//        }
+//        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry-> System.out.println(entry.getKey() + ":" + func.apply(entry.getValue()));
+//        CollectionUtils.zipWithIndex(mapperSettings.getId().stream()).forEach(consumer.wrap());
+//    }
 
     private void setIds(PreparedStatement stmt, K id){
         Function<Field, Object> func;
@@ -125,7 +116,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     f.setAccessible(true);
                     return f.get(id);
                 } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
+                    throw new RuntimeException(e);//TODO
                 }
             };
         } else {
@@ -135,46 +126,98 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         CollectionUtils.zipWithIndex(mapperSettings.getId().stream()).forEach(consumer.wrap());
     }
 
-    @Override
-    public CompletableFuture<Optional<T>> getById(K id) {
-        return execute(mapperSettings.getSelectByIdQuery(), stmt -> {
-            setIds(stmt, id);
-            return stream(stmt, stmt.executeQuery(), this::mapper);
-        }).thenApply(Stream::findFirst);
+    private void setColumns(PreparedStatement stmt, T obj) {
+        Function<Field, Object> func = f -> {
+            try {
+                f.setAccessible(true);
+                return f.get(obj);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);//TODO
+            }
+        };
+        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry -> stmt.setObject(entry.getKey(), func.apply(entry.getValue()));
+        CollectionUtils.zipWithIndex(mapperSettings.getColumns().stream()).forEach(consumer.wrap());
     }
 
-//    private PreparedStatement m(PreparedStatement stmt, ){
-//        if(mapperSettings.getId().size() > 1){
-//            mapperSettings.getId()
-//        }
-//    }
+    private boolean tryReplace(T obj, long timeout){
+        long target = System.currentTimeMillis() +  timeout;
+        long remaining = target - System.currentTimeMillis();
+
+        while(remaining >= 0){
+            T observedObj = identityMap.get(obj.getIdentityKey());
+            if(observedObj.getVersion() < obj.getVersion()) {
+                if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
+                    return true;
+            }
+            remaining = target - System.currentTimeMillis();
+            Thread.yield();
+        }
+        return false;
+    }
+
+    @Override
+    public CompletableFuture<Optional<T>> getById(K id) {
+        T obj = identityMap.get(id);
+        if(obj != null)
+            return CompletableFuture.completedFuture(Optional.of(obj));
+        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet(), this::mapper);
+        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setIds(stmt, id))
+                .thenApply(func.wrap())
+                .thenApply(Stream::findFirst);
+    }
 
     @Override
     public CompletableFuture<List<T>> getAll() {
-        return execute(mapperSettings.getSelectQuery(), stmt -> stream(stmt, stmt.executeQuery(), this::mapper))
+        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet(), this::mapper);
+        return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
+                .thenApply(func.wrap())
                 .thenApply(s->s.collect(Collectors.toList()));
     }
 
     @Override
     public void insert(T obj) {
+        SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
+        func = func.compose(s -> {
+            if(mapperSettings.isIdentity()){
+                mapperSettings.getId().stream().findFirst().ifPresent(((SqlConsumer<Field>)f -> {
+                    f.setAccessible(true);
+                    f.set(obj, SQLUtils.getGeneratedKey(s));
+                }).wrap());
+            }
+            return s;
+        });
+        SQLUtils.execute(mapperSettings.getInsertQuery(), s -> {
+            if(!mapperSettings.isIdentity())
+                setIds(s, obj.getIdentityKey());
+            setColumns(s, obj);
+        }).thenApply(func.wrap()).thenAccept(o -> identityMap.put(o.getIdentityKey(), obj));
+    }
 
+    private T setVersion(PreparedStatement s, T obj) throws SQLException, NoSuchFieldException, IllegalAccessException {
+        if(s.getUpdateCount()==0) throw new ConcurrencyException("Concurrency problem found");
+        Field v = type.getField("version");
+        v.setAccessible(true);
+        v.set(obj, SQLUtils.getVersion(s));
+        return obj;
     }
 
     @Override
     public void update(T obj) {
-        execute(mapperSettings.getUpdateQuery(), stmt -> {
+        SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
+        SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             setColumns(stmt, obj);
             setIds(stmt, obj.getIdentityKey());
-            return stmt.executeUpdate()
         })
+                .thenApply(func.wrap())
+                .thenAccept(o -> {
+                    if(!tryReplace(o, 5000)) throw new ConcurrencyException("Concurrency problem found, could not update IdentityMap");
+                });
     }
 
     @Override
     public void delete(T obj) {
-        execute(mapperSettings.getDeleteQuery(), stmt -> {
-            setIds(stmt, obj.getIdentityKey());
-            return stmt.execute();
-        }).thenAccept(v -> identityMap.remove(obj.getIdentityKey()));
+        SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> setIds(stmt, obj.getIdentityKey()))
+                .thenAccept(v -> identityMap.remove(obj.getIdentityKey()));
     }
 
     public ConcurrentMap<K, T> getIdentityMap() {

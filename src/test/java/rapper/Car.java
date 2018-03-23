@@ -24,6 +24,11 @@ public class Car implements DomainObject<Car.PrimaryPk> {
         return null;
     }
 
+    @Override
+    public long getVersion() {
+        return 0;
+    }
+
     public static class PrimaryPk{
         private final int owner;
 
