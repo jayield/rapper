@@ -13,6 +13,12 @@ DataMapper in rap for domain model
  
  - The Identity Map implements a LRU cache. They have a limit of what they can hold in memory, and when it reaches the limit, they will delete the least-read elements.
  
+ - All domain objects must implement interface DomainObject and each domain object must have a field called version and the same for the DB tables.
+ 
+ - The domain object classes must have the same name as respective DB table, same for the fields/rows.
+ 
+ - The field corresponding to the primary key must have the annotation @Id. If it is a composed key it is needed to create a class that contains the keys and respective names, the domain object must have field of that class and mark it with the annotation @EmbeddedId.
+ 
 ### Rules
 You must create an environment variable to connect to the DB. <br />
 The environment variable must have the following format:
