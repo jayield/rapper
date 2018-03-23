@@ -1,4 +1,4 @@
-package rapper;
+package org.github.isel.rapper;
 
 import org.github.isel.rapper.DomainObject;
 import org.github.isel.rapper.Id;

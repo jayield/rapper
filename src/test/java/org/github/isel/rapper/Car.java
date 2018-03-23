@@ -1,7 +1,4 @@
-package rapper;
-
-import org.github.isel.rapper.DomainObject;
-import org.github.isel.rapper.EmbeddedId;
+package org.github.isel.rapper;
 
 public class Car implements DomainObject<Car.PrimaryPk> {
 

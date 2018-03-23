@@ -13,4 +13,6 @@ dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
     compile group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: '6.3.6.jre8-preview'
     testCompile group: 'junit', name: 'junit', version: '4.12'
+    // https://mvnrepository.com/artifact/org.slf4j/slf4j-jdk14
+    testCompile group: 'org.slf4j', name: 'slf4j-jdk14', version: '1.7.25'
 }

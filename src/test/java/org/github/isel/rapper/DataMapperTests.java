@@ -1,6 +1,5 @@
-package rapper;
+package org.github.isel.rapper;
 
-import org.github.isel.rapper.DataMapper;
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.MapperRegistry;
 import org.github.isel.rapper.utils.UnitOfWork;
@@ -8,9 +7,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.sql.Connection;
 import java.sql.Date;
-import java.sql.SQLException;
 
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 

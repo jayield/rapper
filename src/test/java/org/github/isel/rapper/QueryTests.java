@@ -1,12 +1,10 @@
-package rapper;
+package org.github.isel.rapper;
 
-import org.github.isel.rapper.DataMapper;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.Parameter;
 import java.util.Arrays;
 
 import static java.lang.System.out;
