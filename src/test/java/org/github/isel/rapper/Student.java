@@ -1,4 +1,4 @@
-package rapper;
+package org.github.isel.rapper;
 
 import java.sql.Date;
 

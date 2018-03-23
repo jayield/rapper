@@ -1,7 +1,5 @@
-package rapper;
+package org.github.isel.rapper;
 
-import org.github.isel.rapper.DataMapper;
-import org.github.isel.rapper.utils.UnitOfWork;
 import org.junit.Assert;
 import org.junit.Test;
 
