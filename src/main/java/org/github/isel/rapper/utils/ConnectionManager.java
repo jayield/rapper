@@ -72,6 +72,7 @@ public class ConnectionManager {
 
     private static ConnectionPoolDataSource getDataSource(String envVar){
         String connectionString = System.getenv(envVar);
+        System.out.println(connectionString +" - "+ envVar);
         String [] connectionStringParts = connectionString.split(";");
 
         SQLServerConnectionPoolDataSource dataSource = new SQLServerConnectionPoolDataSource();

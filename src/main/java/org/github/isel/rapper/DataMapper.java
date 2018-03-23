@@ -85,7 +85,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return null;
     }
 
-    private void setIds(PreparedStatement stmt, K id){
+    private void setIds(PreparedStatement stmt, K id, int offset){
         SqlFunction<Field, Object> func;
         if(mapperSettings.getId().size()>1){
             func = f -> {
@@ -95,16 +95,16 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         } else {
             func = f -> id;
         }
-        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry-> stmt.setObject(entry.getKey(), func.apply(entry.getValue()));
+        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry-> stmt.setObject(entry.getKey() + offset, func.apply(entry.getValue()));
         CollectionUtils.zipWithIndex(mapperSettings.getId().stream()).forEach(consumer.wrap());
     }
 
-    private void setColumns(PreparedStatement stmt, T obj) {
+    private void setColumns(PreparedStatement stmt, T obj, int offset) {
         SqlFunction<Field, Object> func = f -> {
                 f.setAccessible(true);
                 return f.get(obj);
         };
-        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry -> stmt.setObject(entry.getKey(), func.apply(entry.getValue()));
+        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry -> stmt.setObject(entry.getKey() +offset, func.apply(entry.getValue()));
         CollectionUtils.zipWithIndex(mapperSettings.getColumns().stream()).forEach(consumer.wrap());
     }
 
@@ -130,7 +130,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         if(obj != null)
             return CompletableFuture.completedFuture(Optional.of(obj));
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet(), this::mapper);
-        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setIds(stmt, id))
+        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setIds(stmt, id, 0))
                 .thenApply(func.wrap())
                 .thenApply(Stream::findFirst);
     }
@@ -157,8 +157,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         });
         SQLUtils.execute(mapperSettings.getInsertQuery(), s -> {
             if(!mapperSettings.isIdentity())
-                setIds(s, obj.getIdentityKey());
-            setColumns(s, obj);
+                setIds(s, obj.getIdentityKey(), 0);
+            setColumns(s, obj, mapperSettings.getId().size()-1);
         }).thenApply(func.wrap()).thenAccept(o -> identityMap.put(o.getIdentityKey(), obj));
     }
 
@@ -174,8 +174,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public void update(T obj) {
         SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
         SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
-            setColumns(stmt, obj);
-            setIds(stmt, obj.getIdentityKey());
+            setColumns(stmt, obj, 0);
+            setIds(stmt, obj.getIdentityKey(), mapperSettings.getColumns().size()-1);
         })
                 .thenApply(func.wrap())
                 .thenAccept(o -> {
@@ -185,7 +185,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public void delete(T obj) {
-        SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> setIds(stmt, obj.getIdentityKey()))
+        SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> setIds(stmt, obj.getIdentityKey(), 0))
                 .thenAccept(v -> identityMap.remove(obj.getIdentityKey()));
     }
 
