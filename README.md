@@ -17,7 +17,7 @@ DataMapper in rap for domain model
  
  - The domain object classes must have the same name as respective DB table, same for the fields/rows.
  
- - The field corresponding to the primary key must have the annotation @Id. If it is a composed key it is needed to create a class that contains the keys and respective names, the domain object must have field of that class and mark it with the annotation @EmbeddedId.
+ - The field corresponding to the primary key must have the annotation <code>@Id</code>. If it is a composed key it is needed to create a class that contains the keys and respective names, the domain object must have field of that class and mark it with the annotation <code>@EmbeddedId</code>.
  
 ### Rules
 You must create an environment variable to connect to the DB. <br />
