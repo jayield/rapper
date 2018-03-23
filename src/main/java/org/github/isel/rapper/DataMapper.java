@@ -70,15 +70,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         try {
             Constructor<T> c = type.getConstructor(mapperSettings.getFields().stream().map(Field::getType).toArray(Class[]::new));
 
-            return c.newInstance(mapperSettings.getFields().stream().map(f-> {
-                try {
-                    return rs.getObject(f.getName());
-                } catch (SQLException e) {
-                    throw new DataMapperException(e);
-                }
-            }).toArray());
+            return c.newInstance(mapperSettings.getFields().stream().map(((SqlFunction<Field,Object>)f->
+                    rs.getObject(f.getName())).wrap()).toArray());
 
-        } catch (NoSuchMethodException e) {
+        } catch (NoSuchMethodException e) {//TODO
             e.printStackTrace();
         } catch (IllegalAccessException e) {
             e.printStackTrace();
@@ -90,34 +85,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return null;
     }
 
-//    public void getById2(K id){
-//        Function<Field, Object> func;
-//        if(mapperSettings.getId().size()>1){
-//            func = f -> {
-//                try {
-//                    f.setAccessible(true);
-//                    return f.get(id);
-//                } catch (IllegalAccessException e) {
-//                    throw new RuntimeException(e);
-//                }
-//            };
-//        } else {
-//            func = f -> id;
-//        }
-//        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry-> System.out.println(entry.getKey() + ":" + func.apply(entry.getValue()));
-//        CollectionUtils.zipWithIndex(mapperSettings.getId().stream()).forEach(consumer.wrap());
-//    }
-
     private void setIds(PreparedStatement stmt, K id){
-        Function<Field, Object> func;
+        SqlFunction<Field, Object> func;
         if(mapperSettings.getId().size()>1){
             func = f -> {
-                try {
                     f.setAccessible(true);
                     return f.get(id);
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);//TODO
-                }
             };
         } else {
             func = f -> id;
@@ -127,13 +100,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     private void setColumns(PreparedStatement stmt, T obj) {
-        Function<Field, Object> func = f -> {
-            try {
+        SqlFunction<Field, Object> func = f -> {
                 f.setAccessible(true);
                 return f.get(obj);
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException(e);//TODO
-            }
         };
         SqlConsumer<Map.Entry<Integer, Field>> consumer = entry -> stmt.setObject(entry.getKey(), func.apply(entry.getValue()));
         CollectionUtils.zipWithIndex(mapperSettings.getColumns().stream()).forEach(consumer.wrap());

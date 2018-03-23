@@ -177,8 +177,7 @@ public class UnitOfWork {
                     .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                     .findFirst()
                     .ifPresent(
-                            clone -> getMapper(obj.getClass()).ifPresent(m->
-                                    m.getIdentityMap().put(clone.getIdentityKey(), clone))
+                            clone -> getMapper(obj.getClass()).ifPresent(m-> m.getIdentityMap().put(clone.getIdentityKey(), clone))
                     );
         }
         removedObjects
