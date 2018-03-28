@@ -2,6 +2,17 @@
 ### ["I'm beginning to feel like a Rap God"](https://www.youtube.com/watch?v=XbGs_qK2PQA) 
 DataMapper in rap for domain model
 
+Rapper is a Reactive Data Mapper library for Java, which provides an implementation of a Data Mapper for a domain entity. This implementations follows the principles stated by Martin Fowler in [[Fowler, 2002]][#Fowler2002] about Object-Relational Behavioral and Data Source Architectural Patterns, but applied to a reactive approach. Thus the Rapper API is asynchronous and the data mapper effects are strongly typed in Promises [[Friedman and Wise, 1976]][#FriedmanAndWise1976].
+
+The Rapper implementation use the following design patterns: 
+
+* [Unit of Work](https://martinfowler.com/eaaCatalog/unitOfWork.html)
+* [Data Mapper](https://martinfowler.com/eaaCatalog/dataMapper.html)
+* etc…
+
+[#Fowler2002]: https://dl.acm.org/citation.cfm?id=579257 "Patterns of Enterprise Application Architecture"
+[#FriedmanAndWise1976]: https://books.google.pt/books/about/The_Impact_of_Applicative_Programming_on.html?id=ZIhtHQAACAAJ  "The Impact of Applicative Programming on Multiprocessing"
+
 ### Rapper Structure
  - There will be one Work Unit for each request received in the Web API. So each request will know what has been changed and what needs to be written to the BD.
  
