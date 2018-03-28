@@ -92,7 +92,7 @@ public class UnitOfWork {
      */
     public void registerClean(DomainObject obj){
         assert obj.getIdentityKey()!= null;
-        getMapper(obj.getClass()).ifPresent(m->m.getIdentityMap().put(obj.getIdentityKey(), obj));
+        getMapper(obj.getClass()).getIdentityMap().put(obj.getIdentityKey(), obj);
     }
 
     private static ThreadLocal<UnitOfWork> current = new ThreadLocal<>();
@@ -141,7 +141,7 @@ public class UnitOfWork {
 
     private void insertNew() {
         for (DomainObject obj : newObjects) {
-            getMapper(obj.getClass()).ifPresent(m -> m.insert(obj));
+            getMapper(obj.getClass()).insert(obj);
         }
     }
 
@@ -149,13 +149,14 @@ public class UnitOfWork {
         dirtyObjects
                 .stream()
                 .filter(domainObject -> !removedObjects.contains(domainObject))
-                .forEach(domainObject -> getMapper(domainObject.getClass()).ifPresent(m -> m.update(domainObject)));
+                .forEach(domainObject -> getMapper(domainObject.getClass()).update(domainObject));
     }
 
     private void deleteRemoved() {
         for (DomainObject obj : removedObjects) {
-            getMapper(obj.getClass()).ifPresent(m->m.delete(obj));
+            getMapper(obj.getClass()).delete(obj);
         }
+
     }
 
     /**
@@ -169,7 +170,7 @@ public class UnitOfWork {
             MapperRegistry.getMapper(obj.getClass()).getIdentityMap().remove(obj.getIdentityKey());*/
 
         newObjects.forEach(domainObject ->
-                getMapper(domainObject.getClass()).ifPresent(m->m.getIdentityMap().remove(domainObject.getIdentityKey())));
+                getMapper(domainObject.getClass()).getIdentityMap().remove(domainObject.getIdentityKey()));
 
         for(DomainObject obj : dirtyObjects){
             clonedObjects
@@ -177,12 +178,12 @@ public class UnitOfWork {
                     .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                     .findFirst()
                     .ifPresent(
-                            clone -> getMapper(obj.getClass()).ifPresent(m-> m.getIdentityMap().put(clone.getIdentityKey(), clone))
+                            clone -> getMapper(obj.getClass()).getIdentityMap().put(clone.getIdentityKey(), clone)
                     );
         }
         removedObjects
                 .stream()
                 .filter(obj -> !dirtyObjects.contains(obj))
-                .forEach(obj -> getMapper(obj.getClass()).ifPresent(m->m.getIdentityMap().put(obj.getIdentityKey(), obj)));
+                .forEach(obj -> getMapper(obj.getClass()).getIdentityMap().put(obj.getIdentityKey(), obj));
     }
 }

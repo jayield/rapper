@@ -12,7 +12,7 @@ import static java.lang.System.out;
 public class QueryTests {
     @Test
     public void shouldObtainQueriesForSimpleEntity(){
-        DataMapper<Person, Integer> dataMapper = new DataMapper<>(Person.class, Integer.class);
+        DataMapper<Person, Integer> dataMapper = new DataMapper<>(Person.class);
 
         Assert.assertEquals("select nif, name, birthday from Person", dataMapper.getSelectQuery());
         Assert.assertEquals("delete from Person where nif = ?", dataMapper.getDeleteQuery());
@@ -22,7 +22,7 @@ public class QueryTests {
 
     @Test
     public void shouldObtainQueriesForEntitiesWithMultiPK(){
-        DataMapper<Car, Car.PrimaryPk> dataMapper = new DataMapper<>(Car.class, Car.PrimaryPk.class);
+        DataMapper<Car, Car.PrimaryPk> dataMapper = new DataMapper<>(Car.class);
 
         Assert.assertEquals("select owner, plate, brand, model from Car", dataMapper.getSelectQuery());
         Assert.assertEquals("delete from Car where owner = ? and plate = ?", dataMapper.getDeleteQuery());
@@ -32,7 +32,7 @@ public class QueryTests {
 
     @Test
     public void shouldObtainQueriesForEntitiesWithInheritance(){
-        DataMapper<Student, Integer> dataMapper = new DataMapper<>(Student.class, Integer.class);
+        DataMapper<Student, Integer> dataMapper = new DataMapper<>(Student.class);
 
         Assert.assertEquals("select nif studentNumber from Student", dataMapper.getSelectQuery());
         Assert.assertEquals("delete from Student where nif = ?", dataMapper.getDeleteQuery());

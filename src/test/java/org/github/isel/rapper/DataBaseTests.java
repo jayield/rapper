@@ -37,6 +37,18 @@ public class DataBaseTests {
     }
 
     @Test
+    public void test() throws SQLException {
+        PreparedStatement s = con.prepareStatement("select * from Person");
+        ResultSet rs = s.executeQuery();
+        rs.next();
+        for (int i = 0; i < 10000; i++) {
+            System.out.println(rs.getObject("nif"));
+        }
+
+        System.out.println(rs.getObject("nif"));
+    }
+
+    @Test
     public void CRUDTest() throws SQLException {
         PreparedStatement statement = con.prepareStatement("INSERT INTO ApiDatabase.[Local] ([Address], Country) Values (?, ?)");
         statement.setString(1, "Rua do Teste da Base de Dados");

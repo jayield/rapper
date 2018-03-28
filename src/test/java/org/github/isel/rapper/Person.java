@@ -4,17 +4,21 @@ import org.github.isel.rapper.DomainObject;
 import org.github.isel.rapper.Id;
 
 import java.sql.Date;
+import java.sql.Time;
+import java.sql.Timestamp;
 
 public class Person implements DomainObject<Integer> {
     @Id
     private final int nif;
     private final String name;
-    private final Date birthday;
+    private final Timestamp birthday;
+    private final long version;
 
-    public Person(int nif, String name, Date birthday) {
+    public Person(int nif, String name, Timestamp birthday, long version) {
         this.nif = nif;
         this.name = name;
         this.birthday = birthday;
+        this.version = version;
     }
 
     @Override
@@ -33,7 +37,7 @@ public class Person implements DomainObject<Integer> {
 
     @Override
     public long getVersion() {
-        return 0;
+        return version;
     }
 
     public int getNif() {
@@ -44,7 +48,7 @@ public class Person implements DomainObject<Integer> {
         return name;
     }
 
-    public Date getBirthday() {
+    public Timestamp getBirthday() {
         return birthday;
     }
 }

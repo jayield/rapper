@@ -1,21 +1,20 @@
 package org.github.isel.rapper;
 
+import org.github.isel.rapper.domainModel.Account;
+import org.github.isel.rapper.utils.MapperRegistry;
+import org.github.isel.rapper.utils.ReflectionUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.io.InputStream;
 import java.io.Reader;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.*;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.Map;
+import java.sql.Array;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -24,9 +23,9 @@ public class MappingTests {
     @Test
     public void shouldMapResultSetToPerson(){
 
-        DataMapper<Person, Integer> mapper = new DataMapper<>(Person.class, Integer.class);
+        DataMapper<Person, Integer> mapper = new DataMapper<>(Person.class);
 
-        DataMapper<Car, Car.PrimaryPk> carMapper = new DataMapper<>(Car.class, Car.PrimaryPk.class);
+        DataMapper<Car, Car.PrimaryPk> carMapper = new DataMapper<>(Car.class);
 
         //carMapper.getById2(new Car.PrimaryPk(1,"abc"));
 
@@ -53,7 +52,20 @@ public class MappingTests {
     @Test
     public void test() throws NoSuchFieldException, IllegalAccessException {
         Class<A> type = A.class;
+
         System.out.println(Arrays.toString(((ParameterizedType) type.getField("b").getGenericType()).getActualTypeArguments()));
+
+        Type type1 = ((ParameterizedType) type.getField("b").getGenericType()).getActualTypeArguments()[0];
+
+        ParameterizedType type2 = (ParameterizedType) type1;
+        System.out.println(type2);
+
+        type1 = ((ParameterizedType) type1).getActualTypeArguments()[0];
+        Class<?> clazz = (Class<?>) type1;
+        System.out.println(clazz);
+
+        System.out.println("-------------");
+        System.out.println(ReflectionUtils.getGenericType(type.getField("b").getGenericType()));
 
         B b = new B("a");
         System.out.println(b + "-"+ b.hashCode());
@@ -66,8 +78,27 @@ public class MappingTests {
         System.out.println(Stream.empty().map(Object::toString).collect(Collectors.joining(",", "prefix", "sufix")));
     }
 
+    @Test
+    public void test1() throws NoSuchFieldException, IllegalAccessException {
+        Field f = MapperRegistry.class.getDeclaredField("map");
+        f.setAccessible(true);
+        Map<Class, DataMapper> map = (Map<Class, DataMapper>)f.get(null);
+        System.out.println(map);
+        MapperRegistry.getMapper(Account.class);
+        System.out.println(map);
+    }
+
+    @Test
+    public void test2(){
+        new DataMapper<>(Account.class).getMapperSettings().getExternals()
+                .stream()
+                .map(f -> ReflectionUtils.getGenericType(f.getGenericType()))
+                .filter(DomainObject.class::isAssignableFrom)
+                .forEach(System.out::println);
+    }
+
     private class A{
-        public CompletableFuture<B> b;
+        public CompletableFuture<List<B>> b;
     }
 
     private class B{

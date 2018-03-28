@@ -1,8 +1,10 @@
 package org.github.isel.rapper;
 
+import javafx.util.Pair;
 import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
 import org.github.isel.rapper.utils.*;
+import org.github.isel.rapper.utils.SqlField.SqlFieldId;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -24,28 +26,33 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final ConcurrentMap<K,T> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
     private final Class<? super T> subClass;
-    private final Class<K> keyType;
     private final MapperSettings mapperSettings;
+    private final Constructor<T> constructor;
 
     public MapperSettings getMapperSettings() {
         return mapperSettings;
     }
 
-    public DataMapper(Class<T> type, Class<K> keyType){
+    public DataMapper(Class<T> type){
         this.type = type;
-        this.keyType = keyType;
         this.subClass = type.getSuperclass();
         this.mapperSettings = new MapperSettings(type);
+        try {
+            this.constructor = type.getConstructor(mapperSettings.getAllFields().stream().map(f->f.field.getType()).toArray(Class[]::new));
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
-    private Stream<T> stream(Statement statement, ResultSet rs, Function<ResultSet, T> func) throws DataMapperException{
+    private Stream<T> stream(Statement statement, ResultSet rs) throws DataMapperException{
         return StreamSupport.stream(new Spliterators.AbstractSpliterator<T>(
                 Long.MAX_VALUE, Spliterator.ORDERED) {
             @Override
             public boolean tryAdvance(Consumer<? super T> action) {
                 try {
                     if(!rs.next())return false;
-                    action.accept(func.apply(rs));
+                    action.accept(mapper(rs));
                     return true;
                 } catch (SQLException e) {
                     throw new DataMapperException(e);
@@ -68,26 +75,35 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private T mapper(ResultSet rs){
         try {
-            Constructor<T> c = type.getConstructor(mapperSettings.getFields().stream().map(Field::getType).toArray(Class[]::new));
-
-            return c.newInstance(mapperSettings.getFields().stream().map(((SqlFunction<Field,Object>)f->
-                    rs.getObject(f.getName())).wrap()).toArray());
-
-        } catch (NoSuchMethodException e) {//TODO
-            e.printStackTrace();
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        } catch (InstantiationException e) {
-            e.printStackTrace();
-        } catch (InvocationTargetException e) {
-            e.printStackTrace();
+            SqlFunction<SqlField, Object> rsGetter = f -> rs.getObject(f.name);
+            Object[] args = mapperSettings
+                    .getAllFields()
+                    .stream()
+                    .map(rsGetter.wrap())
+                    .toArray();
+            return constructor.newInstance(args);
+        } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+            throw new RuntimeException(e);
         }
-        return null;
+    }
+
+    protected<R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values){
+        String query = Arrays.stream(values)
+                .map(p -> p.getKey() + " = ? ")
+                .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
+        SqlConsumer<PreparedStatement> consumer = s -> {
+            for (int i = 0; i < values.length; i++) {
+                s.setObject(i+1, values[i].getValue());
+            }
+        };
+        return SQLUtils.execute(query, consumer.wrap())
+                .thenApply(((SqlFunction<PreparedStatement, Stream<T>>)s -> stream(s, s.getResultSet())).wrap())
+                .thenApply(s -> s.collect(Collectors.toList()));
     }
 
     private void setIds(PreparedStatement stmt, K id, int offset){
         SqlFunction<Field, Object> func;
-        if(mapperSettings.getId().size()>1){
+        if(mapperSettings.getIds().size()>1){
             func = f -> {
                     f.setAccessible(true);
                     return f.get(id);
@@ -95,8 +111,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         } else {
             func = f -> id;
         }
-        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry-> stmt.setObject(entry.getKey() + offset, func.apply(entry.getValue()));
-        CollectionUtils.zipWithIndex(mapperSettings.getId().stream()).forEach(consumer.wrap());
+        SqlConsumer<Map.Entry<Integer, SqlFieldId>> consumer = entry-> {
+            stmt.setObject(entry.getKey() + offset +1 , func.apply(entry.getValue().field));
+        };
+        CollectionUtils.zipWithIndex(mapperSettings.getIds().stream()).forEach(consumer.wrap());
     }
 
     private void setColumns(PreparedStatement stmt, T obj, int offset) {
@@ -104,7 +122,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 f.setAccessible(true);
                 return f.get(obj);
         };
-        SqlConsumer<Map.Entry<Integer, Field>> consumer = entry -> stmt.setObject(entry.getKey() +offset, func.apply(entry.getValue()));
+        SqlConsumer<Map.Entry<Integer, SqlField>> consumer = entry -> {
+            stmt.setObject(entry.getKey() +offset+1, func.apply(entry.getValue().field));
+        };
         CollectionUtils.zipWithIndex(mapperSettings.getColumns().stream()).forEach(consumer.wrap());
     }
 
@@ -127,9 +147,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Optional<T>> getById(K id) {
         T obj = identityMap.get(id);
+        System.out.println(obj);
         if(obj != null)
             return CompletableFuture.completedFuture(Optional.of(obj));
-        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet(), this::mapper);
+        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setIds(stmt, id, 0))
                 .thenApply(func.wrap())
                 .thenApply(Stream::findFirst);
@@ -137,7 +158,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<List<T>> getAll() {
-        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet(), this::mapper);
+        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
                 .thenApply(func.wrap())
                 .thenApply(s->s.collect(Collectors.toList()));
@@ -147,8 +168,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public void insert(T obj) {
         SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
         func = func.compose(s -> {
-            if(mapperSettings.isIdentity()){
-                mapperSettings.getId().stream().findFirst().ifPresent(((SqlConsumer<Field>)f -> {
+            System.out.println(s.getUpdateCount());
+            if((mapperSettings.getIds().stream().noneMatch(f->f.identity))){
+                mapperSettings.getIds().stream().map(f->f.field).findFirst().ifPresent(((SqlConsumer<Field>)f -> {
                     f.setAccessible(true);
                     f.set(obj, SQLUtils.getGeneratedKey(s));
                 }).wrap());
@@ -156,17 +178,22 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             return s;
         });
         SQLUtils.execute(mapperSettings.getInsertQuery(), s -> {
-            if(!mapperSettings.isIdentity())
+            if(mapperSettings.getIds().stream().noneMatch(f->f.identity))
                 setIds(s, obj.getIdentityKey(), 0);
-            setColumns(s, obj, mapperSettings.getId().size()-1);
-        }).thenApply(func.wrap()).thenAccept(o -> identityMap.put(o.getIdentityKey(), obj));
+            setColumns(s, obj, mapperSettings.getIds().size());
+        }).thenApply(func.wrap()).thenAccept(o -> identityMap.put(o.getIdentityKey(), obj)).join();
     }
 
-    private T setVersion(PreparedStatement s, T obj) throws SQLException, NoSuchFieldException, IllegalAccessException {
+    private T setVersion(PreparedStatement s, T obj) throws SQLException, IllegalAccessException {
         if(s.getUpdateCount()==0) throw new ConcurrencyException("Concurrency problem found");
-        Field v = type.getField("version");
-        v.setAccessible(true);
-        v.set(obj, SQLUtils.getVersion(s));
+        Field v = null;
+        try {
+            v = type.getField("version");
+            v.setAccessible(true);
+            v.set(obj, SQLUtils.getVersion(s));
+        } catch (NoSuchFieldException ignored) {
+        }
+
         return obj;
     }
 
@@ -175,18 +202,18 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
         SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             setColumns(stmt, obj, 0);
-            setIds(stmt, obj.getIdentityKey(), mapperSettings.getColumns().size()-1);
+            setIds(stmt, obj.getIdentityKey(), mapperSettings.getColumns().size());
         })
                 .thenApply(func.wrap())
                 .thenAccept(o -> {
                     if(!tryReplace(o, 5000)) throw new ConcurrencyException("Concurrency problem found, could not update IdentityMap");
-                });
+                }).join();
     }
 
     @Override
     public void delete(T obj) {
         SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> setIds(stmt, obj.getIdentityKey(), 0))
-                .thenAccept(v -> identityMap.remove(obj.getIdentityKey()));
+                .thenAccept(v -> identityMap.remove(obj.getIdentityKey())).join();
     }
 
     public ConcurrentMap<K, T> getIdentityMap() {
