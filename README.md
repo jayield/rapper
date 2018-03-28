@@ -8,6 +8,7 @@ The Rapper implementation use the following design patterns:
 
 * [Unit of Work](https://martinfowler.com/eaaCatalog/unitOfWork.html)
 * [Data Mapper](https://martinfowler.com/eaaCatalog/dataMapper.html)
+* [Identity Map](https://martinfowler.com/eaaCatalog/identityMap.html)
 * etc…
 
 [#Fowler2002]: https://dl.acm.org/citation.cfm?id=579257 "Patterns of Enterprise Application Architecture"
