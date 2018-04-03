@@ -109,12 +109,9 @@ public class UnitOfWork {
     }
 
     //TODO FIX: sometimes current.get() returns null,
-    /**Possible reason: since we are using completableFuture we dont have the guarantee that the threadLocal of the working thread has the unit of work*/
+    /**Possible reason: since we are using completableFuture we don't have the guarantee that the threadLocal of the working thread has the unit of work*/
     public static UnitOfWork getCurrent() {
-        UnitOfWork ret = current.get();//test porpuses
-        if(ret == null)
-            ret = new UnitOfWork(ConnectionManager::getConnection2);
-        return ret;
+        return current.get();
     }
 
     //TODO does it catch the concurrentyException?

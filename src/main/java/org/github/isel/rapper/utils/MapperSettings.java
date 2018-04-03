@@ -49,12 +49,12 @@ public class MapperSettings {
 
         columns = fieldMap.get(SqlField.class);
         ids = fieldMap.get(SqlFieldId.class).stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList());
-        externals = fieldMap.get(SqlFieldExternal.class).stream().map(f -> (SqlFieldExternal)f).collect(Collectors.toList());
+        //externals = fieldMap.get(SqlFieldExternal.class).stream().map(f -> (SqlFieldExternal)f).collect(Collectors.toList());
 
         allFields = new ArrayList<>();
         allFields.addAll(ids);
         allFields.addAll(columns);
-        allFields.addAll(externals);
+        //allFields.addAll(externals);
 
         buildQueryStrings();
     }

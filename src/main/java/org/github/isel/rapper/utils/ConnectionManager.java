@@ -50,7 +50,7 @@ public class ConnectionManager {
             connection.setAutoCommit(false);
             return connection;
         } catch (SQLException e) {
-            logger.info("Error on stablishing connection to the DB \n" + e.getMessage());
+            logger.info("Error on establishing connection to the DB \n" + e.getMessage());
         }
         return null;
     }
@@ -65,7 +65,7 @@ public class ConnectionManager {
             return connection;
         } catch (SQLException e) {
             Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
-            logger.info("Error on stablishing connection to the DB \n" + e.getMessage());
+            logger.info("Error on establishing connection to the DB \n" + e.getMessage());
         }
         return null;
     }
