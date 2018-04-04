@@ -153,9 +153,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(func.wrap())
                 .thenApply(Stream::findFirst)
                 .thenApply(optionalT -> {
-                    optionalT.ifPresent(
-                            t -> getMapperSettings().getExternals().stream().forEach(sqlFieldExternal -> findWhere(new Pair<>(sqlFieldExternal.columnName, t.getIdentityKey())))
-                    );
+                    optionalT.ifPresent(this::populateExternals);
                     return optionalT;
                 });
     }
@@ -166,15 +164,20 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
                 .thenApply(func.wrap())
                 .thenApply(tStream -> {
-                    tStream.forEach(t -> getMapperSettings().getExternals()
-                            .stream()
-                            .forEach(
-                                    sqlFieldExternal -> findWhere(new Pair<>(sqlFieldExternal.columnName, t.getIdentityKey()))
-                            )
-                    );
+                    tStream.forEach(this::populateExternals);
                     return tStream;
                 })
                 .thenApply(s->s.collect(Collectors.toList()));
+    }
+
+    private void populateExternals(T t) {
+        getMapperSettings().getExternals()
+                .forEach(sqlFieldExternal -> findWhere(new Pair<>(sqlFieldExternal.columnName, t.getIdentityKey()))
+                        .thenAccept(((SqlConsumer<? super List<T>>) list -> {
+                            sqlFieldExternal.field.setAccessible(true);
+                            sqlFieldExternal.field.set(t, list);
+                        }).wrap())
+                );
     }
 
     /**
