@@ -16,5 +16,4 @@ public interface SqlConsumer<T> {
             }
         };
     }
-
 }
