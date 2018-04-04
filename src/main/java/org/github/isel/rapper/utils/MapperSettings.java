@@ -8,10 +8,7 @@ import org.github.isel.rapper.Id;
 import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -48,13 +45,15 @@ public class MapperSettings {
                 .collect(Collectors.groupingBy(SqlField::getClass)));
 
         columns = fieldMap.get(SqlField.class);
-        ids = fieldMap.get(SqlFieldId.class).stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList());
-        //externals = fieldMap.get(SqlFieldExternal.class).stream().map(f -> (SqlFieldExternal)f).collect(Collectors.toList());
+        Optional.ofNullable(fieldMap.get(SqlFieldId.class))
+                .ifPresent(sqlFields -> ids = sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+        Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
+                .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
 
         allFields = new ArrayList<>();
-        allFields.addAll(ids);
-        allFields.addAll(columns);
-        //allFields.addAll(externals);
+        if(ids != null) allFields.addAll(ids);
+        if(columns != null) allFields.addAll(columns);
+        if(externals != null) allFields.addAll(externals);
 
         buildQueryStrings();
     }

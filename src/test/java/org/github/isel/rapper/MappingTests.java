@@ -92,7 +92,7 @@ public class MappingTests {
     public void test2(){
         new DataMapper<>(Account.class).getMapperSettings().getExternals()
                 .stream()
-                .map(f -> ReflectionUtils.getGenericType(f.getGenericType()))
+                .map(f -> ReflectionUtils.getGenericType(f.field.getGenericType()))
                 .filter(DomainObject.class::isAssignableFrom)
                 .forEach(System.out::println);
     }

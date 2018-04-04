@@ -13,7 +13,7 @@ import static java.lang.System.out;
 public class MapperRegistry {
     private static Map<Class, DataMapper> map = new HashMap<>(); //TODO load all entrys
 
-    public static<T extends DomainObject> DataMapper getMapper(Class<T> domainObject) {
+    public static<T extends DomainObject<K>, K> DataMapper<T, K> getMapper(Class<T> domainObject) {
         DataMapper mapper = map.computeIfAbsent(domainObject, c -> new DataMapper<>(domainObject));
         mapper.getMapperSettings()
                 .getExternals().stream()

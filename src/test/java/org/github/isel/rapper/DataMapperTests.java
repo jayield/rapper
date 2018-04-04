@@ -12,9 +12,12 @@ import java.sql.Date;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class DataMapperTests {
 
@@ -45,15 +48,14 @@ public class DataMapperTests {
     }
 
     @Test
-    public void test(){
-
+    public void getParentsTest(){
         List<Class<DomainObject>> parents = new ArrayList<>();
         Class<? super TopStudent> aclass = TopStudent.class.getSuperclass();
         for( ; aclass != Object.class; aclass = aclass.getSuperclass()){
             parents.add((Class<DomainObject>) aclass);
         }
 
-        System.out.println(parents);
-        System.out.println(DomainObject.class.isAssignableFrom(TopStudent.class));
+        assertEquals(Arrays.asList(Student.class, Person.class), parents);
+        assertTrue(DomainObject.class.isAssignableFrom(TopStudent.class));
     }
 }
