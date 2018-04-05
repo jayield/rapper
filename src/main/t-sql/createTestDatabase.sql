@@ -4,12 +4,13 @@ GO
 
 use PS_TEST_API_DATABASE
 
-if object_id('Person') is not null
+if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Person' AND Type = N'U')
     drop table Person
 go
 create table Person (
 	nif int primary key,
 	[name] nvarchar(50),
-	birthday date
+	birthday date,
+  version rowversion
 )
 go

@@ -44,16 +44,22 @@ public class MapperSettings {
                 .flatMap(this::toSqlField)
                 .collect(Collectors.groupingBy(SqlField::getClass)));
 
-        columns = fieldMap.get(SqlField.class);
-
         //Add SqlFieldIds which have "identity = true" to columns
         Optional.ofNullable(fieldMap.get(SqlFieldId.class))
-                .ifPresent(sqlFields -> sqlFields
-                        .stream()
-                        .map(sqlField -> ((SqlFieldId) sqlField))
-                        .filter(sqlFieldId -> sqlFieldId.identity)
-                        .forEach(columns::add)
-                );
+                .ifPresent(sqlFields -> {
+                    columns = new ArrayList<>();
+                    sqlFields
+                            .stream()
+                            .map(sqlField -> ((SqlFieldId) sqlField))
+                            .filter(sqlFieldId -> sqlFieldId.identity)
+                            .forEach(columns::add);
+                });
+
+        Optional.ofNullable(fieldMap.get(SqlField.class))
+                .ifPresent(sqlFields -> {
+                    if(columns == null) columns = new ArrayList<>();
+                    columns.addAll(sqlFields);
+                });
 
         Optional.ofNullable(fieldMap.get(SqlFieldId.class))
                 .ifPresent(sqlFields -> ids = sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
@@ -74,7 +80,12 @@ public class MapperSettings {
 
         selectQuery = Stream
                 .concat(idName.stream(), columnsNames.stream())
+                .map(str -> {
+                    if(str.equals("version")) return "CAST(version as bigint) version";
+                    return str;
+                })
                 .collect(Collectors.joining(", ", "select ", " from "+type.getSimpleName()));
+
         selectByIdQuery = selectQuery +
                 idName.stream()
                         .map(id -> id+" = ?")
@@ -83,17 +94,20 @@ public class MapperSettings {
         columnsNames.remove("version");
         columns.removeIf(f-> f.name.equals("version"));
 
-        boolean identity = ids.stream().anyMatch(f->f.identity);
+        //boolean identity = ids.stream().allMatch(f -> f.identity);
 
-        insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
-                        .collect(Collectors.joining(", ","insert into "+type.getSimpleName()+" ( ", " ) ")) +
-                    (identity ? "output inserted."+idName.get(0)+" " : "") +
-                    (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
-                        .map(c->"?").collect(Collectors.joining(", ", "values ( ", " )"));
+        insertQuery = columnsNames
+                .stream()
+                .collect(Collectors.joining(", ","insert into "+type.getSimpleName()+" ( ", " ) ")) +
+                "output CAST(INSERTED.version as bigint) version " +
+                columnsNames
+                        .stream()
+                        .map(c->"?")
+                        .collect(Collectors.joining(", ", "values ( ", " )"));
 
         updateQuery = columnsNames.stream()
                 .map(c -> c + " = ?")
-                .collect(Collectors.joining(", ","update "+type.getSimpleName()+" set "," where "))
+                .collect(Collectors.joining(", ","update "+type.getSimpleName()+" set "," output CAST(INSERTED.version as bigint) version where "))
                 + idName.stream()
                 .map(id->id+" = ?")
                 .collect(Collectors.joining(" and "));

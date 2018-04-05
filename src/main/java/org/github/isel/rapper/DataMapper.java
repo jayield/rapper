@@ -1,10 +1,13 @@
 package org.github.isel.rapper;
 
 import javafx.util.Pair;
+import jdk.management.resource.internal.inst.StaticInstrumentation;
 import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
 import org.github.isel.rapper.utils.*;
 import org.github.isel.rapper.utils.SqlField.SqlFieldId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -26,6 +29,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final Class<? super T> subClass;
     private final MapperSettings mapperSettings;
     private final Constructor<T> constructor;
+    private final Logger logger = LoggerFactory.getLogger(DataMapper.class);
 
     public MapperSettings getMapperSettings() {
         return mapperSettings;
@@ -124,9 +128,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 f.setAccessible(true);
                 return f.get(obj);
         };
-        SqlConsumer<Map.Entry<Integer, SqlField>> consumer = entry -> {
-            stmt.setObject(entry.getKey() +offset, func.apply(entry.getValue().field));
-        };
+        SqlConsumer<Map.Entry<Integer, SqlField>> consumer = entry -> stmt.setObject(entry.getKey() + offset + 1, func.apply(entry.getValue().field));
+
         CollectionUtils.zipWithIndex(mapperSettings.getColumns().stream())
                 .forEach(consumer.wrap());
     }
@@ -136,7 +139,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         long remaining = target - System.currentTimeMillis();
 
         while(remaining >= 0){
-            T observedObj = identityMap.get(obj.getIdentityKey());
+            T observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), obj);
+            if(observedObj == null) return true;
             if(observedObj.getVersion() < obj.getVersion()) {
                 if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
                     return true;
@@ -249,21 +253,27 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             if(noneMatch)
                 setIds(stmt, obj.getIdentityKey(), 0);
-            setColumns(stmt, obj, mapperSettings.getIds().size());
+
+            int offset = (int) mapperSettings
+                    .getIds()
+                    .stream()
+                    .filter(sqlFieldId -> !sqlFieldId.identity)
+                    .count();
+            setColumns(stmt, obj, offset);
         })
                 .thenApply(func.wrap())
-                .thenAccept(o -> identityMap.put(o.getIdentityKey(), obj))
+                .thenAccept(t -> identityMap.put(t.getIdentityKey(), obj))
                 .join();
     }
 
-    private T setVersion(PreparedStatement s, T obj) throws SQLException, IllegalAccessException {
-        if(s.getUpdateCount()==0) throw new ConcurrencyException("Concurrency problem found");
-        Field v = null;
+    private T setVersion(PreparedStatement stmt, T obj) throws SQLException, IllegalAccessException {
+        if(stmt.getUpdateCount()==0) throw new ConcurrencyException("Concurrency problem found");
+        Field version = null;
         try {
-            v = type.getField("version");
-            v.setAccessible(true);
-            v.set(obj, SQLUtils.getVersion(s));
-        } catch (NoSuchFieldException ignored) { }
+            version = type.getDeclaredField("version");
+            version.setAccessible(true);
+            version.set(obj, SQLUtils.getVersion(stmt));
+        } catch (NoSuchFieldException ignored) { logger.info("version field not found on " + type.getSimpleName()); }
 
         return obj;
     }

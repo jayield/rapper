@@ -54,25 +54,43 @@ public class DataMapperTests {
     public void getAll() {
     }
 
+    private void assertPerson(Person person, ResultSet rs, String errorMessage) throws SQLException {
+        if (rs.next()) {
+            assertEquals(person.getNif(), rs.getInt("nif"));
+            assertEquals(person.getName(), rs.getString("name"));
+            //assertEquals(p.getBirthday(), rs.getTimestamp("birthday"));
+            assertEquals(person.getVersion(), rs.getLong("version"));
+        }
+        else fail(errorMessage);
+    }
+
     @Test
     public void insert() throws SQLException {
         //Arrange
         DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
-        Person p = new Person(123, "abc", new Timestamp(1969, 6, 9, 16, 04, 30,30), 0);
+        Person person = new Person(123, "abc", new Timestamp(1969, 6, 9, 16, 04, 30,30), 0);
 
         //Act
-        mapper.insert(p);
+        mapper.insert(person);
 
         //Assert
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select * from Person where nif = ?");
-        ps.setInt(1, p.getNif());
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
+        ps.setInt(1, person.getNif());
         ResultSet rs = ps.executeQuery();
-        if (rs.next()) assertEquals(p.getNif(), rs.getInt("nif"));
-        else fail("Person wasn't inserted in the database");
+        assertPerson(person, rs, "Person wasn't inserted in the database");
     }
 
     @Test
-    public void update() {
+    public void update() throws SQLException {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        Person person = new Person(321, "Maria", new Timestamp(21312312), 0);
+
+        mapper.update(person);
+
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
+        ps.setInt(1, person.getNif());
+        ResultSet rs = ps.executeQuery();
+        assertPerson(person, rs, "Person wasn't updated in the database");
     }
 
     @Test

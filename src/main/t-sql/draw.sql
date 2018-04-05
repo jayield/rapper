@@ -6,20 +6,20 @@ begin tran
 rollback
 
 begin tran
-	insert into [Local] ([Address], Country, Street, ZIPCode)
-	OUTPUT INSERTED.[version]
-	values ('123', '456', '789', '101112')
+	insert into Person (nif, name)
+	OUTPUT CAST(INSERTED.version as bigint) version
+	values ('123', 'Ze')
 rollback
 
 begin tran
-	insert into [Local] ([Address], Country, Street, ZIPCode)
-	values ('123', '456', '789', '101112')
+	insert into Person (nif, name)
+	values ('123', '456')
 
-	select * from [Local]
+	select * from Person
 
-	update [Local] set country = '321' 
-	output INSERTED.[version]
-	where [Address] = '123'
+	update Person set nif = '321'
+	output CAST(INSERTED.version as bigint) version
+	where nif = '123'
 rollback
 
 begin tran
