@@ -7,7 +7,7 @@ public class Student extends Person {
 
     private final int studentNumber;
 
-    public Student(int nif, String name, Timestamp birthday, long version, int studentNumber) {
+    public Student(int nif, String name, Date birthday, long version, int studentNumber) {
         super(nif, name, birthday, version);
         this.studentNumber = studentNumber;
     }

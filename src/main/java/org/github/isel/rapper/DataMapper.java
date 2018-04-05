@@ -155,7 +155,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Optional<T>> getById(K id) {
         T obj = identityMap.get(id);
-        System.out.println(obj);
         if(obj != null)
             return CompletableFuture.completedFuture(Optional.of(obj));
 
@@ -174,11 +173,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
                 .thenApply(func.wrap())
-                .thenApply(tStream -> {
-                    tStream.forEach(this::populateExternals);
-                    return tStream;
-                })
-                .thenApply(s->s.collect(Collectors.toList()));
+                .thenApply(tStream -> tStream.peek(this::populateExternals))
+                .thenApply(tStream1 -> tStream1.collect(Collectors.toList()));
     }
 
     /**
@@ -197,9 +193,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     .thenAccept(sqlConsumer.wrap());
         };
 
-        getMapperSettings()
-                .getExternals()
-                .forEach(findWhereConsumer);
+        List<SqlField.SqlFieldExternal> externals = getMapperSettings().getExternals();
+        if(externals != null) externals.forEach(findWhereConsumer);
     }
 
     /**

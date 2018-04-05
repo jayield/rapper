@@ -1,5 +1,6 @@
 package org.github.isel.rapper;
 
+import javafx.util.Pair;
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.MapperRegistry;
 import org.github.isel.rapper.utils.UnitOfWork;
@@ -11,11 +12,10 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 public class DataMapperTests {
 
@@ -33,42 +33,60 @@ public class DataMapperTests {
     }
 
     @Test
-    public void InsertUpdateSelectDeleteTest(){
-        Person p = new Person(123, "abc", new Timestamp(1969, 6, 9, 16, 04, 30,30), 0);
+    public void findWhere() throws SQLException {
         DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
-        mapper.insert(p);
-        System.out.println(mapper.getById(123).join());
-        mapper.update(new Person(p.getNif(), "def", p.getBirthday(), p.getVersion()));
-        System.out.println(mapper.getById(123).join());
+
+        List<Person> people = mapper.findWhere(new Pair<>("name", "Jose")).join();
+
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?");
+        ps.setString(1, "Jose");
+        ResultSet rs = ps.executeQuery();
+        while (rs.next())
+            assertPerson(people.remove(0), rs);
     }
 
     @Test
-    public void findWhere() {
-    }
+    public void getById() throws SQLException {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        int nif = 321;
+        String errorMessage = "Person wasn't selected from the database";
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
+        ps.setInt(1, nif);
+        ResultSet rs = ps.executeQuery();
 
-    @Test
-    public void getById() {
-    }
+        Optional<Person> optionalPerson = mapper.getById(nif).join();
 
-    @Test
-    public void getAll() {
-    }
-
-    private void assertPerson(Person person, ResultSet rs, String errorMessage) throws SQLException {
-        if (rs.next()) {
-            assertEquals(person.getNif(), rs.getInt("nif"));
-            assertEquals(person.getName(), rs.getString("name"));
-            //assertEquals(p.getBirthday(), rs.getTimestamp("birthday"));
-            assertEquals(person.getVersion(), rs.getLong("version"));
-        }
+        if(optionalPerson.isPresent() && rs.next())
+            assertPerson(optionalPerson.get(), rs);
         else fail(errorMessage);
+    }
+
+    @Test
+    public void getAll() throws SQLException {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        String errorMessage = "People weren't selected from the database";
+
+        List<Person> people = mapper.getAll().join();
+
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person");
+        ResultSet rs = ps.executeQuery();
+        if (rs.next())
+            assertPerson(people.get(0), rs);
+        else fail(errorMessage);
+    }
+
+    private void assertPerson(Person person, ResultSet rs) throws SQLException {
+        assertEquals(person.getNif(), rs.getInt("nif"));
+        assertEquals(person.getName(), rs.getString("name"));
+        assertEquals(person.getBirthday(), rs.getDate("birthday"));
+        assertEquals(person.getVersion(), rs.getLong("version"));
     }
 
     @Test
     public void insert() throws SQLException {
         //Arrange
         DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
-        Person person = new Person(123, "abc", new Timestamp(1969, 6, 9, 16, 04, 30,30), 0);
+        Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
 
         //Act
         mapper.insert(person);
@@ -77,39 +95,62 @@ public class DataMapperTests {
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
         ResultSet rs = ps.executeQuery();
-        assertPerson(person, rs, "Person wasn't inserted in the database");
+        if (rs.next()) {
+            assertPerson(person, rs);
+        }
+        else fail("Person wasn't inserted in the database");
     }
 
     @Test
     public void update() throws SQLException {
         DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
-        Person person = new Person(321, "Maria", new Timestamp(21312312), 0);
+        Person person = new Person(321, "Maria", new Date(2010, 2, 3), 0);
 
         mapper.update(person);
 
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
         ResultSet rs = ps.executeQuery();
-        assertPerson(person, rs, "Person wasn't updated in the database");
+        if (rs.next()) {
+            assertPerson(person, rs);
+        }
+        else fail("Person wasn't updated in the database");
     }
 
     @Test
-    public void delete() {
+    public void delete() throws SQLException {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        Person person = new Person(321, null, null, 0);
+
+        mapper.delete(person);
+
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
+        ps.setInt(1, person.getNif());
+        ResultSet rs = ps.executeQuery();
+        assertFalse(rs.next());
     }
 
     @Test
     public void getSelectQuery() {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        assertEquals("select nif, name, birthday, CAST(version as bigint) version from Person", mapper.getSelectQuery());
     }
 
     @Test
     public void getInsertQuery() {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        assertEquals("insert into Person ( nif, name, birthday ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", mapper.getInsertQuery());
     }
 
     @Test
     public void getUpdateQuery() {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        assertEquals("update Person set nif = ?, name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ?", mapper.getUpdateQuery());
     }
 
     @Test
     public void getDeleteQuery() {
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        assertEquals("delete from Person where nif = ?", mapper.getDeleteQuery());
     }
 }

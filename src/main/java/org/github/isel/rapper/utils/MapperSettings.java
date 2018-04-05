@@ -78,8 +78,11 @@ public class MapperSettings {
         List<String> idName = ids.stream().map(f->f.name).collect(Collectors.toList());
         List<String> columnsNames = columns.stream().map(f->f.name).collect(Collectors.toList());
 
+        Stream<String> missingColumns = columnsNames
+                .stream()
+                .filter(s -> !idName.contains(s));
         selectQuery = Stream
-                .concat(idName.stream(), columnsNames.stream())
+                .concat(idName.stream(), missingColumns)
                 .map(str -> {
                     if(str.equals("version")) return "CAST(version as bigint) version";
                     return str;
@@ -120,7 +123,8 @@ public class MapperSettings {
     private Stream<SqlField> toSqlField(Field f){
         Predicate<Field> pred = field -> field.getType().isPrimitive() ||
                 field.getType().isAssignableFrom(String.class) ||
-                field.getType().isAssignableFrom(Timestamp.class);
+                field.getType().isAssignableFrom(Timestamp.class) ||
+                field.getType().isAssignableFrom(Date.class);
         if(f.isAnnotationPresent(EmbeddedId.class)){
             return Arrays.stream(f.getType()
                     .getDeclaredFields()).filter(pred)

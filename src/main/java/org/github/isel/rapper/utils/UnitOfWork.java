@@ -40,7 +40,8 @@ public class UnitOfWork {
 
     public void closeConnection(){
         try {
-            connection.close();
+            if(connection != null)
+                connection.close();
         } catch (SQLException e) { }
         connection = null;
     }
@@ -177,7 +178,8 @@ public class UnitOfWork {
      * The objects in dirtyObjects need to go back as before
      */
     public void rollback() throws SQLException {
-        connection.rollback();
+        if(connection != null)
+            connection.rollback();
         /*for (DomainObject obj : newObjects)
             MapperRegistry.getMapper(obj.getClass()).getIdentityMap().remove(obj.getIdentityKey());*/
 

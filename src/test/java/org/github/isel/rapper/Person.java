@@ -1,15 +1,16 @@
 package org.github.isel.rapper;
 
+import java.sql.Date;
 import java.sql.Timestamp;
 
 public class Person implements DomainObject<Integer> {
     @Id(isIdentity = true)
     private final int nif;
     private final String name;
-    private final Timestamp birthday;
+    private final Date birthday;
     private final long version;
 
-    public Person(int nif, String name, Timestamp birthday, long version) {
+    public Person(int nif, String name, Date birthday, long version) {
         this.nif = nif;
         this.name = name;
         this.birthday = birthday;
@@ -43,7 +44,7 @@ public class Person implements DomainObject<Integer> {
         return name;
     }
 
-    public Timestamp getBirthday() {
+    public Date getBirthday() {
         return birthday;
     }
 }
