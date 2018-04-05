@@ -1,14 +1,9 @@
 package org.github.isel.rapper;
 
-import org.github.isel.rapper.DomainObject;
-import org.github.isel.rapper.Id;
-
-import java.sql.Date;
-import java.sql.Time;
 import java.sql.Timestamp;
 
 public class Person implements DomainObject<Integer> {
-    @Id
+    @Id(isIdentity = true)
     private final int nif;
     private final String name;
     private final Timestamp birthday;

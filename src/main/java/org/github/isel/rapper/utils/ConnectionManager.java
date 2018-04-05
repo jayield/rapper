@@ -12,6 +12,7 @@ import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 
 public class ConnectionManager {
     private final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
+    private static final Logger staticLogger = LoggerFactory.getLogger(ConnectionManager.class);
 
     public enum DBsPath {
         DEFAULTDB ("DB_CONNECTION_STRING"),
@@ -57,7 +58,7 @@ public class ConnectionManager {
 
     private static ConnectionPoolDataSource getDataSource(String envVar){
         String connectionString = System.getenv(envVar);
-        System.out.println(connectionString +" - "+ envVar);
+        staticLogger.info(connectionString +" - "+ envVar);
         String [] connectionStringParts = connectionString.split(";");
 
         SQLServerConnectionPoolDataSource dataSource = new SQLServerConnectionPoolDataSource();

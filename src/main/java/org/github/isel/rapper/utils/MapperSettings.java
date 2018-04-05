@@ -45,6 +45,16 @@ public class MapperSettings {
                 .collect(Collectors.groupingBy(SqlField::getClass)));
 
         columns = fieldMap.get(SqlField.class);
+
+        //Add SqlFieldIds which have "identity = true" to columns
+        Optional.ofNullable(fieldMap.get(SqlFieldId.class))
+                .ifPresent(sqlFields -> sqlFields
+                        .stream()
+                        .map(sqlField -> ((SqlFieldId) sqlField))
+                        .filter(sqlFieldId -> sqlFieldId.identity)
+                        .forEach(columns::add)
+                );
+
         Optional.ofNullable(fieldMap.get(SqlFieldId.class))
                 .ifPresent(sqlFields -> ids = sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
         Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
@@ -52,7 +62,7 @@ public class MapperSettings {
 
         allFields = new ArrayList<>();
         if(ids != null) allFields.addAll(ids);
-        if(columns != null) allFields.addAll(columns);
+        if(columns != null) columns.forEach(sqlField -> { if(!allFields.contains(sqlField)) allFields.add(sqlField); });
         if(externals != null) allFields.addAll(externals);
 
         buildQueryStrings();

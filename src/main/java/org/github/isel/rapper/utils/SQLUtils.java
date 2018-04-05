@@ -1,6 +1,8 @@
 package org.github.isel.rapper.utils;
 
 import org.github.isel.rapper.exceptions.DataMapperException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,6 +12,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public class SQLUtils {
+    private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
+
     public static long getVersion(PreparedStatement statement) throws SQLException {
         long version;
         try (ResultSet inserted = statement.getResultSet()) {
@@ -22,6 +26,9 @@ public class SQLUtils {
     }
 
     public static long getGeneratedKey(PreparedStatement preparedStatement) throws SQLException {
+        logger.info("UpdateCount = " + preparedStatement.getUpdateCount());
+        if(!preparedStatement.getMoreResults()) throw new DataMapperException("Couldn't get generated key.");
+
         long jobId;
         try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
             if (generatedKeys.next()){

@@ -7,10 +7,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.SQLException;
-import java.sql.Timestamp;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,17 +15,15 @@ import java.util.List;
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class DataMapperTests {
-
-    private Connection connection;
 
     @Before
     public void start(){
         MapperRegistry.addEntry(Person.class, new DataMapper<>(Person.class));
-        ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB.toString());
+        ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         UnitOfWork.newCurrent(manager::getConnection);
-        connection = UnitOfWork.getCurrent().getConnection();
     }
 
     @After
@@ -48,14 +43,55 @@ public class DataMapperTests {
     }
 
     @Test
-    public void getParentsTest(){
-        List<Class<DomainObject>> parents = new ArrayList<>();
-        Class<? super TopStudent> aclass = TopStudent.class.getSuperclass();
-        for( ; aclass != Object.class; aclass = aclass.getSuperclass()){
-            parents.add((Class<DomainObject>) aclass);
-        }
+    public void findWhere() {
+    }
 
-        assertEquals(Arrays.asList(Student.class, Person.class), parents);
-        assertTrue(DomainObject.class.isAssignableFrom(TopStudent.class));
+    @Test
+    public void getById() {
+    }
+
+    @Test
+    public void getAll() {
+    }
+
+    @Test
+    public void insert() throws SQLException {
+        //Arrange
+        DataMapper<Person, Integer> mapper = MapperRegistry.getMapper(Person.class);
+        Person p = new Person(123, "abc", new Timestamp(1969, 6, 9, 16, 04, 30,30), 0);
+
+        //Act
+        mapper.insert(p);
+
+        //Assert
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select * from Person where nif = ?");
+        ps.setInt(1, p.getNif());
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) assertEquals(p.getNif(), rs.getInt("nif"));
+        else fail("Person wasn't inserted in the database");
+    }
+
+    @Test
+    public void update() {
+    }
+
+    @Test
+    public void delete() {
+    }
+
+    @Test
+    public void getSelectQuery() {
+    }
+
+    @Test
+    public void getInsertQuery() {
+    }
+
+    @Test
+    public void getUpdateQuery() {
+    }
+
+    @Test
+    public void getDeleteQuery() {
     }
 }
