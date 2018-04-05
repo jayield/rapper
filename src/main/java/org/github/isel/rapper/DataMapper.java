@@ -36,7 +36,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         this.subClass = type.getSuperclass();
         this.mapperSettings = new MapperSettings(type);
         try {
-            this.constructor = type.getConstructor(mapperSettings.getAllFields().stream().map(f->f.field.getType()).toArray(Class[]::new));
+            Class[] parameterTypes = mapperSettings
+                    .getAllFields()
+                    .stream()
+                    .map(f -> f.field.getType())
+                    .toArray(Class[]::new);
+            this.constructor = type.getConstructor(parameterTypes);
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
@@ -171,6 +176,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(s->s.collect(Collectors.toList()));
     }
 
+    /**
+     * It will go to the DB get the externals for a class (T) and set them on the object received
+     * @param t object which externals shall be populated
+     */
     private void populateExternals(T t) {
         Consumer<SqlField.SqlFieldExternal> findWhereConsumer = sqlFieldExternal -> {
 
@@ -208,11 +217,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         func = func.compose(s -> {
             System.out.println(s.getUpdateCount());
 
-            boolean noneMatch =
-                    mapperSettings
-                            .getIds()
-                            .stream()
-                            .noneMatch(f -> f.identity);
+            boolean noneMatch = mapperSettings
+                    .getIds()
+                    .stream()
+                    .noneMatch(f -> f.identity);
 
             if(noneMatch){
                 SqlConsumer<Field> fieldSqlConsumer = f -> {

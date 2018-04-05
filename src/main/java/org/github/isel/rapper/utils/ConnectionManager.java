@@ -30,8 +30,8 @@ public class ConnectionManager {
 
     private static ConnectionManager connectionManager = null;
 
-    public static ConnectionManager getConnectionManager(String envVar){
-        if(connectionManager == null) connectionManager = new ConnectionManager(envVar);
+    public static ConnectionManager getConnectionManager(DBsPath envVar){
+        if(connectionManager == null) connectionManager = new ConnectionManager(envVar.toString());
         return connectionManager;
     }
 
@@ -50,21 +50,6 @@ public class ConnectionManager {
             connection.setAutoCommit(false);
             return connection;
         } catch (SQLException e) {
-            logger.info("Error on establishing connection to the DB \n" + e.getMessage());
-        }
-        return null;
-    }
-
-    //test method
-    public static Connection getConnection2() {
-        try {
-            Connection connection = getDataSource(TESTDB.toString())
-                    .getPooledConnection()
-                    .getConnection();
-            connection.setAutoCommit(false);
-            return connection;
-        } catch (SQLException e) {
-            Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
             logger.info("Error on establishing connection to the DB \n" + e.getMessage());
         }
         return null;

@@ -1,9 +1,9 @@
 package org.github.isel.rapper.utils;
 
 
-import org.github.isel.rapper.DataMapper;
 import org.github.isel.rapper.DomainObject;
 import org.github.isel.rapper.exceptions.ConcurrencyException;
+import org.github.isel.rapper.exceptions.DataMapperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -11,6 +11,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 import static org.github.isel.rapper.utils.MapperRegistry.getMapper;
@@ -109,14 +110,17 @@ public class UnitOfWork {
     }
 
     //TODO FIX: sometimes current.get() returns null,
-    /**Possible reason: since we are using completableFuture we don't have the guarantee that the threadLocal of the working thread has the unit of work*/
+    //Possible reason: since we are using completableFuture we don't have the guarantee that the threadLocal of the working thread has the unit of work
     public static UnitOfWork getCurrent() {
         return current.get();
     }
 
-    //TODO does it catch the concurrentyException?
+    public CompletableFuture<Void> commit() {
+        return CompletableFuture.runAsync(this::commitRunnable);
+    }
+
     //TODO update IdentityMaps only after all transactions succeeded?
-    public void commit() throws SQLException {
+    private void commitRunnable() {
         try {
             insertNew();
             updateDirty();
@@ -124,8 +128,19 @@ public class UnitOfWork {
 
             connection.commit();
         } catch (ConcurrencyException e) {
-            rollback();
+            try {
+                rollback();
+            } catch (SQLException e1) {
+                throw new DataMapperException(e1);
+            }
             throw e;
+        }
+        catch (SQLException e){
+            try {
+                rollback();
+            } catch (SQLException e1) {
+                throw new DataMapperException(e1);
+            }
         }
         finally {
             //closeConnection();

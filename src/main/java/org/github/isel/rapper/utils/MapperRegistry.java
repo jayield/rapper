@@ -5,6 +5,7 @@ import org.github.isel.rapper.DomainObject;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -15,12 +16,16 @@ public class MapperRegistry {
 
     public static<T extends DomainObject<K>, K> DataMapper<T, K> getMapper(Class<T> domainObject) {
         DataMapper mapper = map.computeIfAbsent(domainObject, c -> new DataMapper<>(domainObject));
-        mapper.getMapperSettings()
-                .getExternals().stream()
-                .map(f -> f.type)
-                .filter(c -> !map.containsKey(c))
-                .filter(DomainObject.class::isAssignableFrom)
-                .forEach(MapperRegistry::getMapper);
+
+        List<SqlField.SqlFieldExternal> externals = mapper.getMapperSettings().getExternals();
+        if(externals != null)
+            externals
+                    .stream()
+                    .map(f -> f.type)
+                    .filter(c -> !map.containsKey(c))
+                    .filter(DomainObject.class::isAssignableFrom)
+                    .forEach(MapperRegistry::getMapper);
+
         return mapper;
     }
 
