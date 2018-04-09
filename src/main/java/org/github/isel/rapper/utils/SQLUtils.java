@@ -20,7 +20,7 @@ public class SQLUtils {
             if (inserted.next()){
                 version = inserted.getLong(1);
             }
-            else throw new DataMapperException("Error inserting new entry");
+            else throw new DataMapperException("Couldn't get version.");
         }
         return version;
     }
@@ -29,14 +29,14 @@ public class SQLUtils {
         logger.info("UpdateCount = " + preparedStatement.getUpdateCount());
         if(!preparedStatement.getMoreResults()) throw new DataMapperException("Couldn't get generated key.");
 
-        long jobId;
+        long key;
         try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
             if (generatedKeys.next()){
-                jobId = generatedKeys.getLong(1);
+                key = generatedKeys.getLong(1);
             }
-            else throw new DataMapperException("Error inserting new entry");
+            else throw new DataMapperException("Couldn't get generated key.");
         }
-        return jobId;
+        return key;
     }
 
     public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement){

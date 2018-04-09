@@ -14,3 +14,17 @@ create table Person (
   version rowversion
 )
 go
+
+if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Car' AND Type = N'U')
+  drop table Car
+go
+create table Car (
+  owner int,
+  plate varchar(6),
+  brand varchar(20),
+  model varchar(20),
+  version rowversion,
+
+  PRIMARY KEY (owner, plate)
+)
+go

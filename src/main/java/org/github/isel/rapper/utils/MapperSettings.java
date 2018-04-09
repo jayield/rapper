@@ -44,8 +44,19 @@ public class MapperSettings {
                 .flatMap(this::toSqlField)
                 .collect(Collectors.groupingBy(SqlField::getClass)));
 
-        //Add SqlFieldIds which have "identity = true" to columns
         Optional.ofNullable(fieldMap.get(SqlFieldId.class))
+                .ifPresent(sqlFields -> ids = sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+
+        //Add SqlFieldIds which have "identity = false" to columns
+        /*if(ids != null) {
+            columns = new ArrayList<>();
+            ids
+                    .stream()
+                    .filter(sqlFieldId -> !sqlFieldId.identity)
+                    .forEach(columns::add);
+        }*/
+        
+        /*Optional.ofNullable(fieldMap.get(SqlFieldId.class))
                 .ifPresent(sqlFields -> {
                     columns = new ArrayList<>();
                     sqlFields
@@ -53,7 +64,7 @@ public class MapperSettings {
                             .map(sqlField -> ((SqlFieldId) sqlField))
                             .filter(sqlFieldId -> sqlFieldId.identity)
                             .forEach(columns::add);
-                });
+                });*/
 
         Optional.ofNullable(fieldMap.get(SqlField.class))
                 .ifPresent(sqlFields -> {
@@ -61,8 +72,6 @@ public class MapperSettings {
                     columns.addAll(sqlFields);
                 });
 
-        Optional.ofNullable(fieldMap.get(SqlFieldId.class))
-                .ifPresent(sqlFields -> ids = sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
         Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
                 .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
 
@@ -78,11 +87,7 @@ public class MapperSettings {
         List<String> idName = ids.stream().map(f->f.name).collect(Collectors.toList());
         List<String> columnsNames = columns.stream().map(f->f.name).collect(Collectors.toList());
 
-        Stream<String> missingColumns = columnsNames
-                .stream()
-                .filter(s -> !idName.contains(s));
-        selectQuery = Stream
-                .concat(idName.stream(), missingColumns)
+        selectQuery = Stream.concat(idName.stream(), columnsNames.stream())
                 .map(str -> {
                     if(str.equals("version")) return "CAST(version as bigint) version";
                     return str;
@@ -97,18 +102,16 @@ public class MapperSettings {
         columnsNames.remove("version");
         columns.removeIf(f-> f.name.equals("version"));
 
-        //boolean identity = ids.stream().allMatch(f -> f.identity);
+        boolean identity = ids.stream().anyMatch(f -> f.identity);
 
-        insertQuery = columnsNames
-                .stream()
+        insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .collect(Collectors.joining(", ","insert into "+type.getSimpleName()+" ( ", " ) ")) +
                 "output CAST(INSERTED.version as bigint) version " +
-                columnsNames
-                        .stream()
-                        .map(c->"?")
+                (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
+                        .map(c -> "?")
                         .collect(Collectors.joining(", ", "values ( ", " )"));
 
-        updateQuery = columnsNames.stream()
+        updateQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .map(c -> c + " = ?")
                 .collect(Collectors.joining(", ","update "+type.getSimpleName()+" set "," output CAST(INSERTED.version as bigint) version where "))
                 + idName.stream()
