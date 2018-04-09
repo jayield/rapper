@@ -18,4 +18,12 @@ public class TopStudent extends Student {
         this.topGrade = 0;
         this.year = 0;
     }
+
+    public int getTopGrade() {
+        return topGrade;
+    }
+
+    public int getYear() {
+        return year;
+    }
 }

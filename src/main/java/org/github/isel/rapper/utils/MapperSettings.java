@@ -45,17 +45,20 @@ public class MapperSettings {
                 .flatMap(this::toSqlField)
                 .collect(Collectors.groupingBy(SqlField::getClass));
 
-        //Add Ids from parent classes
+        allFields = new ArrayList<>();
+
+        //Add Ids from parent classes to ids and fields to allFields
         for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass()){
             Map<Class, List<SqlField>> parentFieldMap = Arrays.stream(clazz.getDeclaredFields())
                     .flatMap(this::toSqlField)
                     .collect(Collectors.groupingBy(SqlField::getClass));
 
-            List<SqlField> sqlFields = parentFieldMap.get(SqlFieldId.class);
+            List<SqlField> sqlFieldIds = parentFieldMap.get(SqlFieldId.class);
+            allFields.addAll(parentFieldMap.get(SqlField.class));
 
-            if(sqlFields != null){
+            if(sqlFieldIds != null){
                 if(ids == null) ids = new ArrayList<>();
-                ids.addAll(sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+                ids.addAll(sqlFieldIds.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
             }
         }
 
@@ -83,7 +86,6 @@ public class MapperSettings {
         Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
                 .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
 
-        allFields = new ArrayList<>();
         if(ids != null) allFields.addAll(ids);
         if(columns != null) columns.forEach(sqlField -> { if(!allFields.contains(sqlField)) allFields.add(sqlField); });
         if(externals != null) allFields.addAll(externals);

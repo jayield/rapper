@@ -11,4 +11,12 @@ public class Student extends Person {
         super(nif, name, birthday, version);
         this.studentNumber = studentNumber;
     }
+
+    public Student(){
+        this.studentNumber = 0;
+    }
+
+    public int getStudentNumber() {
+        return studentNumber;
+    }
 }

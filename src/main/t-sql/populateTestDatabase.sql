@@ -6,5 +6,10 @@ GO
 exec dbo.AddUser '123@gmail.com', 2.0, '345', 'Hilário', 'Bue baril', 'someurl', null*/
 
 insert into Person (nif, name, birthday) values (321, 'Jose', '1996-6-2')
+insert into Person (nif, name, birthday) values (454, 'Nuno', '1996-4-2')
 
 insert into Car (owner, plate, brand, model) values (2, '23we45', 'Mitsubishi', 'lancer')
+
+insert into Student (nif, studentNumber) values (454, 3)
+
+insert into TopStudent (nif, topGrade, year) values (454, 20, 2017)

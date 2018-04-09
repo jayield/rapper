@@ -280,15 +280,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public void update(T obj) {
         SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
+
+        //Updates parents first
+        getParentMapper().ifPresent(objectDataMapper -> objectDataMapper.update(obj));
+
         SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             setColumns(stmt, obj, 0);
             setIds(stmt, obj.getIdentityKey(), mapperSettings.getColumns().size());
         })
                 .thenApply(func.wrap())
-                .thenApply(t -> {
-                    getParentMapper().ifPresent(objectDataMapper -> objectDataMapper.update(obj));
-                    return t;
-                })
                 .thenAccept(o -> {
                     if(!tryReplace(o, 5000)) throw new ConcurrencyException("Concurrency problem found, could not update IdentityMap");
                 }).join();
@@ -296,9 +296,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public void delete(T obj) {
-        SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> setIds(stmt, obj.getIdentityKey(), 0))
-                .thenAccept(s -> getParentMapper().ifPresent(objectDataMapper -> objectDataMapper.delete(obj)))
-                .thenAccept(v -> identityMap.remove(obj.getIdentityKey())).join();
+        SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> setIds(stmt, obj.getIdentityKey(), 0)).join();
+
+        getParentMapper().ifPresent(objectDataMapper -> objectDataMapper.delete(obj));
+        identityMap.remove(obj.getIdentityKey());
     }
 
     public ConcurrentMap<K, T> getIdentityMap() {

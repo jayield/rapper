@@ -43,7 +43,7 @@ public class DataMapperTests {
     }
 
     @Test
-    public void findWhere() throws SQLException {
+    public void findWhere() {
         SqlConsumer<List<Person>> personConsumer = people -> {
             PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?");
             ps.setString(1, "Jose");
@@ -70,7 +70,7 @@ public class DataMapperTests {
     }
 
     @Test
-    public void getById() throws SQLException {
+    public void getById() {
         int nif = 321;
         int owner = 2;
         String plate = "23we45";
@@ -139,6 +139,7 @@ public class DataMapperTests {
         assertEquals(person.getName(), rs.getString("name"));
         assertEquals(person.getBirthday(), rs.getDate("birthday"));
         assertEquals(person.getVersion(), rs.getLong("version"));
+        assertNotEquals(0, person.getVersion());
     }
 
     private void assertCar(Car car, ResultSet rs) throws SQLException {
@@ -147,6 +148,17 @@ public class DataMapperTests {
         assertEquals(car.getBrand(), rs.getString("brand"));
         assertEquals(car.getModel(), rs.getString("model"));
         assertEquals(car.getVersion(), rs.getLong("version"));
+        assertNotEquals(0, car.getVersion());
+    }
+
+    private void assertTopStudent(TopStudent topStudent, ResultSet rs) throws SQLException {
+        assertEquals(topStudent.getNif(), rs.getInt("nif"));
+        assertEquals(topStudent.getName(), rs.getString("name"));
+        assertEquals(topStudent.getBirthday(), rs.getDate("birthday"));
+        assertEquals(topStudent.getVersion(), rs.getLong("version"));
+        assertNotEquals(0, topStudent.getVersion());
+        assertEquals(topStudent.getTopGrade(), rs.getInt("topGrade"));
+        assertEquals(topStudent.getYear(), rs.getInt("year"));
     }
 
     @Test
@@ -154,10 +166,12 @@ public class DataMapperTests {
         //Arrange
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
+        TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016);
 
         //Act
         personMapper.insert(person);
         carMapper.insert(car);
+        topStudentMapper.insert(topStudent);
 
         //Assert
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
@@ -176,15 +190,30 @@ public class DataMapperTests {
             assertCar(car, rs);
         }
         else fail("Car wasn't inserted in the database");
+
+        ps = UnitOfWork.getCurrent().getConnection()
+                .prepareStatement(
+                        "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(P.version as bigint) version from Person P " +
+                        "inner join Student S2 on P.nif = S2.nif " +
+                        "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
+                );
+        ps.setInt(1, topStudent.getNif());
+        rs = ps.executeQuery();
+        if (rs.next()) {
+            assertTopStudent(topStudent, rs);
+        }
+        else fail("TopStudent wasn't inserted in the database");
     }
 
     @Test
     public void update() throws SQLException {
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), 0);
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", 0);
+        TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), 0, 4, 6, 7);
 
         personMapper.update(person);
         carMapper.update(car);
+        topStudentMapper.update(topStudent);
 
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
@@ -202,15 +231,29 @@ public class DataMapperTests {
             assertCar(car, rs);
         }
         else fail("Car wasn't updated in the database");
+
+        ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
+                "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(P.version as bigint) version from Person P " +
+                        "inner join Student S2 on P.nif = S2.nif " +
+                        "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
+        );
+        ps.setInt(1, topStudent.getNif());
+        rs = ps.executeQuery();
+        if (rs.next()) {
+            assertTopStudent(topStudent, rs);
+        }
+        else fail("TopStudent wasn't updated in the database");
     }
 
     @Test
     public void delete() throws SQLException {
         Person person = new Person(321, null, null, 0);
         Car car = new Car(2, "23we45", null, null, 0);
+        TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0);
 
         personMapper.delete(person);
         carMapper.delete(car);
+        topStudentMapper.delete(topStudent);
 
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
@@ -222,30 +265,14 @@ public class DataMapperTests {
         ps.setString(2, car.getIdentityKey().getPlate());
         rs = ps.executeQuery();
         assertFalse(rs.next());
-    }
 
-    @Test
-    public void getSelectQuery() {
-        assertEquals("select nif, name, birthday, CAST(version as bigint) version from Person", personMapper.getSelectQuery());
-        assertEquals("select owner, plate, brand, model, CAST(version as bigint) version from Car", carMapper.getSelectQuery());
-        assertEquals("select nif, topGrade, year from TopStudent", topStudentMapper.getSelectQuery());
-    }
-
-    @Test
-    public void getInsertQuery() {
-        assertEquals("insert into Person ( nif, name, birthday ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", personMapper.getInsertQuery());
-        assertEquals("insert into Car ( owner, plate, brand, model ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ?, ? )", carMapper.getInsertQuery());
-    }
-
-    @Test
-    public void getUpdateQuery() {
-        assertEquals("update Person set name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ?", personMapper.getUpdateQuery());
-        assertEquals("update Car set brand = ?, model = ? output CAST(INSERTED.version as bigint) version where owner = ? and plate = ?", carMapper.getUpdateQuery());
-    }
-
-    @Test
-    public void getDeleteQuery() {
-        assertEquals("delete from Person where nif = ?", personMapper.getDeleteQuery());
-        assertEquals("delete from Car where owner = ? and plate = ?", carMapper.getDeleteQuery());
+        ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
+                "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(P.version as bigint) version from Person P " +
+                        "inner join Student S2 on P.nif = S2.nif " +
+                        "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
+        );
+        ps.setInt(1, topStudent.getNif());
+        rs = ps.executeQuery();
+        assertFalse(rs.next());
     }
 }
