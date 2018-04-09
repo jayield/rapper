@@ -6,3 +6,5 @@ GO
 exec dbo.AddUser '123@gmail.com', 2.0, '345', 'Hilário', 'Bue baril', 'someurl', null*/
 
 insert into Person (nif, name, birthday) values (321, 'Jose', '1996-6-2')
+
+insert into Car (owner, plate, brand, model) values (2, '23we45', 'Mitsubishi', 'lancer')

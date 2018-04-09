@@ -55,7 +55,7 @@ public class MapperSettings {
                     .filter(sqlFieldId -> !sqlFieldId.identity)
                     .forEach(columns::add);
         }*/
-        
+
         /*Optional.ofNullable(fieldMap.get(SqlFieldId.class))
                 .ifPresent(sqlFields -> {
                     columns = new ArrayList<>();
@@ -113,14 +113,14 @@ public class MapperSettings {
 
         updateQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .map(c -> c + " = ?")
-                .collect(Collectors.joining(", ","update "+type.getSimpleName()+" set "," output CAST(INSERTED.version as bigint) version where "))
+                .collect(Collectors.joining(", ","update " + type.getSimpleName() + " set "," output CAST(INSERTED.version as bigint) version where "))
                 + idName.stream()
                 .map(id->id+" = ?")
                 .collect(Collectors.joining(" and "));
 
         deleteQuery = idName.stream()
                 .map(id -> id + " = ?")
-                .collect(Collectors.joining(" and ", "delete from "+type.getSimpleName()+" where ",""));
+                .collect(Collectors.joining(" and ", "delete from " + type.getSimpleName() + " where ",""));
     }
 
     private Stream<SqlField> toSqlField(Field f){
