@@ -16,6 +16,13 @@ public class Person implements DomainObject<Integer> {
         this.version = version;
     }
 
+    public Person(){
+        this.nif = 0;
+        this.name = null;
+        this.birthday = null;
+        this.version = 0;
+    }
+
     @Override
     public String toString() {
         return "Person{" +

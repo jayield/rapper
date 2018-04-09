@@ -2,6 +2,7 @@ package org.github.isel.rapper.utils;
 
 
 import org.github.isel.rapper.ColumnName;
+import org.github.isel.rapper.DomainObject;
 import org.github.isel.rapper.EmbeddedId;
 import org.github.isel.rapper.Id;
 
@@ -40,12 +41,29 @@ public class MapperSettings {
     public MapperSettings(Class<?> type){
         this.type = type;
 
-        Map<Class, List<SqlField>> fieldMap = (Arrays.stream(type.getDeclaredFields())
+        Map<Class, List<SqlField>> fieldMap = Arrays.stream(type.getDeclaredFields())
                 .flatMap(this::toSqlField)
-                .collect(Collectors.groupingBy(SqlField::getClass)));
+                .collect(Collectors.groupingBy(SqlField::getClass));
+
+        //Add Ids from parent classes
+        for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass()){
+            Map<Class, List<SqlField>> parentFieldMap = Arrays.stream(clazz.getDeclaredFields())
+                    .flatMap(this::toSqlField)
+                    .collect(Collectors.groupingBy(SqlField::getClass));
+
+            List<SqlField> sqlFields = parentFieldMap.get(SqlFieldId.class);
+
+            if(sqlFields != null){
+                if(ids == null) ids = new ArrayList<>();
+                ids.addAll(sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+            }
+        }
 
         Optional.ofNullable(fieldMap.get(SqlFieldId.class))
-                .ifPresent(sqlFields -> ids = sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+                .ifPresent(sqlFields -> {
+                    if(ids == null) ids = new ArrayList<>();
+                    ids.addAll(sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+                });
 
         //Add SqlFieldIds which have "identity = false" to columns
         /*if(ids != null) {
@@ -55,16 +73,6 @@ public class MapperSettings {
                     .filter(sqlFieldId -> !sqlFieldId.identity)
                     .forEach(columns::add);
         }*/
-
-        /*Optional.ofNullable(fieldMap.get(SqlFieldId.class))
-                .ifPresent(sqlFields -> {
-                    columns = new ArrayList<>();
-                    sqlFields
-                            .stream()
-                            .map(sqlField -> ((SqlFieldId) sqlField))
-                            .filter(sqlFieldId -> sqlFieldId.identity)
-                            .forEach(columns::add);
-                });*/
 
         Optional.ofNullable(fieldMap.get(SqlField.class))
                 .ifPresent(sqlFields -> {
@@ -84,8 +92,15 @@ public class MapperSettings {
     }
 
     private void buildQueryStrings(){
-        List<String> idName = ids.stream().map(f->f.name).collect(Collectors.toList());
-        List<String> columnsNames = columns.stream().map(f->f.name).collect(Collectors.toList());
+        List<String> idName = ids == null ? Collections.EMPTY_LIST : ids
+                .stream()
+                .map(f->f.name)
+                .collect(Collectors.toList());
+
+        List<String> columnsNames = columns == null ? Collections.EMPTY_LIST : columns
+                .stream()
+                .map(f->f.name)
+                .collect(Collectors.toList());
 
         selectQuery = Stream.concat(idName.stream(), columnsNames.stream())
                 .map(str -> {
@@ -102,7 +117,9 @@ public class MapperSettings {
         columnsNames.remove("version");
         columns.removeIf(f-> f.name.equals("version"));
 
-        boolean identity = ids.stream().anyMatch(f -> f.identity);
+        boolean identity = ids != null && ids
+                .stream()
+                .anyMatch(f -> f.identity);
 
         insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .collect(Collectors.joining(", ","insert into "+type.getSimpleName()+" ( ", " ) ")) +
@@ -111,7 +128,8 @@ public class MapperSettings {
                         .map(c -> "?")
                         .collect(Collectors.joining(", ", "values ( ", " )"));
 
-        updateQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
+        updateQuery = columnsNames
+                .stream()
                 .map(c -> c + " = ?")
                 .collect(Collectors.joining(", ","update " + type.getSimpleName() + " set "," output CAST(INSERTED.version as bigint) version where "))
                 + idName.stream()

@@ -14,6 +14,13 @@ public class Car implements DomainObject<Car.PrimaryPk> {
         this.version = version;
     }
 
+    public Car(){
+        this.pk = null;
+        this.brand = null;
+        this.model = null;
+        this.version = 0;
+    }
+
     public String getBrand() {
         return brand;
     }

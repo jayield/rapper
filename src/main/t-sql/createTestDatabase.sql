@@ -28,3 +28,29 @@ create table Car (
   PRIMARY KEY (owner, plate)
 )
 go
+
+if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Student' AND Type = N'U')
+  drop table Student
+go
+create table Student (
+  nif int references Person,
+  studentNumber int,
+  version rowversion
+
+  PRIMARY KEY (nif)
+)
+go
+
+if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'TopStudent' AND Type = N'U')
+  drop table TopStudent
+go
+create table TopStudent (
+  nif int references Student,
+  topGrade int,
+  year int,
+  version rowversion
+
+    PRIMARY KEY (nif)
+)
+go
+

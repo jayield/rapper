@@ -33,6 +33,8 @@ The Rapper implementation use the following design patterns:
  
  - If a `DomainObject` contains a `List<DomainObject>` as a reference to another table, the field must be annotated with <code>@ColumnName</code>, in which is passed the name of the column of the referenced table where the ID of the `DomainObject` takes place
  
+ - A `DomainObject` must have a 0 arguments constructor
+ 
 ### Rules
 You must create an environment variable to connect to the DB. <br />
 The environment variable must have the following format:

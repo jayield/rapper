@@ -1,20 +1,19 @@
 package org.github.isel.rapper;
 
 import javafx.util.Pair;
-import org.github.isel.rapper.utils.ConnectionManager;
-import org.github.isel.rapper.utils.MapperRegistry;
-import org.github.isel.rapper.utils.SqlConsumer;
-import org.github.isel.rapper.utils.UnitOfWork;
+import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.sql.Date;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 import static org.junit.Assert.*;
@@ -28,6 +27,7 @@ public class DataMapperTests {
 
     private DataMapper<Person, Integer> personMapper = MapperRegistry.getMapper(Person.class);
     private DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getMapper(Car.class);
+    private DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getMapper(TopStudent.class);
 
     @Before
     public void start(){
@@ -228,6 +228,7 @@ public class DataMapperTests {
     public void getSelectQuery() {
         assertEquals("select nif, name, birthday, CAST(version as bigint) version from Person", personMapper.getSelectQuery());
         assertEquals("select owner, plate, brand, model, CAST(version as bigint) version from Car", carMapper.getSelectQuery());
+        assertEquals("select nif, topGrade, year from TopStudent", topStudentMapper.getSelectQuery());
     }
 
     @Test
@@ -238,8 +239,8 @@ public class DataMapperTests {
 
     @Test
     public void getUpdateQuery() {
-        assertEquals("update Person set nif = ?, name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ?", personMapper.getUpdateQuery());
-        assertEquals("update Car set owner = ?, plate = ?, brand = ?, model = ? output CAST(INSERTED.version as bigint) version where owner = ? and plate = ?", carMapper.getUpdateQuery());
+        assertEquals("update Person set name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ?", personMapper.getUpdateQuery());
+        assertEquals("update Car set brand = ?, model = ? output CAST(INSERTED.version as bigint) version where owner = ? and plate = ?", carMapper.getUpdateQuery());
     }
 
     @Test

@@ -40,12 +40,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         this.subClass = type.getSuperclass();
         this.mapperSettings = new MapperSettings(type);
         try {
-            Class[] parameterTypes = mapperSettings
+            /*Class[] parameterTypes = mapperSettings
                     .getAllFields()
                     .stream()
                     .map(f -> f.field.getType())
-                    .toArray(Class[]::new);
-            this.constructor = type.getConstructor(parameterTypes);
+                    .toArray(Class[]::new);*/
+            this.constructor = type.getConstructor();
+            //this.constructor = type.getConstructor(parameterTypes); //TODO get a better way to get the constructor
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
@@ -81,13 +82,17 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private T mapper(ResultSet rs){
         try {
-            SqlFunction<SqlField, Object> rsGetter = f -> rs.getObject(f.name);
-            Object[] args = mapperSettings
+            T t = constructor.newInstance();
+
+            SqlConsumer<SqlField> fieldSetter = f -> {
+                f.field.setAccessible(true);
+                f.field.set(t, rs.getObject(f.name));
+            };
+            mapperSettings
                     .getAllFields()
-                    .stream()
-                    .map(rsGetter.wrap())
-                    .toArray();
-            return constructor.newInstance(args);
+                    .forEach(fieldSetter.wrap());
+
+            return t;
         } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
             throw new RuntimeException(e);
         }
@@ -276,22 +281,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public void update(T obj) {
         SqlFunction<PreparedStatement, T> func = s -> setVersion(s, obj);
         SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
-            boolean noneMatch = mapperSettings
-                    .getIds()
-                    .stream()
-                    .noneMatch(f -> f.identity);
-
-            if(noneMatch)
-                setIds(stmt, obj.getIdentityKey(), 0);
-
-            int offset = (int) mapperSettings
-                    .getIds()
-                    .stream()
-                    .filter(sqlFieldId -> !sqlFieldId.identity)
-                    .count();
-            setColumns(stmt, obj, offset);
-
-            setIds(stmt, obj.getIdentityKey(), mapperSettings.getIds().size() + mapperSettings.getColumns().size());
+            setColumns(stmt, obj, 0);
+            setIds(stmt, obj.getIdentityKey(), mapperSettings.getColumns().size());
         })
                 .thenApply(func.wrap())
                 .thenApply(t -> {
