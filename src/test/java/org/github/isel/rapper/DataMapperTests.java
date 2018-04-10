@@ -6,14 +6,9 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 import static org.junit.Assert.*;
@@ -166,7 +161,7 @@ public class DataMapperTests {
         //Arrange
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016);
+        TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
         personMapper.insert(person);
@@ -193,7 +188,7 @@ public class DataMapperTests {
 
         ps = UnitOfWork.getCurrent().getConnection()
                 .prepareStatement(
-                        "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(P.version as bigint) version from Person P " +
+                        "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
                         "inner join Student S2 on P.nif = S2.nif " +
                         "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
                 );
@@ -207,17 +202,37 @@ public class DataMapperTests {
 
     @Test
     public void update() throws SQLException {
-        Person person = new Person(321, "Maria", new Date(2010, 2, 3), 0);
-        Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", 0);
-        TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), 0, 4, 6, 7);
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select CAST(version as bigint) version from Person where nif = ?");
+        ps.setInt(1, 321);
+        ResultSet rs = ps.executeQuery();
+        rs.next();
+        Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
+
+        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select CAST(version as bigint) version from Car where owner = ? and plate = ?");
+        ps.setInt(1, 2);
+        ps.setString(2, "23we45");
+        rs = ps.executeQuery();
+        rs.next();
+        Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
+
+        ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
+                "select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+                "inner join Student S2 on P.nif = S2.nif " +
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
+        );
+        ps.setInt(1, 454);
+        rs = ps.executeQuery();
+        rs.next();
+        TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
+                4, 6, 7, rs.getLong(3), rs.getLong(1));
 
         personMapper.update(person);
         carMapper.update(car);
         topStudentMapper.update(topStudent);
 
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
+        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
-        ResultSet rs = ps.executeQuery();
+        rs = ps.executeQuery();
         if (rs.next()) {
             assertPerson(person, rs);
         }
@@ -233,7 +248,7 @@ public class DataMapperTests {
         else fail("Car wasn't updated in the database");
 
         ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
-                "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(P.version as bigint) version from Person P " +
+                "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
                         "inner join Student S2 on P.nif = S2.nif " +
                         "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
         );
@@ -249,7 +264,7 @@ public class DataMapperTests {
     public void delete() throws SQLException {
         Person person = new Person(321, null, null, 0);
         Car car = new Car(2, "23we45", null, null, 0);
-        TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0);
+        TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0, 0, 0);
 
         personMapper.delete(person);
         carMapper.delete(car);

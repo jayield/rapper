@@ -1,22 +1,29 @@
 package org.github.isel.rapper;
 
 import java.sql.Date;
-import java.sql.Timestamp;
 
 public class Student extends Person {
 
     private final int studentNumber;
+    private final long version;
 
-    public Student(int nif, String name, Date birthday, long version, int studentNumber) {
-        super(nif, name, birthday, version);
+    public Student(int nif, String name, Date birthday, long personVersion, int studentNumber, long version) {
+        super(nif, name, birthday, personVersion);
         this.studentNumber = studentNumber;
+        this.version = version;
     }
 
     public Student(){
-        this.studentNumber = 0;
+        studentNumber = 0;
+        version = 0;
     }
 
     public int getStudentNumber() {
         return studentNumber;
+    }
+
+    @Override
+    public long getVersion() {
+        return version;
     }
 }

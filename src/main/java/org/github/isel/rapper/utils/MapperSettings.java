@@ -135,8 +135,9 @@ public class MapperSettings {
                 .map(c -> c + " = ?")
                 .collect(Collectors.joining(", ","update " + type.getSimpleName() + " set "," output CAST(INSERTED.version as bigint) version where "))
                 + idName.stream()
-                .map(id->id+" = ?")
-                .collect(Collectors.joining(" and "));
+                .map(id -> id + " = ?")
+                .collect(Collectors.joining(" and "))
+                + " and version = ?";
 
         deleteQuery = idName.stream()
                 .map(id -> id + " = ?")

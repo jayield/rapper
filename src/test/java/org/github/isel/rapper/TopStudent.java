@@ -1,22 +1,23 @@
 package org.github.isel.rapper;
 
 import java.sql.Date;
-import java.sql.Timestamp;
 
 public class TopStudent extends Student {
     private final int topGrade;
     private final int year;
+    private final long version;
 
-    public TopStudent(int nif, String name, Date birthday, long version, int studentNumber, int topGrade, int year) {
-        super(nif, name, birthday, version, studentNumber);
+    public TopStudent(int nif, String name, Date birthday, long studentVersion, int studentNumber, int topGrade, int year, long version, long personVersion) {
+        super(nif, name, birthday, personVersion, studentNumber, studentVersion);
         this.topGrade = topGrade;
         this.year = year;
+        this.version = version;
     }
 
     public TopStudent(){
-        super(0, null, null, 0, 0);
-        this.topGrade = 0;
-        this.year = 0;
+        topGrade = 0;
+        year = 0;
+        version = 0;
     }
 
     public int getTopGrade() {
@@ -25,5 +26,10 @@ public class TopStudent extends Student {
 
     public int getYear() {
         return year;
+    }
+
+    @Override
+    public long getVersion() {
+        return version;
     }
 }

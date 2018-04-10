@@ -287,6 +287,20 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             setColumns(stmt, obj, 0);
             setIds(stmt, obj.getIdentityKey(), mapperSettings.getColumns().size());
+
+            //Since each object has its own version, we want the version from type not from the subClass
+            SqlFunction<T, Long> getVersion = t -> {
+                Field f = type.getDeclaredField("version");
+                f.setAccessible(true);
+                return (Long) f.get(t);
+            };
+
+            SqlConsumer<PreparedStatement> setVersion = preparedStatement ->
+                    preparedStatement.setLong(
+                            mapperSettings.getColumns().size() + mapperSettings.getIds().size() + 1,
+                            getVersion.wrap().apply(obj)
+                    );
+            setVersion.wrap().accept(stmt);
         })
                 .thenApply(func.wrap())
                 .thenAccept(o -> {

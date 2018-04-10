@@ -13,3 +13,5 @@ insert into Car (owner, plate, brand, model) values (2, '23we45', 'Mitsubishi', 
 insert into Student (nif, studentNumber) values (454, 3)
 
 insert into TopStudent (nif, topGrade, year) values (454, 20, 2017)
+
+insert into TopStudentCar (topStudentId, carOwner, carPlate) values (454, 2, '23we45');
