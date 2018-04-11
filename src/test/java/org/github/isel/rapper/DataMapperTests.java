@@ -9,6 +9,7 @@ import org.junit.Test;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 import static org.junit.Assert.*;
@@ -23,6 +24,7 @@ public class DataMapperTests {
     private DataMapper<Person, Integer> personMapper = MapperRegistry.getMapper(Person.class);
     private DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getMapper(Car.class);
     private DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getMapper(TopStudent.class);
+    private DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getMapper(Company.class);
 
     @Before
     public void start(){
@@ -66,13 +68,13 @@ public class DataMapperTests {
 
     @Test
     public void getById() {
-        int nif = 321;
-        int owner = 2;
+        int nif = 321, owner = 2;
         String plate = "23we45";
-
+        int companyId = 1, companyCid = 1;
+        UnitOfWork current = UnitOfWork.getCurrent();
 
         SqlConsumer<Optional<Person>> personConsumer = optionalPerson -> {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection()
+            PreparedStatement ps = current.getConnection()
                     .prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
             ps.setInt(1, nif);
             ResultSet rs = ps.executeQuery();
@@ -82,7 +84,7 @@ public class DataMapperTests {
         };
 
         SqlConsumer<Optional<Car>> carConsumer = optionalCar -> {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection()
+            PreparedStatement ps = current.getConnection()
                     .prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?");
             ps.setInt(1, owner);
             ps.setString(2, plate);
@@ -93,18 +95,39 @@ public class DataMapperTests {
             else fail("Car wasn't selected from the database");
         };
 
-        personMapper
+        SqlConsumer<Optional<Company>> companyConsumer = optionalCompany -> {
+            PreparedStatement ps = current.getConnection()
+                    .prepareStatement("select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?");
+            ps.setInt(1, companyId);
+            ps.setInt(2, companyCid);
+            ResultSet rs = ps.executeQuery();
+            if(optionalCompany.isPresent() && rs.next()){
+                assertCompany(optionalCompany.get(), rs, current);
+            }
+            else fail("Car wasn't selected from the database");
+        };
+
+        CompletableFuture<Void> personFuture = personMapper
                 .getById(nif)
                 .thenAccept(personConsumer.wrap());
-        carMapper
+
+        CompletableFuture<Void> carFuture = carMapper
                 .getById(new Car.PrimaryPk(owner, plate))
                 .thenAccept(carConsumer.wrap());
+
+        CompletableFuture<Void> companyFuture = companyMapper
+                .getById(new Company.PrimaryKey(companyId, companyCid))
+                .thenAccept(companyConsumer.wrap());
+
+        CompletableFuture.allOf(personFuture, carFuture, companyFuture).join();
     }
 
     @Test
     public void getAll() {
+        UnitOfWork current = UnitOfWork.getCurrent();
+
         SqlConsumer<List<Person>> personConsumer = people -> {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person");
+            PreparedStatement ps = current.getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person");
             ResultSet rs = ps.executeQuery();
             if (rs.next())
                 assertPerson(people.get(0), rs);
@@ -112,7 +135,7 @@ public class DataMapperTests {
         };
 
         SqlConsumer<List<Car>> carConsumer = cars -> {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car");
+            PreparedStatement ps = current.getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car");
             ResultSet rs = ps.executeQuery();
             if(rs.next()){
                 assertCar(cars.get(0), rs);
@@ -120,13 +143,15 @@ public class DataMapperTests {
             else fail("Cars weren't selected from the database");
         };
 
-        personMapper
+        CompletableFuture<Void> personFuture = personMapper
                 .getAll()
                 .thenAccept(personConsumer.wrap());
 
-        carMapper
+        CompletableFuture<Void> carFuture = carMapper
                 .getAll()
                 .thenAccept(carConsumer.wrap());
+
+        CompletableFuture.allOf(personFuture, carFuture).join();
     }
 
     private void assertPerson(Person person, ResultSet rs) throws SQLException {
@@ -154,6 +179,34 @@ public class DataMapperTests {
         assertNotEquals(0, topStudent.getVersion());
         assertEquals(topStudent.getTopGrade(), rs.getInt("topGrade"));
         assertEquals(topStudent.getYear(), rs.getInt("year"));
+    }
+
+    private void assertCompany(Company company, ResultSet rs, UnitOfWork current) throws SQLException {
+        assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
+        assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
+        assertEquals(company.getMotto(), rs.getString("motto"));
+        assertEquals(company.getVersion(), rs.getLong("version"));
+        assertNotEquals(0, company.getVersion());
+
+        List<Employee> employees = company.getCurrentEmployees().get();
+        PreparedStatement ps = current.getConnection()
+                .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
+        ps.setInt(1, company.getIdentityKey().getId());
+        ps.setInt(2, company.getIdentityKey().getCid());
+        rs = ps.executeQuery();
+
+        while(rs.next()){
+            assertEmployee(employees.remove(0), rs);
+        }
+    }
+
+    private void assertEmployee(Employee employee, ResultSet rs) throws SQLException {
+        assertEquals(employee.getId(), rs.getInt("id"));
+        assertEquals(employee.getName(), rs.getString("name"));
+        assertEquals(employee.getCompanyId(), rs.getInt("companyId"));
+        assertEquals(employee.getCompanyCid(), rs.getInt("companyCid"));
+        assertEquals(employee.getVersion(), rs.getLong("version"));
+        assertNotEquals(0, employee.getVersion());
     }
 
     @Test

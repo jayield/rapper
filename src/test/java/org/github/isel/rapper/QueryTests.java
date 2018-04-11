@@ -30,10 +30,10 @@ public class QueryTests {
         assertEquals("insert into Person ( nif, name, birthday ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", dataMapper.getInsertQuery());
         assertEquals("update Person set name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ? and version = ?", dataMapper.getUpdateQuery());
 
-        assertEquals("select id, name, CAST(version as bigint) version from Employee", employeeMapper.getSelectQuery());
+        assertEquals("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee", employeeMapper.getSelectQuery());
         assertEquals("delete from Employee where id = ?", employeeMapper.getDeleteQuery());
-        assertEquals("insert into Employee ( name ) output CAST(INSERTED.version as bigint) version values ( ? )", employeeMapper.getInsertQuery());
-        assertEquals("update Employee set name = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeMapper.getUpdateQuery());
+        assertEquals("insert into Employee ( name, companyId, companyCid ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", employeeMapper.getInsertQuery());
+        assertEquals("update Employee set name = ?, companyId = ?, companyCid = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeMapper.getUpdateQuery());
     }
 
     @Test
@@ -133,9 +133,9 @@ public class QueryTests {
         if(f.isAnnotationPresent(ColumnName.class)){
             return Stream.of(new SqlField.SqlFieldExternal(
                     f,
-                    f.getName(),
+                    f.getType(), f.getName(),
                     f.getAnnotation(ColumnName.class).name(),
-                    ReflectionUtils.getGenericType(f.getGenericType()))
+                    f.getAnnotation(ColumnName.class).table(), f.getAnnotation(ColumnName.class).foreignName(), ReflectionUtils.getGenericType(f.getGenericType()))
             );
         }
         if(pred.test(f)){

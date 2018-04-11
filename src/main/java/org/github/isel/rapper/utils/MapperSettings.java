@@ -1,11 +1,9 @@
 package org.github.isel.rapper.utils;
 
 
-import org.github.isel.rapper.ColumnName;
-import org.github.isel.rapper.DomainObject;
-import org.github.isel.rapper.EmbeddedId;
-import org.github.isel.rapper.Id;
+import org.github.isel.rapper.*;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -38,7 +36,12 @@ public class MapperSettings {
     private String deleteQuery;
     private String selectByIdQuery;
 
-    public MapperSettings(Class<?> type){
+    private final Predicate<Field> fieldPredicate = field -> field.getType().isPrimitive() ||
+            field.getType().isAssignableFrom(String.class) ||
+            field.getType().isAssignableFrom(Timestamp.class) ||
+            field.getType().isAssignableFrom(Date.class);
+
+    public MapperSettings(Class<?> type, Class<?> primaryKey, Constructor<?> primaryKeyConstructor){
         this.type = type;
 
         Map<Class, List<SqlField>> fieldMap = Arrays.stream(type.getDeclaredFields())
@@ -46,8 +49,36 @@ public class MapperSettings {
                 .collect(Collectors.groupingBy(SqlField::getClass));
 
         allFields = new ArrayList<>();
+        getParentsFields(type);
 
-        //Add Ids from parent classes to ids and fields to allFields
+        Optional.ofNullable(fieldMap.get(SqlFieldId.class))
+                .ifPresent(sqlFields -> {
+                    if(ids == null) ids = new ArrayList<>();
+                    ids.addAll(sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+                });
+
+        Optional.ofNullable(fieldMap.get(SqlField.class))
+                .ifPresent(sqlFields -> {
+                    if(columns == null) columns = new ArrayList<>();
+                    columns.addAll(sqlFields);
+                });
+
+        Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
+                .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
+
+        if(ids != null) allFields.addAll(ids);
+        if(columns != null) allFields.addAll(columns);
+        if(externals != null) allFields.addAll(externals);
+
+
+        buildQueryStrings();
+    }
+
+    /**
+     * Add ids and fields from parent classes to ids and allFields respectively
+     * @param type
+     */
+    private void getParentsFields(Class<?> type) {
         for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass()){
             Map<Class, List<SqlField>> parentFieldMap = Arrays.stream(clazz.getDeclaredFields())
                     .flatMap(this::toSqlField)
@@ -61,36 +92,6 @@ public class MapperSettings {
                 ids.addAll(sqlFieldIds.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
             }
         }
-
-        Optional.ofNullable(fieldMap.get(SqlFieldId.class))
-                .ifPresent(sqlFields -> {
-                    if(ids == null) ids = new ArrayList<>();
-                    ids.addAll(sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
-                });
-
-        //Add SqlFieldIds which have "identity = false" to columns
-        /*if(ids != null) {
-            columns = new ArrayList<>();
-            ids
-                    .stream()
-                    .filter(sqlFieldId -> !sqlFieldId.identity)
-                    .forEach(columns::add);
-        }*/
-
-        Optional.ofNullable(fieldMap.get(SqlField.class))
-                .ifPresent(sqlFields -> {
-                    if(columns == null) columns = new ArrayList<>();
-                    columns.addAll(sqlFields);
-                });
-
-        Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
-                .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
-
-        if(ids != null) allFields.addAll(ids);
-        if(columns != null) columns.forEach(sqlField -> { if(!allFields.contains(sqlField)) allFields.add(sqlField); });
-        if(externals != null) allFields.addAll(externals);
-
-        buildQueryStrings();
     }
 
     private void buildQueryStrings(){
@@ -145,14 +146,14 @@ public class MapperSettings {
     }
 
     private Stream<SqlField> toSqlField(Field f){
-        Predicate<Field> pred = field -> field.getType().isPrimitive() ||
-                field.getType().isAssignableFrom(String.class) ||
-                field.getType().isAssignableFrom(Timestamp.class) ||
-                field.getType().isAssignableFrom(Date.class);
         if(f.isAnnotationPresent(EmbeddedId.class)){
-            return Arrays.stream(f.getType()
-                    .getDeclaredFields()).filter(pred)
-                    .map(fi-> new SqlFieldId(fi, fi.getName(), false));
+            return Arrays.stream(
+                    f
+                            .getType()
+                            .getDeclaredFields())
+                            .filter(fieldPredicate)
+                            .map(fi-> new SqlFieldId(fi, fi.getName(), false)
+            );
         }
         if(f.isAnnotationPresent(Id.class)){
             return Stream.of(new SqlFieldId(f, f.getName(), f.getAnnotation(Id.class).isIdentity()));
@@ -160,12 +161,16 @@ public class MapperSettings {
         if(f.isAnnotationPresent(ColumnName.class)){
             return Stream.of(new SqlFieldExternal(
                     f,
+                    f.getType(),
                     f.getName(),
                     f.getAnnotation(ColumnName.class).name(),
-                    ReflectionUtils.getGenericType(f.getGenericType()))
+                    f.getAnnotation(ColumnName.class).table(),
+                    f.getAnnotation(ColumnName.class).foreignName(),
+                    ReflectionUtils.getGenericType(f.getGenericType())
+                )
             );
         }
-        if(pred.test(f)){
+        if(fieldPredicate.test(f)){
             return Stream.of(new SqlField(f, f.getName()));
         }
         return Stream.empty();
@@ -241,5 +246,9 @@ public class MapperSettings {
 
     public List<SqlField> getAllFields() {
         return allFields;
+    }
+
+    public Predicate<Field> getFieldPredicate() {
+        return fieldPredicate;
     }
 }

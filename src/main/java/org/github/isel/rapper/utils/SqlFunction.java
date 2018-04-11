@@ -2,13 +2,14 @@ package org.github.isel.rapper.utils;
 
 import org.github.isel.rapper.exceptions.DataMapperException;
 
+import java.lang.reflect.InvocationTargetException;
 import java.sql.SQLException;
 import java.util.Objects;
 import java.util.function.Function;
 
 @FunctionalInterface
 public interface SqlFunction<T,R> {
-    R apply(T t) throws SQLException, NoSuchFieldException, IllegalAccessException;
+    R apply(T t) throws SQLException, NoSuchFieldException, IllegalAccessException, InvocationTargetException, InstantiationException;
 
     default Function<T,R> wrap(){
         return t -> {

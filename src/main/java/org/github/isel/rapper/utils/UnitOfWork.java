@@ -106,7 +106,7 @@ public class UnitOfWork {
         setCurrent(new UnitOfWork(supplier));
     }
 
-    private static void setCurrent(UnitOfWork uow) {
+    public static void setCurrent(UnitOfWork uow) {
         current.set(uow);
     }
 

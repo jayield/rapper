@@ -48,6 +48,11 @@ public class Car implements DomainObject<Car.PrimaryPk> {
             this.plate = plate;
         }
 
+        public PrimaryPk() {
+            owner = 1;
+            plate = null;
+        }
+
         public int getOwner() {
             return owner;
         }

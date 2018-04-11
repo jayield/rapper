@@ -73,9 +73,12 @@ go
 create table Employee (
   id int identity,
   name varchar(20),
+  companyId int,
+  companyCid int,
   version rowversion,
 
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  FOREIGN KEY (companyId, companyCid) references Company (id, cid)
 )
 go
 

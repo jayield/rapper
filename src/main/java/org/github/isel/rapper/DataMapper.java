@@ -13,11 +13,13 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
+import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -27,9 +29,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final ConcurrentMap<K,T> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
     private final Class<? super T> subClass;
+    private Class<?> primaryKey = null;
+    private Constructor<?> primaryKeyConstructor = null;
     private final MapperSettings mapperSettings;
     private final Constructor<T> constructor;
     private final Logger logger = LoggerFactory.getLogger(DataMapper.class);
+    private ExternalsHandler<T, K> externalHandler;
 
     public MapperSettings getMapperSettings() {
         return mapperSettings;
@@ -37,19 +42,26 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     public DataMapper(Class<T> type){
         this.type = type;
-        this.subClass = type.getSuperclass();
-        this.mapperSettings = new MapperSettings(type);
+        subClass = type.getSuperclass();
         try {
             /*Class[] parameterTypes = mapperSettings
                     .getAllFields()
                     .stream()
                     .map(f -> f.field.getType())
                     .toArray(Class[]::new);*/
-            this.constructor = type.getConstructor();
-            //this.constructor = type.getConstructor(parameterTypes); //TODO get a better way to get the constructor
+
+            Class<?>[] declaredClasses = type.getDeclaredClasses();
+            if(declaredClasses.length > 0){
+                primaryKey = declaredClasses[0];
+                primaryKeyConstructor = primaryKey.getConstructor();
+            }
+
+            constructor = type.getConstructor();
         } catch (NoSuchMethodException e) {
             throw new RuntimeException(e);
         }
+        mapperSettings = new MapperSettings(type, primaryKey, primaryKeyConstructor);
+        externalHandler = new ExternalsHandler<>(mapperSettings.getIds(), mapperSettings.getExternals(), primaryKey, primaryKeyConstructor);
     }
 
     private Stream<T> stream(Statement statement, ResultSet rs) throws DataMapperException{
@@ -83,13 +95,34 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private T mapper(ResultSet rs){
         try {
             T t = constructor.newInstance();
+            Object primaryKey = primaryKeyConstructor != null ? primaryKeyConstructor.newInstance() : null;
+
+            //Set t's primary key field to primaryKey
+            if(primaryKey != null) {
+                SqlConsumer<Field> fieldConsumer = field -> {
+                    field.setAccessible(true);
+                    field.set(t, primaryKey);
+                };
+
+                Arrays.stream(type.getDeclaredFields())
+                        .filter(field -> field.getType() == this.primaryKey)
+                        .findFirst()
+                        .ifPresent(fieldConsumer.wrap());
+            }
 
             SqlConsumer<SqlField> fieldSetter = f -> {
                 f.field.setAccessible(true);
-                f.field.set(t, rs.getObject(f.name));
+                try{
+                    f.field.set(t, rs.getObject(f.name));
+                }
+                catch (IllegalArgumentException e){ //If IllegalArgumentException is caught, is because field is from primaryKeyClass
+                    f.field.set(primaryKey, rs.getObject(f.name));
+                }
             };
             mapperSettings
                     .getAllFields()
+                    .stream()
+                    .filter(field -> mapperSettings.getFieldPredicate().test(field.field))
                     .forEach(fieldSetter.wrap());
 
             return t;
@@ -160,13 +193,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         T obj = identityMap.get(id);
         if(obj != null)
             return CompletableFuture.completedFuture(Optional.of(obj));
+        UnitOfWork unitOfWork = UnitOfWork.getCurrent();
 
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setIds(stmt, id, 0))
                 .thenApply(func.wrap())
                 .thenApply(Stream::findFirst)
                 .thenApply(optionalT -> {
-                    optionalT.ifPresent(this::populateExternals);
+                    UnitOfWork.setCurrent(unitOfWork);
+                    optionalT.ifPresent(externalHandler::populateExternals);
                     return optionalT;
                 });
     }
@@ -176,28 +211,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
                 .thenApply(func.wrap())
-                .thenApply(tStream -> tStream.peek(this::populateExternals))
+                .thenApply(tStream -> tStream.peek(externalHandler::populateExternals))
                 .thenApply(tStream1 -> tStream1.collect(Collectors.toList()));
-    }
-
-    /**
-     * It will go to the DB get the externals for a class (T) and set them on the object received
-     * @param t object which externals shall be populated
-     */
-    private void populateExternals(T t) {
-        Consumer<SqlField.SqlFieldExternal> findWhereConsumer = sqlFieldExternal -> {
-
-            SqlConsumer<? super List<T>> sqlConsumer = list -> {
-                sqlFieldExternal.field.setAccessible(true);
-                sqlFieldExternal.field.set(t, list);
-            };
-
-            findWhere(new Pair<>(sqlFieldExternal.columnName, t.getIdentityKey()))
-                    .thenAccept(sqlConsumer.wrap());
-        };
-
-        List<SqlField.SqlFieldExternal> externals = getMapperSettings().getExternals();
-        if(externals != null) externals.forEach(findWhereConsumer);
     }
 
     /**

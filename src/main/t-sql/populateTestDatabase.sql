@@ -14,4 +14,7 @@ insert into Student (nif, studentNumber) values (454, 3)
 
 insert into TopStudent (nif, topGrade, year) values (454, 20, 2017)
 
-insert into TopStudentCar (topStudentId, carOwner, carPlate) values (454, 2, '23we45');
+insert into Company (id, cid, motto) values (1, 1, 'Living la vida loca')
+
+insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1)
+insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1)
