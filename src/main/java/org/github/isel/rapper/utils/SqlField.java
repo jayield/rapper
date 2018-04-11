@@ -24,9 +24,10 @@ public class SqlField {
 
     public static class SqlFieldExternal extends SqlField{
         public final String[] foreignNames;
+        //Type of the elements in the collection
         public final Class<? extends DomainObject> type;
+        //Type of the collection / supplier
         public final Class<?> fType;
-        //public final String columnName;
         public final String table;
         public final String selectTableQuery;
         public final String[] columnsNames;
@@ -34,7 +35,6 @@ public class SqlField {
         public SqlFieldExternal(Field field, Class<?> fType, String name, String columnName, String table, String foreignName, Class<? extends DomainObject> type) {
             super(field, name);
             this.fType = fType;
-            //this.columnName = columnName;
             this.table = table;
             this.foreignNames = foreignName.split("\\|");
             this.type = type;

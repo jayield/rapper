@@ -20,35 +20,20 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
 
     private final List<SqlField.SqlFieldId> ids;
     private final List<SqlField.SqlFieldExternal> externals;
-    //private final Class<?> primaryKey;
     private final Constructor<?> primaryKeyConstructor;
     private final Field[] primaryKeyDeclaredFields;
 
     public ExternalsHandler(List<SqlField.SqlFieldId> ids, List<SqlField.SqlFieldExternal> externals, Class<?> primaryKey, Constructor<?> primaryKeyConstructor){
         this.ids = ids;
         this.externals = externals;
-        //this.primaryKey = primaryKey;
         this.primaryKeyConstructor = primaryKeyConstructor;
         primaryKeyDeclaredFields = primaryKey != null ? primaryKey.getDeclaredFields() : null;
     }
 
-    /*
-        if table == null
-        Get the type of the objects of the collection
-        Get it's mapper
-        split the values on name
-        call mapper.findWhere with the values and ids
-        insert obtained values in the sqlfieldExternal
-
-        if table != null
-        split the values on name
-        generate and execute query
-        Get the type of the objects of the collection
-        Get it's mapper
-        call findById with the values obtained
-        insert obtained values in sqlfieldExternal
+    /**
+     * Will set the fields marked with @ColumnName by querying the database
+     * @param t
      */
-
     public void populateExternals(T t){
         if(externals != null)
             externals.forEach(sqlFieldExternal -> {
@@ -85,6 +70,17 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             });
     }
 
+    /**
+     * Used when it's a N-N relation.
+     * This method will get the generated selectQuery in SqlFieldExternal, to get from the relation table the ids of the external objects.
+     * With this, it will call external object's mapper's getById with those ids and create a list with the results.
+     * That List will be setted in the SqlFieldExternal
+     * @param t
+     * @param sqlFieldExternal
+     * @param mapper
+     * @param idValues
+     * @param <V>
+     */
     private<V> void populateWithExternalTable(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, V> mapper, Iterator<Object> idValues) {
         SqlConsumer<PreparedStatement> preparedStatementConsumer = stmt -> {
             for (int i = 1; idValues.hasNext(); i++) {
@@ -136,6 +132,14 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         return results;
     }
 
+    /**
+     * Will call the external object's mapper's findWhere with T's ids to find the external objects who are referenced by T
+     * @param t
+     * @param sqlFieldExternal
+     * @param mapper
+     * @param columnsNames
+     * @param idValues
+     */
     private void populateWithDataMapper(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, ?> mapper, String[] columnsNames, Iterator<Object> idValues) {
         Pair<String, Object>[] pairs = Arrays.stream(columnsNames)
                 .map(str -> new Pair<>(str, idValues.next()))
@@ -148,6 +152,14 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 .join();
     }
 
+    /**
+     * Sets the field of T with the List passed in the parameters
+     * The field must be a collection or a Supplier
+     * @param t
+     * @param sqlFieldExternal
+     * @param domainObjects
+     * @throws IllegalAccessException
+     */
     private void setExternal(T t, SqlField.SqlFieldExternal sqlFieldExternal, List<? extends DomainObject> domainObjects) throws IllegalAccessException {
         if (sqlFieldExternal.fType.isAssignableFrom(Collection.class)) {
             sqlFieldExternal.field.setAccessible(true);

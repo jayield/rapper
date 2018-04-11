@@ -46,7 +46,7 @@ The Rapper implementation use the following design patterns:
  takes place, the `table` in case of N-N relation and the `foreignName` which tells the name of the column of the referenced table 
  where the ID of the other `DomainObject` takes place. `foreignName` is only needed when `table` is setted
  
- - A `DomainObject` must have a 0 arguments constructor
+ - A `DomainObject` and the class that contains the keys and respective names must have a 0 arguments constructor
  
 ### Rules
 You must create an environment variable to connect to the DB. <br />
