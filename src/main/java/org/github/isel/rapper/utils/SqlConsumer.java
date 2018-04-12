@@ -4,6 +4,7 @@ import org.github.isel.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.InvocationTargetException;
 import java.sql.SQLException;
+import java.util.Objects;
 import java.util.function.Consumer;
 
 public interface SqlConsumer<T> {
@@ -16,5 +17,10 @@ public interface SqlConsumer<T> {
                 throw new DataMapperException(e);
             }
         };
+    }
+
+    default <V> SqlConsumer<V> compose(SqlFunction<? super V, ? extends T> before) {
+        Objects.requireNonNull(before);
+        return (V v) -> accept(before.apply(v));
     }
 }

@@ -13,7 +13,7 @@ import java.util.concurrent.CompletableFuture;
 public interface Mapper<T extends DomainObject<K>, K> {
     CompletableFuture<Optional<T>> getById(K id);
     CompletableFuture<List<T>> getAll();
-    void insert(T obj);
-    void update(T obj);
-    void delete(T obj);
+    CompletableFuture<Void> insert(T obj);
+    CompletableFuture<Void> update(T obj);
+    CompletableFuture<Void> delete(T obj);
 }

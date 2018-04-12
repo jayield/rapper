@@ -1,6 +1,8 @@
 package org.github.isel.rapper.utils;
 
 
+import javafx.util.Pair;
+import org.github.isel.rapper.DataMapper;
 import org.github.isel.rapper.DomainObject;
 import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
@@ -10,7 +12,9 @@ import org.slf4j.LoggerFactory;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -40,8 +44,7 @@ public class UnitOfWork {
 
     public void closeConnection(){
         try {
-            if(connection != null)
-                connection.close();
+            connection.close();
         } catch (SQLException e) {
             log.info("Error closing connection\nError Message: " + e.getMessage());
         }
@@ -120,52 +123,121 @@ public class UnitOfWork {
         return current.get();
     }
 
-    //TODO update IdentityMaps only after all transactions succeeded?
     public CompletableFuture<Boolean> commit() {
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                insertNew();
-                updateDirty();
-                deleteRemoved();
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> insertPair = insertNew();
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> updatePair = updateDirty();
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> deletePair = deleteRemoved();
 
-                connection.commit();
-                return true;
-            }
-            catch (ConcurrencyException | SQLException e) {
-                try {
-                    rollback();
-                    return false;
-                } catch (SQLException sqlException) {
-                    throw new DataMapperException(sqlException);
-                }
-            } finally {
-                closeConnection();
-                newObjects.clear();
-                clonedObjects.clear();
-                dirtyObjects.clear();
-                removedObjects.clear();
-            }
-        });
+        List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
+        completableFutures.addAll(updatePair.getValue());
+        completableFutures.addAll(deletePair.getValue());
+
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .thenApply(aVoid -> updateIdentityMap(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
     }
 
-    private void insertNew() {
-        for (DomainObject obj : newObjects) {
-            getMapper(obj.getClass()).insert(obj);
+    private Boolean updateIdentityMap(List<DataMapper<? extends DomainObject<?>, ?>> insertMappers, List<DataMapper<? extends DomainObject<?>, ?>> updateMappers,
+                                      List<DataMapper<? extends DomainObject<?>, ?>> deleteMappers) {
+        try {
+            //The different iterators will have the same size (eg. insertMapperIter.size() == insertObjIter.size()
+            Iterator<DataMapper<? extends DomainObject<?>, ?>> insertMapperIter = insertMappers.iterator(),
+                    updateMapperIter = updateMappers.iterator(),
+                    deleteMapperIter = deleteMappers.iterator();
+            Iterator<DomainObject> insertObjIter = newObjects.iterator(),
+                    updateObjIter = dirtyObjects.iterator(),
+                    deleteObjIter = removedObjects.iterator();
+
+            //Will iterate through insert, update and delete iterators at the same time
+            while (insertMapperIter.hasNext() || updateMapperIter.hasNext() || deleteMapperIter.hasNext()){
+                iterate(insertMapperIter, insertObjIter);
+                iterate(updateMapperIter, updateObjIter);
+                iterate(deleteMapperIter, deleteObjIter);
+            }
+
+            connection.commit();
+            return true;
+        }
+        catch (ConcurrencyException | SQLException e) {
+            try {
+                rollback();
+                return false;
+            } catch (SQLException sqlException) {
+                throw new DataMapperException(sqlException);
+            }
+        } finally {
+            closeConnection();
+            newObjects.clear();
+            clonedObjects.clear();
+            dirtyObjects.clear();
+            removedObjects.clear();
         }
     }
 
-    private void updateDirty() {
+    private<V> void iterate(Iterator<DataMapper<? extends DomainObject<?>, ?>> mapperIterator, Iterator<DomainObject> domainObjectIterator) {
+        if(mapperIterator.hasNext()){
+            DataMapper<DomainObject<V>, V> mapper = (DataMapper<DomainObject<V>, V>) mapperIterator.next();
+            DomainObject<V> domainObject = domainObjectIterator.next();
+            if(!tryReplace(domainObject, mapper.getIdentityMap())) {
+                throw new ConcurrencyException("Couldn't update IdentityMap");
+            }
+        }
+    }
+
+    private<K, V extends DomainObject<K>> boolean tryReplace(V obj, Map<K, V> identityMap){
+        long target = System.currentTimeMillis() + (long) 2000;
+        long remaining = target - System.currentTimeMillis();
+
+        while(remaining >= 0){
+            V observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), obj);
+            if(observedObj == null) return true;
+            if(observedObj.getVersion() < obj.getVersion()) {
+                if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
+                    return true;
+            }
+            else return false;
+            remaining = target - System.currentTimeMillis();
+            Thread.yield();
+        }
+        return false;
+    }
+
+    private Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> insertNew() {
+        List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        for (DomainObject obj : newObjects) {
+            DataMapper mapper = getMapper(obj.getClass());
+            completableFutures.add(mapper.insert(obj));
+            mappers.add(mapper);
+        }
+
+        return new Pair<>(mappers, completableFutures);
+    }
+
+    private Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> updateDirty() {
+        List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         dirtyObjects
                 .stream()
                 .filter(domainObject -> !removedObjects.contains(domainObject))
-                .forEach(domainObject -> getMapper(domainObject.getClass()).update(domainObject));
+                .forEach(domainObject -> {
+                    DataMapper mapper = getMapper(domainObject.getClass());
+                    completableFutures.add(mapper.update(domainObject));
+                    mappers.add(mapper);
+                });
+
+        return new Pair<>(mappers, completableFutures);
     }
 
-    private void deleteRemoved() {
+    private Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> deleteRemoved() {
+        List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         for (DomainObject obj : removedObjects) {
-            getMapper(obj.getClass()).delete(obj);
+            DataMapper mapper = getMapper(obj.getClass());
+            completableFutures.add(mapper.delete(obj));
+            mappers.add(mapper);
         }
 
+        return new Pair<>(mappers, completableFutures);
     }
 
     /**

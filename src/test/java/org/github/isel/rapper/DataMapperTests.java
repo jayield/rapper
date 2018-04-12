@@ -11,6 +11,7 @@ import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
+import static org.github.isel.rapper.AssertUtils.*;
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 import static org.junit.Assert.*;
 
@@ -107,19 +108,21 @@ public class DataMapperTests {
             else fail("Car wasn't selected from the database");
         };
 
-        CompletableFuture<Void> personFuture = personMapper
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        completableFutures.add(personMapper
                 .getById(nif)
-                .thenAccept(personConsumer.wrap());
+                .thenAccept(personConsumer.wrap()));
 
-        CompletableFuture<Void> carFuture = carMapper
+        completableFutures.add(carMapper
                 .getById(new Car.PrimaryPk(owner, plate))
-                .thenAccept(carConsumer.wrap());
+                .thenAccept(carConsumer.wrap()));
 
-        CompletableFuture<Void> companyFuture = companyMapper
+        completableFutures.add(companyMapper
                 .getById(new Company.PrimaryKey(companyId, companyCid))
-                .thenAccept(companyConsumer.wrap());
+                .thenAccept(companyConsumer.wrap()));
 
-        CompletableFuture.allOf(personFuture, carFuture, companyFuture).join();
+        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .join();
     }
 
     @Test
@@ -143,70 +146,17 @@ public class DataMapperTests {
             else fail("Cars weren't selected from the database");
         };
 
-        CompletableFuture<Void> personFuture = personMapper
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        completableFutures.add(personMapper
                 .getAll()
-                .thenAccept(personConsumer.wrap());
+                .thenAccept(personConsumer.wrap()));
 
-        CompletableFuture<Void> carFuture = carMapper
+        completableFutures.add(carMapper
                 .getAll()
-                .thenAccept(carConsumer.wrap());
+                .thenAccept(carConsumer.wrap()));
 
-        CompletableFuture.allOf(personFuture, carFuture).join();
-    }
-
-    private void assertPerson(Person person, ResultSet rs) throws SQLException {
-        assertEquals(person.getNif(), rs.getInt("nif"));
-        assertEquals(person.getName(), rs.getString("name"));
-        assertEquals(person.getBirthday(), rs.getDate("birthday"));
-        assertEquals(person.getVersion(), rs.getLong("version"));
-        assertNotEquals(0, person.getVersion());
-    }
-
-    private void assertCar(Car car, ResultSet rs) throws SQLException {
-        assertEquals(car.getIdentityKey().getOwner(), rs.getInt("owner"));
-        assertEquals(car.getIdentityKey().getPlate(), rs.getString("plate"));
-        assertEquals(car.getBrand(), rs.getString("brand"));
-        assertEquals(car.getModel(), rs.getString("model"));
-        assertEquals(car.getVersion(), rs.getLong("version"));
-        assertNotEquals(0, car.getVersion());
-    }
-
-    private void assertTopStudent(TopStudent topStudent, ResultSet rs) throws SQLException {
-        assertEquals(topStudent.getNif(), rs.getInt("nif"));
-        assertEquals(topStudent.getName(), rs.getString("name"));
-        assertEquals(topStudent.getBirthday(), rs.getDate("birthday"));
-        assertEquals(topStudent.getVersion(), rs.getLong("version"));
-        assertNotEquals(0, topStudent.getVersion());
-        assertEquals(topStudent.getTopGrade(), rs.getInt("topGrade"));
-        assertEquals(topStudent.getYear(), rs.getInt("year"));
-    }
-
-    private void assertCompany(Company company, ResultSet rs, UnitOfWork current) throws SQLException {
-        assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
-        assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
-        assertEquals(company.getMotto(), rs.getString("motto"));
-        assertEquals(company.getVersion(), rs.getLong("version"));
-        assertNotEquals(0, company.getVersion());
-
-        List<Employee> employees = company.getCurrentEmployees().get();
-        PreparedStatement ps = current.getConnection()
-                .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
-        ps.setInt(1, company.getIdentityKey().getId());
-        ps.setInt(2, company.getIdentityKey().getCid());
-        rs = ps.executeQuery();
-
-        while(rs.next()){
-            assertEmployee(employees.remove(0), rs);
-        }
-    }
-
-    private void assertEmployee(Employee employee, ResultSet rs) throws SQLException {
-        assertEquals(employee.getId(), rs.getInt("id"));
-        assertEquals(employee.getName(), rs.getString("name"));
-        assertEquals(employee.getCompanyId(), rs.getInt("companyId"));
-        assertEquals(employee.getCompanyCid(), rs.getInt("companyCid"));
-        assertEquals(employee.getVersion(), rs.getLong("version"));
-        assertNotEquals(0, employee.getVersion());
+        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .join();
     }
 
     @Test
@@ -217,9 +167,13 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        personMapper.insert(person);
-        carMapper.insert(car);
-        topStudentMapper.insert(topStudent);
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        completableFutures.add(personMapper.insert(person));
+        completableFutures.add(carMapper.insert(car));
+        completableFutures.add(topStudentMapper.insert(topStudent));
+
+        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .join();
 
         //Assert
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
@@ -279,9 +233,13 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        personMapper.update(person);
-        carMapper.update(car);
-        topStudentMapper.update(topStudent);
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        completableFutures.add(personMapper.update(person));
+        completableFutures.add(carMapper.update(car));
+        completableFutures.add(topStudentMapper.update(topStudent));
+
+        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .join();
 
         ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
@@ -319,9 +277,13 @@ public class DataMapperTests {
         Car car = new Car(2, "23we45", null, null, 0);
         TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0, 0, 0);
 
-        personMapper.delete(person);
-        carMapper.delete(car);
-        topStudentMapper.delete(topStudent);
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        completableFutures.add(personMapper.delete(person));
+        completableFutures.add(carMapper.delete(car));
+        completableFutures.add(topStudentMapper.delete(topStudent));
+
+        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .join();
 
         PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
         ps.setInt(1, person.getNif());
