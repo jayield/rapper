@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static org.github.isel.rapper.utils.ConnectionManager.*;
 
@@ -49,21 +49,21 @@ public class DataRepository<T extends DomainObject<K>, K> implements Repository<
     }
 
     @Override
-    public CompletableFuture<Void> create(T t) {
+    public CompletableFuture<Boolean> create(T t) {
         checkUnitOfWork();
         t.markNew();
         return UnitOfWork.getCurrent().commit();
     }
 
     @Override
-    public CompletableFuture<Void> createAll(Iterable<T> t) {
+    public CompletableFuture<Boolean> createAll(Iterable<T> t) {
         checkUnitOfWork();
         t.forEach(DomainObject::markNew);
         return UnitOfWork.getCurrent().commit();
     }
 
     @Override
-    public CompletableFuture<Void> update(T t) {
+    public CompletableFuture<Boolean> update(T t) {
         checkUnitOfWork();
         Mapper<T, K> mapper = MapperRegistry.getMapper(type);
         ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
@@ -75,7 +75,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Repository<
     }
 
     @Override
-    public CompletableFuture<Void> updateAll(Iterable<T> t) {
+    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
         checkUnitOfWork();
         Mapper<T, K> mapper = MapperRegistry.getMapper(type);
         ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
@@ -89,7 +89,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Repository<
     }
 
     @Override
-    public CompletableFuture<Void> deleteById(K k) {
+    public CompletableFuture<Boolean> deleteById(K k) {
         checkUnitOfWork();
         Mapper<T, K> mapper = MapperRegistry.getMapper(type);
         ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
@@ -98,28 +98,34 @@ public class DataRepository<T extends DomainObject<K>, K> implements Repository<
             return UnitOfWork.getCurrent().commit();
         }
         else {
-            Consumer<T> consumer = t1 -> {
+            Function<T, Boolean> consumer = t1 -> {
                 t1.markRemoved();
-                UnitOfWork.getCurrent().commit().join();
+                return UnitOfWork.getCurrent().commit().join();
             };
 
             return findById(k)
-                    .thenAccept(t -> t.ifPresent(consumer));
+                    .thenApply(t -> {
+                        if(t.isPresent())
+                            return consumer.apply(t.get());
+                        else return false;
+                    });
         }
     }
 
     @Override
-    public CompletableFuture<Void> delete(T t) {
+    public CompletableFuture<Boolean> delete(T t) {
         checkUnitOfWork();
         t.markRemoved();
         return UnitOfWork.getCurrent().commit();
     }
 
     @Override
-    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
         checkUnitOfWork();
-        List<CompletableFuture<Void>> list = new ArrayList<>();
+        List<CompletableFuture<Boolean>> list = new ArrayList<>();
         keys.forEach(k -> list.add(deleteById(k)));
-        return CompletableFuture.allOf((CompletableFuture<Void>[]) list.toArray());
+        return list
+                .stream()
+                .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2));
     }
 }

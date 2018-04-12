@@ -34,7 +34,8 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * Will set the fields marked with @ColumnName by querying the database
      * @param t
      */
-    public void populateExternals(T t){
+    public CompletableFuture<Void> populateExternals(T t){
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         if(externals != null)
             externals.forEach(sqlFieldExternal -> {
                 Class<? extends DomainObject> collectionObjectsType = sqlFieldExternal.type;
@@ -61,13 +62,14 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                         .map(function.wrap());
                 try {
                     if(sqlFieldExternal.table.equals(ColumnName.class.getDeclaredMethod("table").getDefaultValue()))
-                        populateWithDataMapper(t, sqlFieldExternal, collectionObjectsTypeMapper, columnsNames, idValues.iterator());
-                    else populateWithExternalTable(t, sqlFieldExternal, collectionObjectsTypeMapper, idValues.iterator());
+                        completableFutures.add(populateWithDataMapper(t, sqlFieldExternal, collectionObjectsTypeMapper, columnsNames, idValues.iterator()));
+                    else completableFutures.add(populateWithExternalTable(t, sqlFieldExternal, collectionObjectsTypeMapper, idValues.iterator()));
 
                 } catch (NoSuchMethodException e) {
                     throw new DataMapperException(e);
                 }
             });
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
     /**
@@ -75,13 +77,13 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * This method will get the generated selectQuery in SqlFieldExternal, to get from the relation table the ids of the external objects.
      * With this, it will call external object's mapper's getById with those ids and create a list with the results.
      * That List will be setted in the SqlFieldExternal
+     * @param <V>
      * @param t
      * @param sqlFieldExternal
      * @param mapper
      * @param idValues
-     * @param <V>
      */
-    private<V> void populateWithExternalTable(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, V> mapper, Iterator<Object> idValues) {
+    private<V> CompletableFuture<Void> populateWithExternalTable(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, V> mapper, Iterator<Object> idValues) {
         SqlConsumer<PreparedStatement> preparedStatementConsumer = stmt -> {
             for (int i = 1; idValues.hasNext(); i++) {
                 stmt.setObject(i, idValues.next());
@@ -101,10 +103,9 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
 
         SqlConsumer<List<? extends DomainObject>> listConsumer = domainObjects -> setExternal(t, sqlFieldExternal, domainObjects);
 
-        SQLUtils.execute(sqlFieldExternal.selectTableQuery, preparedStatementConsumer.wrap())
+        return SQLUtils.execute(sqlFieldExternal.selectTableQuery, preparedStatementConsumer.wrap())
                 .thenApply(consumeResults.wrap())
-                .thenAccept(listConsumer.wrap())
-                .join();
+                .thenAccept(listConsumer.wrap());
     }
 
     /**
@@ -140,16 +141,15 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param columnsNames
      * @param idValues
      */
-    private void populateWithDataMapper(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, ?> mapper, String[] columnsNames, Iterator<Object> idValues) {
+    private CompletableFuture<Void> populateWithDataMapper(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, ?> mapper, String[] columnsNames, Iterator<Object> idValues) {
         Pair<String, Object>[] pairs = Arrays.stream(columnsNames)
                 .map(str -> new Pair<>(str, idValues.next()))
                 .toArray(Pair[]::new);
 
         SqlConsumer<List<? extends DomainObject>> listConsumer = domainObjects -> setExternal(t, sqlFieldExternal, domainObjects);
 
-        mapper.findWhere(pairs)
-                .thenAccept(listConsumer.wrap())
-                .join();
+        return mapper.findWhere(pairs)
+                .thenAccept(listConsumer.wrap());
     }
 
     /**

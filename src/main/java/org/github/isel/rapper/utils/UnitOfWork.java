@@ -42,7 +42,9 @@ public class UnitOfWork {
         try {
             if(connection != null)
                 connection.close();
-        } catch (SQLException e) { }
+        } catch (SQLException e) {
+            log.info("Error closing connection\nError Message: " + e.getMessage());
+        }
         connection = null;
     }
 
@@ -58,6 +60,10 @@ public class UnitOfWork {
         newObjects.add(obj);
     }
 
+    /**
+     * It will be created a clone of obj, in case a rollback is done, we have a way to go back as it was before
+     * @param obj DomainObject to be cloned
+     */
     public void registerClone(DomainObject obj) {
         assert obj.getIdentityKey()!= null;
         assert !removedObjects.contains(obj);
@@ -110,46 +116,36 @@ public class UnitOfWork {
         current.set(uow);
     }
 
-    //TODO FIX: sometimes current.get() returns null,
-    //Possible reason: since we are using completableFuture we don't have the guarantee that the threadLocal of the working thread has the unit of work
     public static UnitOfWork getCurrent() {
         return current.get();
     }
 
-    public CompletableFuture<Void> commit() {
-        return CompletableFuture.runAsync(this::commitRunnable);
-    }
-
     //TODO update IdentityMaps only after all transactions succeeded?
-    private void commitRunnable() {
-        try {
-            insertNew();
-            updateDirty();
-            deleteRemoved();
+    public CompletableFuture<Boolean> commit() {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                insertNew();
+                updateDirty();
+                deleteRemoved();
 
-            connection.commit();
-        } catch (ConcurrencyException e) {
-            try {
-                rollback();
-            } catch (SQLException e1) {
-                throw new DataMapperException(e1);
+                connection.commit();
+                return true;
             }
-            throw e;
-        }
-        catch (SQLException e){
-            try {
-                rollback();
-            } catch (SQLException e1) {
-                throw new DataMapperException(e1);
+            catch (ConcurrencyException | SQLException e) {
+                try {
+                    rollback();
+                    return false;
+                } catch (SQLException sqlException) {
+                    throw new DataMapperException(sqlException);
+                }
+            } finally {
+                closeConnection();
+                newObjects.clear();
+                clonedObjects.clear();
+                dirtyObjects.clear();
+                removedObjects.clear();
             }
-        }
-        finally {
-            //closeConnection();
-            newObjects.clear();
-            clonedObjects.clear();
-            dirtyObjects.clear();
-            removedObjects.clear();
-        }
+        });
     }
 
     private void insertNew() {
@@ -178,8 +174,7 @@ public class UnitOfWork {
      * The objects in dirtyObjects need to go back as before
      */
     public void rollback() throws SQLException {
-        if(connection != null)
-            connection.rollback();
+        connection.rollback();
         /*for (DomainObject obj : newObjects)
             MapperRegistry.getMapper(obj.getClass()).getIdentityMap().remove(obj.getIdentityKey());*/
 

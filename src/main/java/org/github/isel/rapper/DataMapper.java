@@ -201,7 +201,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(Stream::findFirst)
                 .thenApply(optionalT -> {
                     UnitOfWork.setCurrent(unitOfWork);
-                    optionalT.ifPresent(externalHandler::populateExternals);
+                    optionalT.ifPresent(t -> externalHandler.populateExternals(t).join());
                     return optionalT;
                 });
     }
@@ -211,7 +211,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
                 .thenApply(func.wrap())
-                .thenApply(tStream -> tStream.peek(externalHandler::populateExternals))
+                .thenApply(tStream -> tStream.peek(t -> externalHandler.populateExternals(t).join()))
                 .thenApply(tStream1 -> tStream1.collect(Collectors.toList()));
     }
 
