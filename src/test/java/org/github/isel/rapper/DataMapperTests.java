@@ -27,10 +27,10 @@ import static org.junit.Assert.*;
 public class DataMapperTests {
     private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
 
-    private final DataMapper<Person, Integer> personMapper = MapperRegistry.getMapper(Person.class);
-    private final DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getMapper(Car.class);
-    private final DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getMapper(TopStudent.class);
-    private final DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getMapper(Company.class);
+    private final DataMapper<Person, Integer> personMapper = MapperRegistry.getRepository(Person.class).getMapper();
+    private final DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getRepository(Car.class).getMapper();
+    private final DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getRepository(TopStudent.class).getMapper();
+    private final DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getRepository(Company.class).getMapper();
     private final String personSelectQuery = "select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?";
     private final String carSelectQuery = "select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?";
     private final String topStudentSelectQuery = "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
@@ -70,7 +70,6 @@ public class DataMapperTests {
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         UnitOfWork.newCurrent(manager::getConnection);
         UnitOfWork.getCurrent().getConnection().prepareCall("{call populateDB}").execute();
-        MapperRegistry.invalidateRegistry();
     }
 
     @After

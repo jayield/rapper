@@ -15,8 +15,7 @@ import static org.junit.Assert.assertEquals;
 
 public class DataBaseTests {
 
-    private static final String envVarName = "DBTEST_CONNECTION_STRING";
-    private static final ConnectionManager manager = new ConnectionManager(envVarName);
+    private static final ConnectionManager manager = ConnectionManager.getConnectionManager(ConnectionManager.DBsPath.TESTDB);
 
     public static Connection getConnection() {
         return manager.getConnection();

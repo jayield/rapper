@@ -39,7 +39,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         if(externals != null)
             externals.forEach(sqlFieldExternal -> {
                 Class<? extends DomainObject> collectionObjectsType = sqlFieldExternal.type;
-                DataMapper<? extends DomainObject, ?> collectionObjectsTypeMapper = MapperRegistry.getMapper(collectionObjectsType);
+                DataMapper<? extends DomainObject, ?> collectionObjectsTypeMapper = MapperRegistry.getRepository(collectionObjectsType).getMapper();
                 String[] columnsNames = sqlFieldExternal.columnsNames;
 
                 SqlFunction<SqlField.SqlFieldId, Object> function = sqlFieldId -> {

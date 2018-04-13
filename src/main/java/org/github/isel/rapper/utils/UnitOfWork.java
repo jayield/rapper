@@ -3,6 +3,7 @@ package org.github.isel.rapper.utils;
 
 import javafx.util.Pair;
 import org.github.isel.rapper.DataMapper;
+import org.github.isel.rapper.DataRepository;
 import org.github.isel.rapper.DomainObject;
 import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
@@ -20,7 +21,7 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static org.github.isel.rapper.utils.MapperRegistry.getMapper;
+import static org.github.isel.rapper.utils.MapperRegistry.getRepository;
 
 public class UnitOfWork {
     /**
@@ -99,15 +100,6 @@ public class UnitOfWork {
             removedObjects.add(obj);
     }
 
-    /**
-     * Adds the new obj to the IdentityMap
-     * @param obj
-     */
-    public void registerClean(DomainObject obj){
-        assert obj.getIdentityKey()!= null;
-        getMapper(obj.getClass()).getIdentityMap().put(obj.getIdentityKey(), obj);
-    }
-
     private static ThreadLocal<UnitOfWork> current = new ThreadLocal<>();
 
     /**
@@ -126,12 +118,12 @@ public class UnitOfWork {
     }
 
     public CompletableFuture<Boolean> commit() {
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> insertPair =
-                executeFilteredBiFunctionInList(DataMapper::create, newObjects, domainObject -> true);
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> updatePair =
-                executeFilteredBiFunctionInList(DataMapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> deletePair =
-                executeFilteredBiFunctionInList(DataMapper::delete, removedObjects, domainObject -> true);
+        Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> insertPair =
+                executeFilteredBiFunctionInList(DataRepository::create, newObjects, domainObject -> true);
+        Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> updatePair =
+                executeFilteredBiFunctionInList(DataRepository::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+        Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> deletePair =
+                executeFilteredBiFunctionInList(DataRepository::delete, removedObjects, domainObject -> true);
 
         List<CompletableFuture<Boolean>> completableFutures = insertPair.getValue();
         completableFutures.addAll(updatePair.getValue());
@@ -141,11 +133,11 @@ public class UnitOfWork {
                 .thenApply(aVoid -> updateIdentityMap(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
     }
 
-    private Boolean updateIdentityMap(List<DataMapper<? extends DomainObject<?>, ?>> insertMappers, List<DataMapper<? extends DomainObject<?>, ?>> updateMappers,
-                                      List<DataMapper<? extends DomainObject<?>, ?>> deleteMappers) {
+    private Boolean updateIdentityMap(List<DataRepository<? extends DomainObject<?>, ?>> insertMappers, List<DataRepository<? extends DomainObject<?>, ?>> updateMappers,
+                                      List<DataRepository<? extends DomainObject<?>, ?>> deleteMappers) {
         try {
             //The different iterators will have the same size (eg. insertMapperIter.size() == insertObjIter.size()
-            Iterator<DataMapper<? extends DomainObject<?>, ?>> insertMapperIter = insertMappers.iterator(),
+            Iterator<DataRepository<? extends DomainObject<?>, ?>> insertMapperIter = insertMappers.iterator(),
                     updateMapperIter = updateMappers.iterator(),
                     deleteMapperIter = deleteMappers.iterator();
             Iterator<DomainObject> insertObjIter = newObjects.iterator(),
@@ -178,32 +170,14 @@ public class UnitOfWork {
         }
     }
 
-    private<V> void iterate(Iterator<DataMapper<? extends DomainObject<?>, ?>> mapperIterator, Iterator<DomainObject> domainObjectIterator) {
+    private<V> void iterate(Iterator<DataRepository<? extends DomainObject<?>, ?>> mapperIterator, Iterator<DomainObject> domainObjectIterator) {
         if(mapperIterator.hasNext()){
-            DataMapper<DomainObject<V>, V> mapper = (DataMapper<DomainObject<V>, V>) mapperIterator.next();
+            DataRepository<DomainObject<V>, V> mapper = (DataRepository<DomainObject<V>, V>) mapperIterator.next();
             DomainObject<V> domainObject = domainObjectIterator.next();
-            if(!tryReplace(domainObject, mapper.getIdentityMap())) {
+            if(!mapper.tryReplace(domainObject)) {
                 throw new ConcurrencyException("Couldn't update IdentityMap");
             }
         }
-    }
-
-    private<K, V extends DomainObject<K>> boolean tryReplace(V obj, Map<K, V> identityMap){
-        long target = System.currentTimeMillis() + (long) 2000;
-        long remaining = target - System.currentTimeMillis();
-
-        while(remaining >= 0){
-            V observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), obj);
-            if(observedObj == null) return true;
-            if(observedObj.getVersion() < obj.getVersion()) {
-                if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
-                    return true;
-            }
-            else return false;
-            remaining = target - System.currentTimeMillis();
-            Thread.yield();
-        }
-        return false;
     }
 
     /**
@@ -217,18 +191,18 @@ public class UnitOfWork {
      *
      * The value of the Pair is a List containing the completableFutures of the calls of the mapper
      */
-    private<V> Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> executeFilteredBiFunctionInList(
-            BiFunction<DataMapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
+    private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> executeFilteredBiFunctionInList(
+            BiFunction<DataRepository<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
             List<DomainObject> list,
             Predicate<DomainObject> predicate
     ) {
-        List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
+        List<DataRepository<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
         List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
         list
                 .stream()
                 .filter(predicate)
                 .forEach(domainObject -> {
-                    DataMapper mapper = getMapper(domainObject.getClass());
+                    DataRepository mapper = getRepository(domainObject.getClass());
                     completableFutures.add(biFunction.apply(mapper, domainObject));
                     mappers.add(mapper);
                 });
@@ -247,7 +221,7 @@ public class UnitOfWork {
             MapperRegistry.getMapper(obj.getClass()).getIdentityMap().remove(obj.getIdentityKey());*/
 
         newObjects.forEach(domainObject ->
-                getMapper(domainObject.getClass()).getIdentityMap().remove(domainObject.getIdentityKey()));
+                getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
 
         for(DomainObject obj : dirtyObjects){
             clonedObjects
@@ -255,12 +229,12 @@ public class UnitOfWork {
                     .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                     .findFirst()
                     .ifPresent(
-                            clone -> getMapper(obj.getClass()).getIdentityMap().put(clone.getIdentityKey(), clone)
+                            clone -> getRepository(obj.getClass()).validate(clone.getIdentityKey(), clone)
                     );
         }
         removedObjects
                 .stream()
                 .filter(obj -> !dirtyObjects.contains(obj))
-                .forEach(obj -> getMapper(obj.getClass()).getIdentityMap().put(obj.getIdentityKey(), obj));
+                .forEach(obj -> getRepository(obj.getClass()).validate(obj.getIdentityKey(), obj));
     }
 }

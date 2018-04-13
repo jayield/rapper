@@ -11,12 +11,6 @@ public interface DomainObject<K> {
         UnitOfWork.getCurrent().registerNew(this);
     }
 
-    /**
-     * Always called when reading an object from DB
-     */
-    default void markClean() {
-        UnitOfWork.getCurrent().registerClean(this);
-    }
 
     /**
      * To be always called before making any changes to the object and calling markDirty()

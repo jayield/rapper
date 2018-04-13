@@ -1,6 +1,7 @@
 package org.github.isel.rapper.utils;
 
 import org.github.isel.rapper.DataMapper;
+import org.github.isel.rapper.DataRepository;
 import org.github.isel.rapper.DomainObject;
 
 import java.lang.reflect.ParameterizedType;
@@ -12,28 +13,9 @@ import java.util.Optional;
 import static java.lang.System.out;
 
 public class MapperRegistry {
-    private static Map<Class, DataMapper> map = new HashMap<>(); //TODO load all entrys
+    private static Map<Class, DataRepository> repositoryMap = new HashMap<>();
 
-    public static<T extends DomainObject<K>, K> DataMapper<T, K> getMapper(Class<T> domainObject) {
-        DataMapper mapper = map.computeIfAbsent(domainObject, c -> new DataMapper<>(domainObject));
-
-        List<SqlField.SqlFieldExternal> externals = mapper.getMapperSettings().getExternals();
-        if(externals != null)
-            externals
-                    .stream()
-                    .map(f -> f.type)
-                    .filter(c -> !map.containsKey(c))
-                    .filter(DomainObject.class::isAssignableFrom)
-                    .forEach(MapperRegistry::getMapper);
-
-        return mapper;
-    }
-
-    public static <T extends DomainObject<K>, K> void addEntry(Class<T> domainObjectClass, DataMapper<T, K> dataMapper) {
-        map.put(domainObjectClass, dataMapper);
-    }
-
-    public static void invalidateRegistry(){
-        map.clear();
+    public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> domainObject) {
+        return repositoryMap.computeIfAbsent(domainObject, c -> new DataRepository<>(domainObject));
     }
 }

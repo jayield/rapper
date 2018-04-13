@@ -23,7 +23,6 @@ import java.util.stream.StreamSupport;
 
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
-    private final ConcurrentMap<K,T> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
     private Class<?> primaryKey = null;
     private Constructor<?> primaryKeyConstructor = null;
@@ -79,12 +78,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             } catch (SQLException e) {
                 throw new DataMapperException(e.getMessage(), e);
             }
-        }).peek(this::putOrReplace);
-    }
-
-    private void putOrReplace(T item){
-        K key = item.getIdentityKey();
-        identityMap.compute(key, (k,v)-> item);
+        });
     }
 
     private T mapper(ResultSet rs){
@@ -142,11 +136,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Optional<T>> findById(K id) {
-        T obj = identityMap.get(id);
-        if(obj != null)
-            return CompletableFuture.completedFuture(Optional.of(obj));
         UnitOfWork unitOfWork = UnitOfWork.getCurrent();
-
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt ->
                 setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
@@ -176,7 +166,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private Optional<DataMapper<? super T, ?>> getParentMapper(){
         Class<? super T> aClass = type.getSuperclass();
         if(aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            DataMapper<? super T, ?> classMapper = MapperRegistry.getMapper((Class<DomainObject>) aClass);
+            DataMapper<? super T, ?> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass).getMapper();
             return Optional.of(classMapper);
         }
         return Optional.empty();
@@ -292,10 +282,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
         //TODO
         return null;
-    }
-
-    public ConcurrentMap<K, T> getIdentityMap() {
-        return identityMap;
     }
 
     public String getSelectQuery() {

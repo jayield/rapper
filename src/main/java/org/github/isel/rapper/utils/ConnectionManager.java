@@ -39,7 +39,7 @@ public class ConnectionManager {
     /**CONNECTION STRING FORMAT: SERVERNAME;DATABASE;USER;PASSWORD*/
     private final ConnectionPoolDataSource dataSource;
 
-    public ConnectionManager(String envVarName){
+    private ConnectionManager(String envVarName){
         dataSource = getDataSource(envVarName);
     }
 

@@ -6,8 +6,10 @@ import org.github.isel.rapper.utils.UnitOfWork;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 
@@ -15,36 +17,40 @@ import static org.github.isel.rapper.utils.ConnectionManager.*;
 
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
+    private final ConcurrentMap<K, T> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
-    private ConnectionManager connectionManager;
+    private final DataMapper<T, K> mapper;
 
     public DataRepository(Class<T> type){
         this.type = type;
-        connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
+        mapper = new DataMapper<>(type);
+    }
+
+    public DataMapper<T, K> getMapper() {
+        return mapper;
     }
 
     private void checkUnitOfWork(){
-        if(UnitOfWork.getCurrent() == null)
-            UnitOfWork.newCurrent(() -> connectionManager.getConnection());
+        if(UnitOfWork.getCurrent() == null) {
+            ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.DEFAULTDB);
+            UnitOfWork.newCurrent(connectionManager::getConnection);
+        }
     }
 
     @Override
     public CompletableFuture<Optional<T>> findById(K k) {
         checkUnitOfWork();
-        Mapper<T, K> mapper = MapperRegistry.getMapper(type);
-        ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
         if(identityMap.containsKey(k)){
             return CompletableFuture.completedFuture(Optional.of(identityMap.get(k)));
         }
-        return mapper.findById(k);
+        return mapper.findById(k).thenApply(t -> { t.ifPresent(this::putOrReplace); return t; });
     }
 
     @Override
     public CompletableFuture<List<T>> findAll() {
         checkUnitOfWork();
-        Mapper<T, K> mapper = MapperRegistry.getMapper(type);
         CompletableFuture<List<T>> completableFuture = mapper.findAll();
-        completableFuture.thenAccept(list -> list.forEach(DomainObject::markClean));
+        completableFuture.thenAccept(list -> list.forEach(this::putOrReplace));
         return completableFuture;
     }
 
@@ -65,8 +71,6 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Boolean> update(T t) {
         checkUnitOfWork();
-        Mapper<T, K> mapper = MapperRegistry.getMapper(type);
-        ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
         if(identityMap.containsKey(t.getIdentityKey())){
             identityMap.get(t.getIdentityKey()).markToBeDirty();
         }
@@ -77,8 +81,6 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
         checkUnitOfWork();
-        Mapper<T, K> mapper = MapperRegistry.getMapper(type);
-        ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
         t.forEach(t1 -> {
             if(identityMap.containsKey(t1.getIdentityKey())){
                 identityMap.get(t1.getIdentityKey()).markToBeDirty();
@@ -91,8 +93,6 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Boolean> deleteById(K k) {
         checkUnitOfWork();
-        Mapper<T, K> mapper = MapperRegistry.getMapper(type);
-        ConcurrentMap<K, T> identityMap = ((DataMapper<T, K>) mapper).getIdentityMap();
         if(identityMap.containsKey(k)){
             identityMap.get(k).markRemoved();
             return UnitOfWork.getCurrent().commit();
@@ -127,5 +127,36 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         return list
                 .stream()
                 .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2));
+    }
+
+    private void putOrReplace(T item){
+        K key = item.getIdentityKey();
+        identityMap.compute(key, (k,v)-> item);
+    }
+
+    public void invalidate(K identityKey) {
+        identityMap.remove(identityKey);
+    }
+
+    public void validate(K identityKey, T t) {
+        identityMap.put(identityKey, t);
+    }
+
+    public boolean tryReplace(T obj){
+        long target = System.currentTimeMillis() + (long) 2000;
+        long remaining = target - System.currentTimeMillis();
+
+        while(remaining >= 0){
+            T observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), obj);
+            if(observedObj == null) return true;
+            if(observedObj.getVersion() < obj.getVersion()) {
+                if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
+                    return true;
+            }
+            else return false;
+            remaining = target - System.currentTimeMillis();
+            Thread.yield();
+        }
+        return false;
     }
 }

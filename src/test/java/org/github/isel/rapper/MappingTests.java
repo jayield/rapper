@@ -86,7 +86,7 @@ public class MappingTests {
         f.setAccessible(true);
         Map<Class, DataMapper> map = (Map<Class, DataMapper>)f.get(null);
         out.println(map);
-        MapperRegistry.getMapper(Account.class);
+        MapperRegistry.getRepository(Account.class).getMapper();
         out.println(map);
     }
 
