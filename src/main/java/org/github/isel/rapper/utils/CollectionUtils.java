@@ -11,13 +11,13 @@ public class CollectionUtils {
     /**
      * Zips the specified stream with its indices.
      */
-    public static <T> Stream<Map.Entry<Integer, T>> zipWithIndex(Stream<? extends T> stream) {
-        return StreamSupport.stream(new Spliterators.AbstractSpliterator<Map.Entry<Integer, T>>(Long.MAX_VALUE, Spliterator.ORDERED | Spliterator.IMMUTABLE) {
+    public static <T> Stream<Indexer<T>> zipWithIndex(Stream<? extends T> stream) {
+        return StreamSupport.stream(new Spliterators.AbstractSpliterator<Indexer<T>>(Long.MAX_VALUE, Spliterator.ORDERED | Spliterator.IMMUTABLE) {
             int[] index = {0};
             Spliterator<? extends T> spliterator = stream.spliterator();
             @Override
-            public boolean tryAdvance(Consumer<? super Map.Entry<Integer, T>> action) {
-                return spliterator.tryAdvance(i -> action.accept(new AbstractMap.SimpleImmutableEntry<>(index[0]++, i)));
+            public boolean tryAdvance(Consumer<? super Indexer<T>> action) {
+                return spliterator.tryAdvance(i -> action.accept(new Indexer<T>(i, index[0]++)));
             }
         }, false);
     }
@@ -27,7 +27,17 @@ public class CollectionUtils {
      * The first argument of the function is the element index and the second one - the element value.
      */
     public static <T, R> Stream<R> mapWithIndex(Stream<? extends T> stream, BiFunction<Integer, ? super T, ? extends R> mapper) {
-        return zipWithIndex(stream).map(entry -> mapper.apply(entry.getKey(), entry.getValue()));
+        return zipWithIndex(stream).map(entry -> mapper.apply(entry.index, entry.item));
+    }
+
+    public static class Indexer<T>{
+        public final T item;
+        public final int index;
+
+        public Indexer(T item, int index) {
+            this.item = item;
+            this.index = index;
+        }
     }
 
 

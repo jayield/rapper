@@ -102,7 +102,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         };
 
         SqlConsumer<List<? extends DomainObject>> listConsumer = domainObjects -> setExternal(t, sqlFieldExternal, domainObjects);
-
         return SQLUtils.execute(sqlFieldExternal.selectTableQuery, preparedStatementConsumer.wrap())
                 .thenApply(consumeResults.wrap())
                 .thenAccept(listConsumer.wrap());

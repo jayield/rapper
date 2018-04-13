@@ -7,9 +7,9 @@ public class Company implements DomainObject<Company.PrimaryKey> {
     @EmbeddedId
     private final PrimaryKey primaryKey;
     private final String motto;
-    @ColumnName(name = "companyId|companyCid", table = "CompanyEmployee", foreignName = "employeeId")
+    @ColumnName(name = {"companyId","companyCid"}, table = "CompanyEmployee", foreignName = {"employeeId"})
     private final Supplier<List<Employee>> allEmployees;
-    @ColumnName(name = "companyId|companyCid")
+    @ColumnName(name = {"companyId","companyCid"})
     private final Supplier<List<Employee>> currentEmployees;
     private final long version;
 
