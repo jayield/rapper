@@ -32,4 +32,8 @@ public class MapperRegistry {
     public static <T extends DomainObject<K>, K> void addEntry(Class<T> domainObjectClass, DataMapper<T, K> dataMapper) {
         map.put(domainObjectClass, dataMapper);
     }
+
+    public static void invalidateRegistry(){
+        map.clear();
+    }
 }

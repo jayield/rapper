@@ -4,8 +4,8 @@ GO
 
 use PS_TEST_API_DATABASE
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Person' AND Type = N'U')
-    drop table Person
+if OBJECT_ID('Person') is not null
+  drop table Person
 go
 create table Person (
 	nif int primary key,
@@ -15,7 +15,7 @@ create table Person (
 )
 go
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Car' AND Type = N'U')
+if OBJECT_ID('Car') is not null
   drop table Car
 go
 create table Car (
@@ -29,7 +29,7 @@ create table Car (
 )
 go
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Student' AND Type = N'U')
+if OBJECT_ID('Student') is not null
   drop table Student
 go
 create table Student (
@@ -41,7 +41,7 @@ create table Student (
 )
 go
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'TopStudent' AND Type = N'U')
+if OBJECT_ID('TopStudent') is not null
   drop table TopStudent
 go
 create table TopStudent (
@@ -54,7 +54,7 @@ create table TopStudent (
 )
 go
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Company' AND Type = N'U')
+if OBJECT_ID('Company') is not null
   drop table Company
 go
 create table Company (
@@ -67,7 +67,7 @@ create table Company (
 )
 go
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'Employee' AND Type = N'U')
+if OBJECT_ID('Employee') is not null
   drop table Employee
 go
 create table Employee (
@@ -82,7 +82,7 @@ create table Employee (
 )
 go
 
-if EXISTS(SELECT 1 FROM sys.Tables WHERE  Name = N'CompanyEmployee' AND Type = N'U')
+if OBJECT_ID('CompanyEmployee') is not null
   drop table CompanyEmployee
 go
 create table CompanyEmployee (

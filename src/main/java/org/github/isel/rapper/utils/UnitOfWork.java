@@ -16,6 +16,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.github.isel.rapper.utils.MapperRegistry.getMapper;
@@ -124,9 +126,12 @@ public class UnitOfWork {
     }
 
     public CompletableFuture<Boolean> commit() {
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> insertPair = insertNew();
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> updatePair = updateDirty();
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> deletePair = deleteRemoved();
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> insertPair =
+                executeFilteredBiFunctionInList(DataMapper::insert, newObjects, domainObject -> true);
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> updatePair =
+                executeFilteredBiFunctionInList(DataMapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> deletePair =
+                executeFilteredBiFunctionInList(DataMapper::delete, removedObjects, domainObject -> true);
 
         List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
         completableFutures.addAll(updatePair.getValue());
@@ -201,41 +206,32 @@ public class UnitOfWork {
         return false;
     }
 
-    private Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> insertNew() {
+    /**
+     * It will iterate over {@code list} and call {@code biFunction} passing the mapper and the domainObject
+     *
+     * @param biFunction the biFunction to be called for each iteration
+     * @param list the list to iterate
+     * @param predicate the predicate to filter the elements to iterate
+     * @return a Pair whose key contains an ordered List of the object's mappers inside {@code list}, meaning, for example,
+     * for object located at index 4 in {@code list}, its mapper is located at the same index in this List.
+     *
+     * The value of the Pair is a List containing the completableFutures of the calls of the mapper
+     */
+    private<V> Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> executeFilteredBiFunctionInList(
+            BiFunction<DataMapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Void>> biFunction,
+            List<DomainObject> list,
+            Predicate<DomainObject> predicate
+    ) {
         List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        for (DomainObject obj : newObjects) {
-            DataMapper mapper = getMapper(obj.getClass());
-            completableFutures.add(mapper.insert(obj));
-            mappers.add(mapper);
-        }
-
-        return new Pair<>(mappers, completableFutures);
-    }
-
-    private Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> updateDirty() {
-        List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        dirtyObjects
+        list
                 .stream()
-                .filter(domainObject -> !removedObjects.contains(domainObject))
+                .filter(predicate)
                 .forEach(domainObject -> {
                     DataMapper mapper = getMapper(domainObject.getClass());
-                    completableFutures.add(mapper.update(domainObject));
+                    completableFutures.add(biFunction.apply(mapper, domainObject));
                     mappers.add(mapper);
                 });
-
-        return new Pair<>(mappers, completableFutures);
-    }
-
-    private Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> deleteRemoved() {
-        List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        for (DomainObject obj : removedObjects) {
-            DataMapper mapper = getMapper(obj.getClass());
-            completableFutures.add(mapper.delete(obj));
-            mappers.add(mapper);
-        }
 
         return new Pair<>(mappers, completableFutures);
     }

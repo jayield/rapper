@@ -5,11 +5,15 @@ import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static org.github.isel.rapper.AssertUtils.*;
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
@@ -21,22 +25,58 @@ import static org.junit.Assert.*;
  * TopStudentMapper -> Class that extends Student and Person and has List of cars annotated with @ColumnName
  */
 public class DataMapperTests {
+    private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
 
-    private DataMapper<Person, Integer> personMapper = MapperRegistry.getMapper(Person.class);
-    private DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getMapper(Car.class);
-    private DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getMapper(TopStudent.class);
-    private DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getMapper(Company.class);
+    private final DataMapper<Person, Integer> personMapper = MapperRegistry.getMapper(Person.class);
+    private final DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getMapper(Car.class);
+    private final DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getMapper(TopStudent.class);
+    private final DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getMapper(Company.class);
+    private final String personSelectQuery = "select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?";
+    private final String carSelectQuery = "select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?";
+    private final String topStudentSelectQuery = "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
+            "inner join Student S2 on P.nif = S2.nif " +
+            "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?";
+
+    private Consumer<PreparedStatement> getPersonPSConsumer(int nif) {
+        SqlConsumer<PreparedStatement> consumer = ps -> ps.setInt(1, nif);
+        return consumer.wrap();
+    }
+
+    private Consumer<PreparedStatement> getCompanyPSConsumer(int companyId, int companyCid) {
+        SqlConsumer<PreparedStatement> companyPSConsumer = ps ->{
+            ps.setInt(1, companyId);
+            ps.setInt(2, companyCid);
+        };
+        return companyPSConsumer.wrap();
+    }
+
+    private Consumer<PreparedStatement> getCarPSConsumer(int owner, String plate) {
+        SqlConsumer<PreparedStatement> carPSConsumer = ps ->{
+            ps.setInt(1, owner);
+            ps.setString(2, plate);
+        };
+        return carPSConsumer.wrap();
+    }
+
+    private Consumer<PreparedStatement> getTopStudentPSConsumer(int nif) {
+        SqlConsumer<PreparedStatement> consumer = ps -> {
+            ps.setInt(1, nif);
+        };
+        return consumer.wrap();
+    }
 
     @Before
-    public void start(){
-        MapperRegistry.addEntry(Person.class, new DataMapper<>(Person.class));
+    public void start() throws SQLException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         UnitOfWork.newCurrent(manager::getConnection);
+        UnitOfWork.getCurrent().getConnection().prepareCall("{call populateDB}").execute();
+        MapperRegistry.invalidateRegistry();
     }
 
     @After
     public void finish() throws SQLException {
         UnitOfWork.getCurrent().rollback();
+        UnitOfWork.getCurrent().getConnection().prepareCall("{call deleteDB}").execute();
         UnitOfWork.getCurrent().closeConnection();
     }
 
@@ -46,16 +86,20 @@ public class DataMapperTests {
             PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?");
             ps.setString(1, "Jose");
             ResultSet rs = ps.executeQuery();
-            while (rs.next())
+
+            if (rs.next())
                 assertPerson(people.remove(0), rs);
+            else fail("Database has no data");
         };
 
         SqlConsumer<List<Car>> carConsumer = cars -> {
             PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
             ps.setString(1, "Mitsubishi");
             ResultSet rs = ps.executeQuery();
-            while (rs.next())
+
+            if (rs.next())
                 assertCar(cars.remove(0), rs);
+            else fail("Database has no data");
         };
 
         personMapper
@@ -69,91 +113,66 @@ public class DataMapperTests {
 
     @Test
     public void getById() {
-        int nif = 321, owner = 2;
-        String plate = "23we45";
+        int nif = 321;
+        int owner = 2; String plate = "23we45";
         int companyId = 1, companyCid = 1;
         UnitOfWork current = UnitOfWork.getCurrent();
-
-        SqlConsumer<Optional<Person>> personConsumer = optionalPerson -> {
-            PreparedStatement ps = current.getConnection()
-                    .prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
-            ps.setInt(1, nif);
-            ResultSet rs = ps.executeQuery();
-            if(optionalPerson.isPresent() && rs.next())
-                assertPerson(optionalPerson.get(), rs);
-            else fail("Person wasn't selected from the database");
-        };
-
-        SqlConsumer<Optional<Car>> carConsumer = optionalCar -> {
-            PreparedStatement ps = current.getConnection()
-                    .prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?");
-            ps.setInt(1, owner);
-            ps.setString(2, plate);
-            ResultSet rs = ps.executeQuery();
-            if(optionalCar.isPresent() && rs.next()){
-                assertCar(optionalCar.get(), rs);
-            }
-            else fail("Car wasn't selected from the database");
-        };
-
-        SqlConsumer<Optional<Company>> companyConsumer = optionalCompany -> {
-            PreparedStatement ps = current.getConnection()
-                    .prepareStatement("select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?");
-            ps.setInt(1, companyId);
-            ps.setInt(2, companyCid);
-            ResultSet rs = ps.executeQuery();
-            if(optionalCompany.isPresent() && rs.next()){
-                assertCompany(optionalCompany.get(), rs, current);
-            }
-            else fail("Car wasn't selected from the database");
-        };
 
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper
                 .getById(nif)
-                .thenAccept(personConsumer.wrap()));
+                .thenApply(person -> person.orElse(new Person()))
+                .thenAccept(person -> assertSingleRow(current, person, personSelectQuery,
+                        getPersonPSConsumer(nif), AssertUtils::assertPerson)));
 
         completableFutures.add(carMapper
                 .getById(new Car.PrimaryPk(owner, plate))
-                .thenAccept(carConsumer.wrap()));
+                .thenApply(car -> car.orElse(new Car()))
+                .thenAccept(car -> assertSingleRow(current, car, carSelectQuery,
+                        getCarPSConsumer(owner, plate), AssertUtils::assertCar)));
+
 
         completableFutures.add(companyMapper
                 .getById(new Company.PrimaryKey(companyId, companyCid))
-                .thenAccept(companyConsumer.wrap()));
+                .thenApply(company -> company.orElse(new Company()))
+                .thenAccept(company -> assertSingleRow(current, company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
+                        getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, current))));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
+    }
+
+    private<U> void assertGetAll(UnitOfWork current, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
+        try {
+            PreparedStatement ps = current.getConnection().prepareStatement(sql,
+                    ResultSet.TYPE_SCROLL_INSENSITIVE,
+                    ResultSet.CONCUR_READ_ONLY);
+            ResultSet rs = ps.executeQuery();
+
+            rs.last();
+            assertEquals(expectedRows, rs.getRow());
+            rs.beforeFirst();
+
+            if (rs.next())
+                assertConsumer.accept(list.get(0), rs);
+            else fail("People weren't selected from the database");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
     public void getAll() {
         UnitOfWork current = UnitOfWork.getCurrent();
 
-        SqlConsumer<List<Person>> personConsumer = people -> {
-            PreparedStatement ps = current.getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person");
-            ResultSet rs = ps.executeQuery();
-            if (rs.next())
-                assertPerson(people.get(0), rs);
-            else fail("People weren't selected from the database");
-        };
-
-        SqlConsumer<List<Car>> carConsumer = cars -> {
-            PreparedStatement ps = current.getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car");
-            ResultSet rs = ps.executeQuery();
-            if(rs.next()){
-                assertCar(cars.get(0), rs);
-            }
-            else fail("Cars weren't selected from the database");
-        };
-
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper
                 .getAll()
-                .thenAccept(personConsumer.wrap()));
+                .thenAccept(people -> assertGetAll(current, people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2)));
 
         completableFutures.add(carMapper
                 .getAll()
-                .thenAccept(carConsumer.wrap()));
+                .thenAccept(cars -> assertGetAll(current, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1)));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
@@ -176,60 +195,22 @@ public class DataMapperTests {
                 .join();
 
         //Assert
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
-        ps.setInt(1, person.getNif());
-        ResultSet rs = ps.executeQuery();
-        if (rs.next()) {
-            assertPerson(person, rs);
-        }
-        else fail("Person wasn't inserted in the database");
-
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?");
-        ps.setInt(1, car.getIdentityKey().getOwner());
-        ps.setString(2, car.getIdentityKey().getPlate());
-        rs = ps.executeQuery();
-        if (rs.next()) {
-            assertCar(car, rs);
-        }
-        else fail("Car wasn't inserted in the database");
-
-        ps = UnitOfWork.getCurrent().getConnection()
-                .prepareStatement(
-                        "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
-                        "inner join Student S2 on P.nif = S2.nif " +
-                        "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
-                );
-        ps.setInt(1, topStudent.getNif());
-        rs = ps.executeQuery();
-        if (rs.next()) {
-            assertTopStudent(topStudent, rs);
-        }
-        else fail("TopStudent wasn't inserted in the database");
+        assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
     public void update() throws SQLException {
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select CAST(version as bigint) version from Person where nif = ?");
-        ps.setInt(1, 321);
-        ResultSet rs = ps.executeQuery();
-        rs.next();
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select CAST(version as bigint) version from Car where owner = ? and plate = ?");
-        ps.setInt(1, 2);
-        ps.setString(2, "23we45");
-        rs = ps.executeQuery();
-        rs.next();
+        rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"));
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
-                "select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+        rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
-        );
-        ps.setInt(1, 454);
-        rs = ps.executeQuery();
-        rs.next();
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getTopStudentPSConsumer(454));
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
@@ -241,38 +222,13 @@ public class DataMapperTests {
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
 
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
-        ps.setInt(1, person.getNif());
-        rs = ps.executeQuery();
-        if (rs.next()) {
-            assertPerson(person, rs);
-        }
-        else fail("Person wasn't updated in the database");
-
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?");
-        ps.setInt(1, car.getIdentityKey().getOwner());
-        ps.setString(2, car.getIdentityKey().getPlate());
-        rs = ps.executeQuery();
-        if (rs.next()) {
-            assertCar(car, rs);
-        }
-        else fail("Car wasn't updated in the database");
-
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
-                "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
-                        "inner join Student S2 on P.nif = S2.nif " +
-                        "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
-        );
-        ps.setInt(1, topStudent.getNif());
-        rs = ps.executeQuery();
-        if (rs.next()) {
-            assertTopStudent(topStudent, rs);
-        }
-        else fail("TopStudent wasn't updated in the database");
+        assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
-    public void delete() throws SQLException {
+    public void delete() {
         Person person = new Person(321, null, null, 0);
         Car car = new Car(2, "23we45", null, null, 0);
         TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0, 0, 0);
@@ -285,24 +241,47 @@ public class DataMapperTests {
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
 
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?");
-        ps.setInt(1, person.getNif());
-        ResultSet rs = ps.executeQuery();
-        assertFalse(rs.next());
+        assertDelete(personSelectQuery, getPersonPSConsumer(person.getNif()));
+        assertDelete(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
+        assertDelete(topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()));
+    }
 
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?");
-        ps.setInt(1, car.getIdentityKey().getOwner());
-        ps.setString(2, car.getIdentityKey().getPlate());
-        rs = ps.executeQuery();
-        assertFalse(rs.next());
+    private ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
+        try {
+            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            preparedStatementConsumer.accept(ps);
+            ResultSet rs = ps.executeQuery();
+            rs.next();
+            return rs;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
-        ps = UnitOfWork.getCurrent().getConnection().prepareStatement(
-                "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(P.version as bigint) version from Person P " +
-                        "inner join Student S2 on P.nif = S2.nif " +
-                        "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?"
-        );
-        ps.setInt(1, topStudent.getNif());
-        rs = ps.executeQuery();
-        assertFalse(rs.next());
+    private<U> void assertSingleRow(UnitOfWork current, U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
+        try{
+            PreparedStatement ps = current.getConnection().prepareStatement(sql);
+            prepareStatement.accept(ps);
+            ResultSet rs = ps.executeQuery();
+
+            if(rs.next())
+                assertConsumer.accept(object, rs);
+            else fail("Object wasn't selected from the database");
+        }
+        catch (SQLException e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void assertDelete(String sql, Consumer<PreparedStatement> prepareStatement){
+        try {
+            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            prepareStatement.accept(ps);
+            ResultSet rs = ps.executeQuery();
+            assertFalse(rs.next());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 }
