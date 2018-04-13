@@ -13,7 +13,7 @@ import java.util.function.Function;
 
 import static org.github.isel.rapper.utils.ConnectionManager.*;
 
-public class DataRepository<T extends DomainObject<K>, K> implements Repository<T, K> {
+public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private final Class<T> type;
     private ConnectionManager connectionManager;
@@ -36,14 +36,14 @@ public class DataRepository<T extends DomainObject<K>, K> implements Repository<
         if(identityMap.containsKey(k)){
             return CompletableFuture.completedFuture(Optional.of(identityMap.get(k)));
         }
-        return mapper.getById(k);
+        return mapper.findById(k);
     }
 
     @Override
     public CompletableFuture<List<T>> findAll() {
         checkUnitOfWork();
         Mapper<T, K> mapper = MapperRegistry.getMapper(type);
-        CompletableFuture<List<T>> completableFuture = mapper.getAll();
+        CompletableFuture<List<T>> completableFuture = mapper.findAll();
         completableFuture.thenAccept(list -> list.forEach(DomainObject::markClean));
         return completableFuture;
     }

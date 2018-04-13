@@ -120,20 +120,20 @@ public class DataMapperTests {
 
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper
-                .getById(nif)
+                .findById(nif)
                 .thenApply(person -> person.orElse(new Person()))
                 .thenAccept(person -> assertSingleRow(current, person, personSelectQuery,
                         getPersonPSConsumer(nif), AssertUtils::assertPerson)));
 
         completableFutures.add(carMapper
-                .getById(new Car.PrimaryPk(owner, plate))
+                .findById(new Car.PrimaryPk(owner, plate))
                 .thenApply(car -> car.orElse(new Car()))
                 .thenAccept(car -> assertSingleRow(current, car, carSelectQuery,
                         getCarPSConsumer(owner, plate), AssertUtils::assertCar)));
 
 
         completableFutures.add(companyMapper
-                .getById(new Company.PrimaryKey(companyId, companyCid))
+                .findById(new Company.PrimaryKey(companyId, companyCid))
                 .thenApply(company -> company.orElse(new Company()))
                 .thenAccept(company -> assertSingleRow(current, company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
                         getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, current))));
@@ -167,11 +167,11 @@ public class DataMapperTests {
 
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper
-                .getAll()
+                .findAll()
                 .thenAccept(people -> assertGetAll(current, people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2)));
 
         completableFutures.add(carMapper
-                .getAll()
+                .findAll()
                 .thenAccept(cars -> assertGetAll(current, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1)));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
@@ -186,10 +186,10 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        completableFutures.add(personMapper.insert(person));
-        completableFutures.add(carMapper.insert(car));
-        completableFutures.add(topStudentMapper.insert(topStudent));
+        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
+        completableFutures.add(personMapper.create(person));
+        completableFutures.add(carMapper.create(car));
+        completableFutures.add(topStudentMapper.create(topStudent));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
@@ -214,7 +214,7 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.update(person));
         completableFutures.add(carMapper.update(car));
         completableFutures.add(topStudentMapper.update(topStudent));
@@ -233,7 +233,7 @@ public class DataMapperTests {
         Car car = new Car(2, "23we45", null, null, 0);
         TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0, 0, 0);
 
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.delete(person));
         completableFutures.add(carMapper.delete(car));
         completableFutures.add(topStudentMapper.delete(topStudent));

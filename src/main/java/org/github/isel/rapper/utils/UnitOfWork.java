@@ -126,14 +126,14 @@ public class UnitOfWork {
     }
 
     public CompletableFuture<Boolean> commit() {
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> insertPair =
-                executeFilteredBiFunctionInList(DataMapper::insert, newObjects, domainObject -> true);
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> updatePair =
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> insertPair =
+                executeFilteredBiFunctionInList(DataMapper::create, newObjects, domainObject -> true);
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> updatePair =
                 executeFilteredBiFunctionInList(DataMapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
-        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> deletePair =
+        Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> deletePair =
                 executeFilteredBiFunctionInList(DataMapper::delete, removedObjects, domainObject -> true);
 
-        List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
+        List<CompletableFuture<Boolean>> completableFutures = insertPair.getValue();
         completableFutures.addAll(updatePair.getValue());
         completableFutures.addAll(deletePair.getValue());
 
@@ -217,13 +217,13 @@ public class UnitOfWork {
      *
      * The value of the Pair is a List containing the completableFutures of the calls of the mapper
      */
-    private<V> Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> executeFilteredBiFunctionInList(
-            BiFunction<DataMapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Void>> biFunction,
+    private<V> Pair<List<DataMapper<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> executeFilteredBiFunctionInList(
+            BiFunction<DataMapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
             List<DomainObject> list,
             Predicate<DomainObject> predicate
     ) {
         List<DataMapper<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
         list
                 .stream()
                 .filter(predicate)

@@ -94,7 +94,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             List<V> ids = getIds(sqlFieldExternal, preparedStatement.getResultSet());
             return ids
                     .stream()
-                    .map(mapper::getById)
+                    .map(mapper::findById)
                     .map(CompletableFuture::join)
                     .filter(Optional::isPresent)
                     .map(Optional::get)
