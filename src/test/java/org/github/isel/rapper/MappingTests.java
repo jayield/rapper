@@ -19,6 +19,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.lang.System.out;
+
 public class MappingTests {
     @Test
     public void shouldMapResultSetToPerson(){
@@ -39,7 +41,7 @@ public class MappingTests {
             Assert.assertEquals(123, p.getNif());
             Assert.assertEquals("abc", p.getName());
 
-            System.out.println(p);
+            out.println(p);
         } catch (NoSuchMethodException e) {
             e.printStackTrace();
         } catch (IllegalAccessException e) {
@@ -53,29 +55,29 @@ public class MappingTests {
     public void test() throws NoSuchFieldException, IllegalAccessException {
         Class<A> type = A.class;
 
-        System.out.println(Arrays.toString(((ParameterizedType) type.getField("b").getGenericType()).getActualTypeArguments()));
+        out.println(Arrays.toString(((ParameterizedType) type.getField("b").getGenericType()).getActualTypeArguments()));
 
         Type type1 = ((ParameterizedType) type.getField("b").getGenericType()).getActualTypeArguments()[0];
 
         ParameterizedType type2 = (ParameterizedType) type1;
-        System.out.println(type2);
+        out.println(type2);
 
         type1 = ((ParameterizedType) type1).getActualTypeArguments()[0];
         Class<?> clazz = (Class<?>) type1;
-        System.out.println(clazz);
+        out.println(clazz);
 
-        System.out.println("-------------");
-        System.out.println(ReflectionUtils.getGenericType(type.getField("b").getGenericType()));
+        out.println("-------------");
+        out.println(ReflectionUtils.getGenericType(type.getField("b").getGenericType()));
 
         B b = new B("a");
-        System.out.println(b + "-"+ b.hashCode());
+        out.println(b + "-"+ b.hashCode());
         Field s = b.getClass().getDeclaredField("s");
         s.setAccessible(true);
         s.set(b, "b");
 
-        System.out.println(b+"-"+b.hashCode());
+        out.println(b+"-"+b.hashCode());
 
-        System.out.println(Stream.empty().map(Object::toString).collect(Collectors.joining(",", "prefix", "sufix")));
+        out.println(Stream.empty().map(Object::toString).collect(Collectors.joining(",", "prefix", "sufix")));
     }
 
     @Test
@@ -83,9 +85,9 @@ public class MappingTests {
         Field f = MapperRegistry.class.getDeclaredField("map");
         f.setAccessible(true);
         Map<Class, DataMapper> map = (Map<Class, DataMapper>)f.get(null);
-        System.out.println(map);
+        out.println(map);
         MapperRegistry.getMapper(Account.class);
-        System.out.println(map);
+        out.println(map);
     }
 
     @Test
@@ -94,7 +96,15 @@ public class MappingTests {
                 .stream()
                 .map(f -> ReflectionUtils.getGenericType(f.field.getGenericType()))
                 .filter(DomainObject.class::isAssignableFrom)
-                .forEach(System.out::println);
+                .forEach(out::println);
+    }
+
+    @Test
+    public void test3(){
+        B b = new B("s");
+        Field[] fields = b.getClass().getDeclaredFields();
+
+        Arrays.stream(fields).map(f-> f.getDeclaringClass()).forEach(out::println);
     }
 
     private class A{

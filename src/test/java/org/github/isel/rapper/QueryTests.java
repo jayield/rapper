@@ -79,31 +79,6 @@ public class QueryTests {
         Arrays.stream(type.getConstructors()[0].getParameters()).map(p->p.getParameterizedType()).forEach(out::println);
     }
 
-    @Test
-    public void test2(){
-        Class<?> type = B.class;
-
-        List<SqlField> allFields = new ArrayList<>();
-
-        B b = new B();
-
-        for(Class<?> clazz = type; clazz != Object.class; clazz = clazz.getSuperclass()){
-            allFields.addAll(Arrays.stream(clazz.getDeclaredFields())
-                    .flatMap(this::toSqlField)
-                    .collect(Collectors.toList())
-            );
-        }
-
-        final int[] i = {0};
-
-        SqlConsumer<SqlField> consumer = sqlField -> {
-            sqlField.field.setAccessible(true);
-            sqlField.field.set(b, ++i[0]);
-        };
-
-        allFields.forEach(consumer.wrap());
-        System.out.println(b);
-    }
 
     @Test
     public void test3() throws NoSuchFieldException, IllegalAccessException {
@@ -117,32 +92,6 @@ public class QueryTests {
         return (long) f.get(a);
     }
 
-    private Stream<SqlField> toSqlField(Field f){
-        Predicate<Field> pred = field -> field.getType().isPrimitive() ||
-                field.getType().isAssignableFrom(String.class) ||
-                field.getType().isAssignableFrom(Timestamp.class) ||
-                field.getType().isAssignableFrom(Date.class);
-        if(f.isAnnotationPresent(EmbeddedId.class)){
-            return Arrays.stream(f.getType()
-                    .getDeclaredFields()).filter(pred)
-                    .map(fi-> new SqlField.SqlFieldId(fi, fi.getName(), false));
-        }
-        if(f.isAnnotationPresent(Id.class)){
-            return Stream.of(new SqlField.SqlFieldId(f, f.getName(), f.getAnnotation(Id.class).isIdentity()));
-        }
-        if(f.isAnnotationPresent(ColumnName.class)){
-            return Stream.of(new SqlField.SqlFieldExternal(
-                    f,
-                    f.getType(), f.getName(),
-                    f.getAnnotation(ColumnName.class).name(),
-                    f.getAnnotation(ColumnName.class).table(), f.getAnnotation(ColumnName.class).foreignName(), ReflectionUtils.getGenericType(f.getGenericType()))
-            );
-        }
-        if(pred.test(f)){
-            return Stream.of(new SqlField(f, f.getName()));
-        }
-        return Stream.empty();
-    }
 
     public class A{
         protected int a;
