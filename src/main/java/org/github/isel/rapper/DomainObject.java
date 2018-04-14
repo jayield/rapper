@@ -11,7 +11,6 @@ public interface DomainObject<K> {
         UnitOfWork.getCurrent().registerNew(this);
     }
 
-
     /**
      * To be always called before making any changes to the object and calling markDirty()
      */

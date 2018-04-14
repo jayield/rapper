@@ -153,7 +153,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                 if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
                     return true;
             }
-            else return false;
+            else return true; //TODO should we log a message saying a newer version is already present in the identityMap?
             remaining = target - System.currentTimeMillis();
             Thread.yield();
         }

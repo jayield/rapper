@@ -274,7 +274,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     UnitOfWork.setCurrent(unit);
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.delete(obj))
-                            .orElse(CompletableFuture.completedFuture(null));
+                            .orElse(CompletableFuture.completedFuture(true));
                 });
     }
 

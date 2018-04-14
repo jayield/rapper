@@ -54,7 +54,7 @@ public class SqlField {
             else
                 key = obj;
 
-            System.out.println("index " + index + ", key " + key);
+            //System.out.println("index " + index + ", key " + key);
 
             if(embeddedId)
                 super.setValueInStatement(stmt, index, key);
