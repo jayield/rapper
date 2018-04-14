@@ -1,6 +1,10 @@
 package org.github.isel.rapper;
 
 import javafx.util.Pair;
+import org.github.isel.rapper.domainModel.Car;
+import org.github.isel.rapper.domainModel.Company;
+import org.github.isel.rapper.domainModel.Person;
+import org.github.isel.rapper.domainModel.TopStudent;
 import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
@@ -12,8 +16,6 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import static org.github.isel.rapper.AssertUtils.*;
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
@@ -22,7 +24,7 @@ import static org.junit.Assert.*;
 /**
  * PersonMapper -> Simple Class with @Id annotation
  * CarMapper -> Simple Class with @EmbeddedId annotation
- * TopStudentMapper -> Class that extends Student and Person and has List of cars annotated with @ColumnName
+ * TopStudentMapper -> Class that extends Student and Person
  */
 public class DataMapperTests {
     private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
@@ -31,39 +33,6 @@ public class DataMapperTests {
     private final DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getRepository(Car.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getRepository(TopStudent.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getRepository(Company.class).getMapper();
-    private final String personSelectQuery = "select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?";
-    private final String carSelectQuery = "select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?";
-    private final String topStudentSelectQuery = "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
-            "inner join Student S2 on P.nif = S2.nif " +
-            "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?";
-
-    private Consumer<PreparedStatement> getPersonPSConsumer(int nif) {
-        SqlConsumer<PreparedStatement> consumer = ps -> ps.setInt(1, nif);
-        return consumer.wrap();
-    }
-
-    private Consumer<PreparedStatement> getCompanyPSConsumer(int companyId, int companyCid) {
-        SqlConsumer<PreparedStatement> companyPSConsumer = ps ->{
-            ps.setInt(1, companyId);
-            ps.setInt(2, companyCid);
-        };
-        return companyPSConsumer.wrap();
-    }
-
-    private Consumer<PreparedStatement> getCarPSConsumer(int owner, String plate) {
-        SqlConsumer<PreparedStatement> carPSConsumer = ps ->{
-            ps.setInt(1, owner);
-            ps.setString(2, plate);
-        };
-        return carPSConsumer.wrap();
-    }
-
-    private Consumer<PreparedStatement> getTopStudentPSConsumer(int nif) {
-        SqlConsumer<PreparedStatement> consumer = ps -> {
-            ps.setInt(1, nif);
-        };
-        return consumer.wrap();
-    }
 
     @Before
     public void start() throws SQLException {
@@ -121,43 +90,24 @@ public class DataMapperTests {
         completableFutures.add(personMapper
                 .findById(nif)
                 .thenApply(person -> person.orElse(new Person()))
-                .thenAccept(person -> assertSingleRow(current, person, personSelectQuery,
-                        getPersonPSConsumer(nif), AssertUtils::assertPerson)));
+                .thenAccept(person -> TestUtils.assertSingleRow(current, person, TestUtils.personSelectQuery,
+                        TestUtils.getPersonPSConsumer(nif), AssertUtils::assertPerson)));
 
         completableFutures.add(carMapper
                 .findById(new Car.PrimaryPk(owner, plate))
                 .thenApply(car -> car.orElse(new Car()))
-                .thenAccept(car -> assertSingleRow(current, car, carSelectQuery,
-                        getCarPSConsumer(owner, plate), AssertUtils::assertCar)));
+                .thenAccept(car -> TestUtils.assertSingleRow(current, car, TestUtils.carSelectQuery,
+                        TestUtils.getCarPSConsumer(owner, plate), AssertUtils::assertCar)));
 
 
         completableFutures.add(companyMapper
                 .findById(new Company.PrimaryKey(companyId, companyCid))
                 .thenApply(company -> company.orElse(new Company()))
-                .thenAccept(company -> assertSingleRow(current, company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
-                        getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, current))));
+                .thenAccept(company -> TestUtils.assertSingleRow(current, company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
+                        TestUtils.getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, current))));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
-    }
-
-    private<U> void assertGetAll(UnitOfWork current, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
-        try {
-            PreparedStatement ps = current.getConnection().prepareStatement(sql,
-                    ResultSet.TYPE_SCROLL_INSENSITIVE,
-                    ResultSet.CONCUR_READ_ONLY);
-            ResultSet rs = ps.executeQuery();
-
-            rs.last();
-            assertEquals(expectedRows, rs.getRow());
-            rs.beforeFirst();
-
-            if (rs.next())
-                assertConsumer.accept(list.get(0), rs);
-            else fail("People weren't selected from the database");
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     @Test
@@ -167,11 +117,11 @@ public class DataMapperTests {
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper
                 .findAll()
-                .thenAccept(people -> assertGetAll(current, people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2)));
+                .thenAccept(people -> TestUtils.assertMultipleRows(current, people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2)));
 
         completableFutures.add(carMapper
                 .findAll()
-                .thenAccept(cars -> assertGetAll(current, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1)));
+                .thenAccept(cars -> TestUtils.assertMultipleRows(current, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1)));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
@@ -194,22 +144,22 @@ public class DataMapperTests {
                 .join();
 
         //Assert
-        assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        TestUtils.assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        TestUtils.assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        TestUtils.assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
     public void update() throws SQLException {
-        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
+        ResultSet rs = TestUtils.executeQuery("select CAST(version as bigint) version from Person where nif = ?", TestUtils.getPersonPSConsumer(321));
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
-        rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"));
+        rs = TestUtils.executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", TestUtils.getCarPSConsumer(2, "23we45"));
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
-        rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+        rs = TestUtils.executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getTopStudentPSConsumer(454));
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", TestUtils.getTopStudentPSConsumer(454));
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
@@ -221,9 +171,9 @@ public class DataMapperTests {
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
 
-        assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        TestUtils.assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        TestUtils.assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        TestUtils.assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
@@ -240,47 +190,9 @@ public class DataMapperTests {
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
 
-        assertDelete(personSelectQuery, getPersonPSConsumer(person.getNif()));
-        assertDelete(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
-        assertDelete(topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()));
+        TestUtils.assertDelete(TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()));
+        TestUtils.assertDelete(TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
+        TestUtils.assertDelete(TestUtils.topStudentSelectQuery, TestUtils.getTopStudentPSConsumer(topStudent.getNif()));
     }
 
-    private ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
-        try {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
-            preparedStatementConsumer.accept(ps);
-            ResultSet rs = ps.executeQuery();
-            rs.next();
-            return rs;
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private<U> void assertSingleRow(UnitOfWork current, U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
-        try{
-            PreparedStatement ps = current.getConnection().prepareStatement(sql);
-            prepareStatement.accept(ps);
-            ResultSet rs = ps.executeQuery();
-
-            if(rs.next())
-                assertConsumer.accept(object, rs);
-            else fail("Object wasn't selected from the database");
-        }
-        catch (SQLException e){
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void assertDelete(String sql, Consumer<PreparedStatement> prepareStatement){
-        try {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
-            prepareStatement.accept(ps);
-            ResultSet rs = ps.executeQuery();
-            assertFalse(rs.next());
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-
-    }
 }

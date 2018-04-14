@@ -1,4 +1,4 @@
-package org.github.isel.rapper;
+package org.github.isel.rapper.domainModel;
 
 import java.sql.Date;
 

@@ -1,6 +1,8 @@
 package org.github.isel.rapper;
 
 import org.github.isel.rapper.domainModel.Account;
+import org.github.isel.rapper.domainModel.Car;
+import org.github.isel.rapper.domainModel.Person;
 import org.github.isel.rapper.utils.MapperRegistry;
 import org.github.isel.rapper.utils.ReflectionUtils;
 import org.junit.Assert;

@@ -1,6 +1,6 @@
 package org.github.isel.rapper;
 
-import org.github.isel.rapper.*;
+import org.github.isel.rapper.domainModel.*;
 import org.github.isel.rapper.utils.UnitOfWork;
 
 import java.sql.PreparedStatement;

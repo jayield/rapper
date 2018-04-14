@@ -1,4 +1,8 @@
-package org.github.isel.rapper;
+package org.github.isel.rapper.domainModel;
+
+import org.github.isel.rapper.ColumnName;
+import org.github.isel.rapper.DomainObject;
+import org.github.isel.rapper.EmbeddedId;
 
 import java.util.List;
 import java.util.function.Supplier;

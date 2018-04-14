@@ -1,20 +1,11 @@
 package org.github.isel.rapper;
 
-import org.github.isel.rapper.utils.ReflectionUtils;
-import org.github.isel.rapper.utils.SqlConsumer;
-import org.github.isel.rapper.utils.SqlField;
+import org.github.isel.rapper.domainModel.*;
 import org.junit.Test;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.sql.Date;
-import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
-import java.util.function.Predicate;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.lang.System.out;
 import static org.junit.Assert.*;

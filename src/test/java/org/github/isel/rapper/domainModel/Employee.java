@@ -1,9 +1,13 @@
-package org.github.isel.rapper;
+package org.github.isel.rapper.domainModel;
+
+import org.github.isel.rapper.ColumnName;
+import org.github.isel.rapper.DomainObject;
+import org.github.isel.rapper.Id;
 
 import java.util.List;
 import java.util.function.Supplier;
 
-public class Employee implements DomainObject<Integer>{
+public class Employee implements DomainObject<Integer> {
     @Id(isIdentity = true)
     private final int id;
     private final String name;
