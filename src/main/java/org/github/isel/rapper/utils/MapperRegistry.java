@@ -1,16 +1,10 @@
 package org.github.isel.rapper.utils;
 
-import org.github.isel.rapper.DataMapper;
 import org.github.isel.rapper.DataRepository;
 import org.github.isel.rapper.DomainObject;
 
-import java.lang.reflect.ParameterizedType;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-
-import static java.lang.System.out;
 
 public class MapperRegistry {
     private static Map<Class, DataRepository> repositoryMap = new HashMap<>();

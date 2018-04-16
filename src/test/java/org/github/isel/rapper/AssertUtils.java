@@ -7,12 +7,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.*;
 
 public class AssertUtils {
-
+    //---------------------Domain Objects assertions----------------------------------
     public static void assertPerson(Person person, ResultSet rs) {
         try {
             assertEquals(person.getNif(), rs.getInt("nif"));
@@ -83,6 +84,52 @@ public class AssertUtils {
             assertEquals(employee.getCompanyCid(), rs.getInt("companyCid"));
             assertEquals(employee.getVersion(), rs.getLong("version"));
             assertNotEquals(0, employee.getVersion());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    //---------------------------ResultSets assertions-----------------------------------
+    public static<U> void assertSingleRow(UnitOfWork current, U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
+        try{
+            PreparedStatement ps = current.getConnection().prepareStatement(sql);
+            prepareStatement.accept(ps);
+            ResultSet rs = ps.executeQuery();
+
+            if(rs.next())
+                assertConsumer.accept(object, rs);
+            else fail("Object wasn't selected from the database");
+        }
+        catch (SQLException e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static<U> void assertMultipleRows(UnitOfWork current, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
+        try {
+            PreparedStatement ps = current.getConnection().prepareStatement(sql,
+                    ResultSet.TYPE_SCROLL_INSENSITIVE,
+                    ResultSet.CONCUR_READ_ONLY);
+            ResultSet rs = ps.executeQuery();
+
+            rs.last();
+            assertEquals(expectedRows, rs.getRow());
+            rs.beforeFirst();
+
+            if (rs.next())
+                assertConsumer.accept(list.get(0), rs);
+            else fail("Objects weren't selected from the database");
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void assertNotFound(String sql, Consumer<PreparedStatement> prepareStatement){
+        try {
+            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            prepareStatement.accept(ps);
+            ResultSet rs = ps.executeQuery();
+            assertFalse(rs.next());
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

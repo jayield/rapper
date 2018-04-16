@@ -21,6 +21,13 @@ public class Chat implements DomainObject<Long> {
         this.version = version;
     }
 
+    public Chat(){
+        chadId = 0;
+        accountIdFirst = 0;
+        accountIdSecond = 0;
+        version = 0;
+    }
+
     public long getChadId() {
         return chadId;
     }

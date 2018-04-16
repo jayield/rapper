@@ -2,29 +2,33 @@ package org.github.isel.rapper.utils;
 
 import org.github.isel.rapper.AssertUtils;
 import org.github.isel.rapper.DataRepository;
-import org.github.isel.rapper.domainModel.Car;
+import org.github.isel.rapper.domainModel.*;
 import org.github.isel.rapper.DomainObject;
-import org.github.isel.rapper.domainModel.Employee;
-import org.github.isel.rapper.domainModel.Person;
-import org.github.isel.rapper.domainModel.TopStudent;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
 
-import static junit.framework.TestCase.assertTrue;
+import static org.github.isel.rapper.AssertUtils.*;
 import static org.github.isel.rapper.TestUtils.*;
 import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
 import static org.github.isel.rapper.utils.MapperRegistry.getRepository;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class UnitOfWorkTests {
 
     private Container container;
+    private final Logger logger = LoggerFactory.getLogger(UnitOfWorkTests.class);
     private List<DomainObject> newObjects;
     private List<DomainObject> clonedObjects;
     private List<DomainObject> dirtyObjects;
@@ -55,8 +59,10 @@ public class UnitOfWorkTests {
     public void before() throws SQLException, NoSuchFieldException, IllegalAccessException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         UnitOfWork.newCurrent(manager::getConnection);
-        UnitOfWork.getCurrent().getConnection().prepareCall("{call deleteDB}").execute();
-        UnitOfWork.getCurrent().getConnection().prepareCall("{call populateDB}").execute();
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        con.prepareCall("{call deleteDB}").execute();
+        con.prepareCall("{call populateDB}").execute();
+        con.commit();
 
         container = new Container();
 
@@ -64,19 +70,10 @@ public class UnitOfWorkTests {
     }
 
     @After
-    public void finish() throws SQLException {
-        //UnitOfWork.getCurrent().rollback();
-        UnitOfWork.getCurrent().getConnection().prepareCall("{call deleteDB}").execute();
+    public void finish() {
         UnitOfWork.getCurrent().closeConnection();
     }
 
-    /**
-     * Obter as listas do Unit
-     * Popular
-     * Chamar Commit
-     * Verificar IdentiyMaps
-     * Verificar Base de dados
-     */
     @Test
     public void commit() throws NoSuchFieldException, IllegalAccessException {
         populateIdentityMaps();
@@ -84,21 +81,52 @@ public class UnitOfWorkTests {
         addDirtyAndClonedObjects();
         addRemovedObjects();
 
+        List<DomainObject> newObjects = new ArrayList<>(this.newObjects);
+        List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
+        List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
+
         assertTrue(UnitOfWork.getCurrent().commit().join());
 
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
+        identityMapField.setAccessible(true);
 
         assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertTrue(identityMap.containsValue(domainObject)));
         assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertTrue(identityMap.containsValue(domainObject)));
         assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertTrue(!identityMap.containsValue(domainObject)));
 
-        assertNewObjects();
-        assertDirtyObjects();
-        assertRemovedObjects();
+        assertNewObjects(true);
+        assertDirtyObjects(true);
+        assertRemovedObjects(true);
     }
 
     @Test
-    public void rollback() {
+    public void rollback() throws IllegalAccessException, NoSuchFieldException {
+        populateIdentityMaps();
+        addNewObjects();
+        addDirtyAndClonedObjects();
+        addRemovedObjects();
+
+        //There's no table Chat in DB, so there will be a SQLException and a rollback
+        Chat chat = new Chat();
+        removedObjects.add(chat);
+
+        List<DomainObject> newObjects = new ArrayList<>(this.newObjects);
+        List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
+        List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
+
+        assertFalse(UnitOfWork.getCurrent().commit().join());
+
+        removedObjects.remove(chat);
+        Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
+        identityMapField.setAccessible(true);
+
+        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertTrue(!identityMap.containsValue(domainObject)));
+        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertTrue(!identityMap.containsValue(domainObject)));
+        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertTrue(identityMap.containsValue(domainObject)));
+
+        assertNewObjects(false);
+        assertDirtyObjects(false);
+        assertRemovedObjects(false);
     }
 
     private void assertIdentityMaps(Field identityMapField, List<DomainObject> dirtyObjects, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {
@@ -109,29 +137,52 @@ public class UnitOfWorkTests {
         }
     }
 
-    private void assertRemovedObjects() {
+    private void assertRemovedObjects(boolean isCommit) {
         Employee originalEmployee = container.getOriginalEmployee();
-        assertDelete(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()));
+
+        if(isCommit) {
+            assertNotFound(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()));
+        }
+        else{
+            assertSingleRow(UnitOfWork.getCurrent(), originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee);
+        }
     }
 
-    private void assertDirtyObjects() {
-        Person person = container.getUpdatedPerson();
-        Car car = container.getUpdatedCar();
-        TopStudent topStudent = container.getUpdatedTopStudent();
+    private void assertDirtyObjects(boolean isCommit) {
+        Person person = null;
+        Car car = null;
+        TopStudent topStudent = null;
+        if(isCommit) {
+            person = container.getUpdatedPerson();
+            car = container.getUpdatedCar();
+            topStudent = container.getUpdatedTopStudent();
+        }
+        else {
+            person = container.getOriginalPerson();
+            car = container.getOriginalCar();
+            topStudent = container.getOriginalTopStudent();
+        }
 
         assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
         assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
         assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
-    private void assertNewObjects() {
+    private void assertNewObjects(boolean isCommit) {
         Person person = container.getInsertedPerson();
         Car car = container.getInsertedCar();
         TopStudent topStudent = container.getInsertedTopStudent();
 
-        assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        if(isCommit) {
+            assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+            assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+            assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        }
+        else {
+            assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()));
+            assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
+            assertNotFound(topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()));
+        }
     }
 
     private void populateIdentityMaps() {
@@ -164,14 +215,16 @@ public class UnitOfWorkTests {
     }
 
     private class Container {
-        private Person insertedPerson;
-        private Car insertedCar;
-        private TopStudent insertedTopStudent;
-        private Person updatedPerson;
-        private Car updatedCar;
-        private TopStudent updatedTopStudent;
-        private Car originalCar;
-        private Employee originalEmployee;
+        private final Person originalPerson;
+        private final Person insertedPerson;
+        private final Car insertedCar;
+        private final TopStudent insertedTopStudent;
+        private final Person updatedPerson;
+        private final Car updatedCar;
+        private final TopStudent updatedTopStudent;
+        private final Car originalCar;
+        private final Employee originalEmployee;
+        private final TopStudent originalTopStudent;
 
         public Container() throws SQLException {
             insertedPerson = new Person(123, "abc", new Date(1969, 6, 9), 0);
@@ -190,12 +243,27 @@ public class UnitOfWorkTests {
             updatedTopStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                     4, 6, 7, rs.getLong(3), rs.getLong(1));
 
+            rs = executeQuery(personSelectQuery, getPersonPSConsumer(321));
+            originalPerson = new Person(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), rs.getLong("version"));
+
             rs = executeQuery(carSelectQuery, getCarPSConsumer(2, "23we45"));
             originalCar = new Car(rs.getInt("owner"), rs.getString("plate"), rs.getString("brand"), rs.getString("model"), rs.getLong("version"));
+
+            rs = executeQuery(topStudentSelectQuery, getTopStudentPSConsumer(454));
+            originalTopStudent = new TopStudent(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), 0, 0, rs.getInt("topGrade"),
+                    rs.getInt("year"), rs.getLong("version"), 0);
 
             rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Charles"));
             originalEmployee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getInt("companyId"), rs.getInt("companyCid"),
                     rs.getLong("version"), null);
+        }
+
+        public TopStudent getOriginalTopStudent() {
+            return originalTopStudent;
+        }
+
+        public Person getOriginalPerson() {
+            return originalPerson;
         }
 
         public Person getInsertedPerson() {

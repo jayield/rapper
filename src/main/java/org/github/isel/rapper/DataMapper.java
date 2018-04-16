@@ -23,6 +23,7 @@ import java.util.stream.StreamSupport;
 
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
+    private final Logger log = LoggerFactory.getLogger(DataMapper.class);
     private final Class<T> type;
     private Class<?> primaryKey = null;
     private Constructor<?> primaryKeyConstructor = null;
@@ -196,6 +197,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(ps ->{
                     func.wrap().accept(ps);
                     return true;
+                })
+                .exceptionally(throwable -> {
+                    log.info("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable, throwable.getMessage());
+                    return false;
                 });
     }
 
@@ -249,6 +254,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(ps -> {
                     func.wrap().accept(ps);
                     return true;
+                })
+                .exceptionally(throwable -> {
+                    log.info("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable, throwable.getMessage());
+                    return false;
                 });
     }
 
@@ -275,6 +284,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.delete(obj))
                             .orElse(CompletableFuture.completedFuture(true));
+                })
+                .exceptionally(throwable -> {
+                    log.info("Couldn't delete {}. \nReason: {}", type.getSimpleName(), throwable, throwable.getMessage());
+                    return false;
                 });
     }
 

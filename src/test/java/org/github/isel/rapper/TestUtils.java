@@ -70,48 +70,4 @@ public class TestUtils {
         return consumer.wrap();
     }
 
-    public static<U> void assertSingleRow(UnitOfWork current, U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
-        try{
-            PreparedStatement ps = current.getConnection().prepareStatement(sql);
-            prepareStatement.accept(ps);
-            ResultSet rs = ps.executeQuery();
-
-            if(rs.next())
-                assertConsumer.accept(object, rs);
-            else fail("Object wasn't selected from the database");
-        }
-        catch (SQLException e){
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static<U> void assertMultipleRows(UnitOfWork current, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
-        try {
-            PreparedStatement ps = current.getConnection().prepareStatement(sql,
-                    ResultSet.TYPE_SCROLL_INSENSITIVE,
-                    ResultSet.CONCUR_READ_ONLY);
-            ResultSet rs = ps.executeQuery();
-
-            rs.last();
-            assertEquals(expectedRows, rs.getRow());
-            rs.beforeFirst();
-
-            if (rs.next())
-                assertConsumer.accept(list.get(0), rs);
-            else fail("Objects weren't selected from the database");
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void assertDelete(String sql, Consumer<PreparedStatement> prepareStatement){
-        try {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
-            prepareStatement.accept(ps);
-            ResultSet rs = ps.executeQuery();
-            assertFalse(rs.next());
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
 }
