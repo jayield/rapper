@@ -8,52 +8,20 @@ import javax.sql.ConnectionPoolDataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
-
 public class ConnectionManager {
-    private final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
     private static final Logger staticLogger = LoggerFactory.getLogger(ConnectionManager.class);
-
-    public enum DBsPath {
-        DEFAULTDB ("DB_CONNECTION_STRING"),
-        TESTDB ("DBTEST_CONNECTION_STRING");
-
-        String value;
-        DBsPath(String value) {
-            this.value = value;
-        }
-
-        @Override
-        public String toString(){
-            return value;
-        }
-    }
-
     private static ConnectionManager connectionManager = null;
 
-    public static ConnectionManager getConnectionManager(DBsPath envVar){
-        if(connectionManager == null) connectionManager = new ConnectionManager(envVar.toString());
-        return connectionManager;
-    }
-
-    /**CONNECTION STRING FORMAT: SERVERNAME;DATABASE;USER;PASSWORD*/
-    private final ConnectionPoolDataSource dataSource;
+    private final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
+    private final ConnectionPoolDataSource dataSource; /**CONNECTION STRING FORMAT: SERVERNAME;DATABASE;USER;PASSWORD*/
 
     private ConnectionManager(String envVarName){
         dataSource = getDataSource(envVarName);
     }
 
-    public Connection getConnection() {
-        try {
-            Connection connection = dataSource
-                    .getPooledConnection()
-                    .getConnection();
-            connection.setAutoCommit(false);
-            return connection;
-        } catch (SQLException e) {
-            logger.info("Error on establishing connection to the DB \n" + e.getMessage());
-        }
-        return null;
+    public static ConnectionManager getConnectionManager(DBsPath envVar){
+        if(connectionManager == null) connectionManager = new ConnectionManager(envVar.toString());
+        return connectionManager;
     }
 
     private static ConnectionPoolDataSource getDataSource(String envVar){
@@ -69,5 +37,18 @@ public class ConnectionManager {
         dataSource.setPassword(connectionStringParts[3]);
 
         return dataSource;
+    }
+
+    public Connection getConnection() {
+        try {
+            Connection connection = dataSource
+                    .getPooledConnection()
+                    .getConnection();
+            connection.setAutoCommit(false);
+            return connection;
+        } catch (SQLException e) {
+            logger.info("Error on establishing connection to the DB \n" + e.getMessage());
+        }
+        return null;
     }
 }

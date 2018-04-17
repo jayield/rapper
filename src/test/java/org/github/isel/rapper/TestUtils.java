@@ -18,9 +18,8 @@ public class TestUtils {
     public static final String personSelectQuery = "select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?";
     public static final String carSelectQuery = "select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?";
     public static final String employeeSelectQuery = "select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where name = ?";
-    public static final String topStudentSelectQuery = "select P.nif, P.name, P.birthday, S2.studentNumber, TS.topGrade, TS.year, CAST(TS.version as bigint) version from Person P " +
-            "inner join Student S2 on P.nif = S2.nif " +
-            "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?";
+    public static final String topStudentSelectQuery = "select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year,\n" +
+            "  CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = ?";
 
     public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
         try {

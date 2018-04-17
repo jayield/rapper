@@ -1,6 +1,7 @@
 package org.github.isel.rapper;
 
 import org.github.isel.rapper.utils.ConnectionManager;
+import org.github.isel.rapper.utils.DBsPath;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -15,7 +16,7 @@ import static org.junit.Assert.assertEquals;
 
 public class DataBaseTests {
 
-    private static final ConnectionManager manager = ConnectionManager.getConnectionManager(ConnectionManager.DBsPath.TESTDB);
+    private static final ConnectionManager manager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
 
     public static Connection getConnection() {
         return manager.getConnection();

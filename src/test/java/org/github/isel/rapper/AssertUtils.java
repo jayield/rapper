@@ -3,6 +3,7 @@ package org.github.isel.rapper;
 import org.github.isel.rapper.domainModel.*;
 import org.github.isel.rapper.utils.UnitOfWork;
 
+import java.lang.reflect.Field;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -41,14 +42,23 @@ public class AssertUtils {
 
     public static void assertTopStudent(TopStudent topStudent, ResultSet rs) {
         try{
+            Field studentVersion = Student.class.getDeclaredField("version");
+            Field personVersion = Person.class.getDeclaredField("version");
+
+            studentVersion.setAccessible(true);
+            personVersion.setAccessible(true);
+
             assertEquals(topStudent.getNif(), rs.getInt("nif"));
             assertEquals(topStudent.getName(), rs.getString("name"));
             assertEquals(topStudent.getBirthday(), rs.getDate("birthday"));
-            assertEquals(topStudent.getVersion(), rs.getLong("version"));
+            assertEquals(topStudent.getVersion(), rs.getLong("Cversion"));
             assertNotEquals(0, topStudent.getVersion());
+            assertEquals(topStudent.getStudentNumber(), rs.getInt("studentNumber"));
             assertEquals(topStudent.getTopGrade(), rs.getInt("topGrade"));
             assertEquals(topStudent.getYear(), rs.getInt("year"));
-        } catch (SQLException e) {
+            assertEquals(studentVersion.get(topStudent), rs.getLong("P1version"));
+            assertEquals(personVersion.get(topStudent), rs.getLong("P2version"));
+        } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
             throw new RuntimeException(e);
         }
     }

@@ -19,7 +19,7 @@ import java.util.function.BiConsumer;
 
 import static org.github.isel.rapper.AssertUtils.*;
 import static org.github.isel.rapper.TestUtils.*;
-import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
+import static org.github.isel.rapper.utils.DBsPath.TESTDB;
 import static org.github.isel.rapper.utils.MapperRegistry.getRepository;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -250,8 +250,8 @@ public class UnitOfWorkTests {
             originalCar = new Car(rs.getInt("owner"), rs.getString("plate"), rs.getString("brand"), rs.getString("model"), rs.getLong("version"));
 
             rs = executeQuery(topStudentSelectQuery, getTopStudentPSConsumer(454));
-            originalTopStudent = new TopStudent(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), 0, 0, rs.getInt("topGrade"),
-                    rs.getInt("year"), rs.getLong("version"), 0);
+            originalTopStudent = new TopStudent(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), rs.getLong("P1version"), rs.getInt("studentNumber"),
+                    rs.getInt("topGrade"), rs.getInt("year"), rs.getLong("Cversion"), rs.getLong("P2version"));
 
             rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Charles"));
             originalEmployee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getInt("companyId"), rs.getInt("companyCid"),

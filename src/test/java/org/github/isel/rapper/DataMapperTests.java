@@ -19,7 +19,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static org.github.isel.rapper.AssertUtils.*;
 import static org.github.isel.rapper.TestUtils.*;
-import static org.github.isel.rapper.utils.ConnectionManager.DBsPath.TESTDB;
+import static org.github.isel.rapper.utils.DBsPath.TESTDB;
 import static org.junit.Assert.*;
 
 /**
@@ -109,6 +109,12 @@ public class DataMapperTests {
                 .thenAccept(company -> assertSingleRow(current, company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
                         getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, current))));
 
+        completableFutures.add(topStudentMapper
+                .findById(454)
+                .thenApply(topStudent -> topStudent.orElse(new TopStudent()))
+                .thenAccept(topStudent -> assertSingleRow(current, topStudent, topStudentSelectQuery, getTopStudentPSConsumer(454), AssertUtils::assertTopStudent))
+        );
+
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
     }
@@ -131,7 +137,7 @@ public class DataMapperTests {
     }
 
     @Test
-    public void insert() {
+    public void create() {
         //Arrange
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);

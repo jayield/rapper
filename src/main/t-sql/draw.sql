@@ -40,7 +40,5 @@ from TopStudent C
   inner join Student P1 on C.nif = P1.nif
   inner join Person P2 on P1.nif = P2.nif
 
-select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year, CAST(C.version as bigint) Cversion
-from TopStudent C
-  inner join Student P1 on C.nif = P1.nif
-  inner join Person P2 on P1.nif = P2.nif
+select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year,
+  CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = 454

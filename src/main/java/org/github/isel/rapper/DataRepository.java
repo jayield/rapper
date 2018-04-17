@@ -1,33 +1,29 @@
 package org.github.isel.rapper;
 
 import org.github.isel.rapper.utils.ConnectionManager;
-import org.github.isel.rapper.utils.MapperRegistry;
+import org.github.isel.rapper.utils.DBsPath;
 import org.github.isel.rapper.utils.UnitOfWork;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
 
-import static org.github.isel.rapper.utils.ConnectionManager.*;
-
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private final ConcurrentMap<K, T> identityMap = new ConcurrentHashMap<>();
-    private final Class<T> type;
-    private final DataMapper<T, K> mapper;
+    //Used to communicate with the DB
+    private final Mapper<T, K> mapper;
 
-    public DataRepository(Class<T> type){
-        this.type = type;
-        mapper = new DataMapper<>(type);
+    public DataRepository(Mapper<T, K> mapper){
+        this.mapper = mapper;
     }
 
     public DataMapper<T, K> getMapper() {
-        return mapper;
+        return (DataMapper<T, K>) mapper;
     }
 
     private void checkUnitOfWork(){
