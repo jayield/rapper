@@ -6,17 +6,16 @@ import org.github.isel.rapper.exceptions.DataMapperException;
 import java.lang.reflect.Field;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.sql.Timestamp;
-import java.time.DateTimeException;
 
 public class SqlField {
     public final Field field;
     public final String name;
+    public final String selectQueryValue;
 
-    public SqlField(Field field, String name) {
+    public SqlField(Field field, String name, String selectQueryValue) {
         this.field = field;
         this.name = name;
+        this.selectQueryValue = selectQueryValue;
     }
 
     public<T> void setValueInStatement(PreparedStatement stmt, int index, T obj) {
@@ -40,8 +39,8 @@ public class SqlField {
         public final boolean identity;
         public final boolean embeddedId;
 
-        public SqlFieldId(Field field, String name, boolean identity, boolean embeddedId) {
-            super(field, name);
+        public SqlFieldId(Field field, String name, String queryValue, boolean identity, boolean embeddedId) {
+            super(field, name, queryValue);
             this.identity = identity;
             this.embeddedId = embeddedId;
         }
@@ -88,8 +87,8 @@ public class SqlField {
         public final String selectTableQuery;
         public final String[] columnsNames;
 
-        public SqlFieldExternal(Field field, Class<?> fType, String name, String columnName[], String table, String[] foreignName, Class<? extends DomainObject> type) {
-            super(field, name);
+        public SqlFieldExternal(Field field, Class<?> fType, String name, String queryValue, String columnName[], String table, String[] foreignName, Class<? extends DomainObject> type) {
+            super(field, name, queryValue);
             this.fType = fType;
             this.table = table;
             this.foreignNames = foreignName;

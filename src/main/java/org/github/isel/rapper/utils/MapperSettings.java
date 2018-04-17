@@ -3,12 +3,11 @@ package org.github.isel.rapper.utils;
 
 import org.github.isel.rapper.*;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.util.*;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,18 +38,22 @@ public class MapperSettings {
         this.type = type;
 
         Map<Class, List<SqlField>> fieldMap = Arrays.stream(type.getDeclaredFields())
-                .flatMap(this::toSqlField)
+                .flatMap(field -> toSqlField(field, "C."))
                 .collect(Collectors.groupingBy(SqlField::getClass));
 
-        getParentsFields(type);
+        addParentsFields(type);
 
         Optional.ofNullable(fieldMap.get(SqlFieldId.class))
                 .ifPresent(sqlFields ->
-                    ids.addAll(sqlFields.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()))
+                    ids.addAll(
+                            sqlFields
+                                    .stream()
+                                    .map(f -> ((SqlFieldId) f))
+                                    .collect(Collectors.toList())
+                    )
                 );
 
-        Optional.ofNullable(fieldMap.get(SqlField.class))
-                .ifPresent(columns::addAll);
+        Optional.ofNullable(fieldMap.get(SqlField.class)).ifPresent(sqlFields -> columns.addAll(sqlFields));
 
         Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
                 .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
@@ -66,20 +69,65 @@ public class MapperSettings {
      * Add ids and fields from parent classes to ids and allFields respectively
      * @param type
      */
-    private void getParentsFields(Class<?> type) {
-        for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass()){
+    private void addParentsFields(Class<?> type) {
+        int[] i = { 1 };
+        for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass(), i[0]++){
             Map<Class, List<SqlField>> parentFieldMap = Arrays.stream(clazz.getDeclaredFields())
-                    .flatMap(this::toSqlField)
+                    .flatMap(field -> toSqlField(field, String.format("P%d.", i[0])))
                     .collect(Collectors.groupingBy(SqlField::getClass));
 
-            List<SqlField> sqlFieldIds = parentFieldMap.getOrDefault(SqlFieldId.class, new ArrayList<>());
+            List<SqlFieldId> sqlFieldIds = parentFieldMap.getOrDefault(SqlFieldId.class, new ArrayList<>())
+                    .stream()
+                    .map(f -> ((SqlFieldId) f))
+                    .collect(Collectors.toList());
+
             allFields.addAll(parentFieldMap.get(SqlField.class));
-            ids.addAll(sqlFieldIds.stream().map(f -> ((SqlFieldId) f)).collect(Collectors.toList()));
+            ids.addAll(sqlFieldIds);
         }
     }
 
     private void buildQueryStrings(){
         List<String> idName = ids
+                .stream()
+                .map(f->f.selectQueryValue)
+                .collect(Collectors.toList());
+
+        List<String> allFieldsNames = allFields
+                .stream()
+                .filter(sqlField -> !SqlFieldExternal.class.isAssignableFrom(sqlField.getClass())) //We don't want the externals in our selectQuery
+                .map(sqlField -> sqlField.selectQueryValue)
+                .collect(Collectors.toList());
+
+        StringBuilder suffix = new StringBuilder();
+        suffix.append(" from ").append(type.getSimpleName()).append(" C ");
+
+        int[] i = { 1 };
+        for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass(), i[0]++){
+            suffix.append("inner join ").append(clazz.getSimpleName()).append(String.format(" P%d ", i[0])).append("on ");
+
+            //Set the comparisions
+            for (int j = 0; j < idName.size(); j++) {
+                String version = idName.get(j).split("\\.")[1];
+
+                //The previous table's ID
+                if(i[0] == 1) suffix.append("C.").append(version);
+                else suffix.append(String.format("P%d.", i[0] - 1)).append(version);
+
+                //always the table's ID
+                suffix.append(" = ").append(String.format("P%d.", i[0])).append(version).append(" ");
+            }
+        }
+
+        selectQuery = allFieldsNames
+                .stream()
+                .collect(Collectors.joining(", ", "select ", suffix));
+
+        selectByIdQuery = selectQuery +
+                idName.stream()
+                        .map(id -> id+" = ?")
+                        .collect(Collectors.joining(" and ", " where ", ""));
+
+        idName = ids
                 .stream()
                 .map(f->f.name)
                 .collect(Collectors.toList());
@@ -89,20 +137,8 @@ public class MapperSettings {
                 .map(f->f.name)
                 .collect(Collectors.toList());
 
-        selectQuery = Stream.concat(idName.stream(), columnsNames.stream())
-                .map(str -> {
-                    if(str.equals("version")) return "CAST(version as bigint) version";
-                    return str;
-                })
-                .collect(Collectors.joining(", ", "select ", " from "+type.getSimpleName()));
-
-        selectByIdQuery = selectQuery +
-                idName.stream()
-                        .map(id -> id+" = ?")
-                        .collect(Collectors.joining(" and ", " where ", ""));
-
-        columnsNames.remove("version");
-        columns.removeIf(f-> f.name.equals("version"));
+        columnsNames.remove("Cversion");
+        columns.removeIf(f-> f.name.equals("Cversion"));
 
         boolean identity = ids
                 .stream()
@@ -131,36 +167,48 @@ public class MapperSettings {
 
     class FieldOperations {
         public final Predicate<Field> predicate;
-        public final Function<Field, Stream<SqlField>> function;
+        public final BiFunction<Field, String, Stream<SqlField>> function;
 
-        public FieldOperations(Predicate<Field> predicate, Function<Field, Stream<SqlField>> function) {
+        public FieldOperations(Predicate<Field> predicate, BiFunction<Field, String, Stream<SqlField>> function) {
             this.predicate = predicate;
             this.function = function;
         }
     }
 
     private final FieldOperations[] operations = {
-            new FieldOperations(f->f.isAnnotationPresent(EmbeddedId.class), f-> Arrays.stream(f.getType().getDeclaredFields())
+            new FieldOperations(f->f.isAnnotationPresent(EmbeddedId.class), (f, pref) -> Arrays.stream(f.getType().getDeclaredFields())
                     .filter(fieldPredicate)
-                    .map(fi-> new SqlFieldId(fi, fi.getName(), false, true))),
-            new FieldOperations(f->f.isAnnotationPresent(Id.class), f->Stream.of(new SqlFieldId(f, f.getName(), f.getAnnotation(Id.class).isIdentity(), false))),
-            new FieldOperations(f->f.isAnnotationPresent(ColumnName.class), f->Stream.of(new SqlFieldExternal(
+                    .map(fi -> new SqlFieldId(fi, getName(fi, pref), getQueryValue(fi, pref),false, true))),
+            new FieldOperations(f->f.isAnnotationPresent(Id.class),
+                    (f, pref) -> Stream.of(new SqlFieldId(f, getName(f, pref), getQueryValue(f, pref), f.getAnnotation(Id.class).isIdentity(), false))),
+            new FieldOperations(f->f.isAnnotationPresent(ColumnName.class), (f, pref) -> Stream.of(new SqlFieldExternal(
                             f,
                             f.getType(),
-                            f.getName(),
+                    getName(f, pref),
+                    getQueryValue(f, pref),
                             f.getAnnotation(ColumnName.class).name(),
                             f.getAnnotation(ColumnName.class).table(),
                             f.getAnnotation(ColumnName.class).foreignName(),
                             ReflectionUtils.getGenericType(f.getGenericType())
                     )
             )),
-            new FieldOperations(fieldPredicate, f->Stream.of(new SqlField(f, f.getName())))
+            new FieldOperations(fieldPredicate, (f, pref) ->Stream.of(new SqlField(f, getName(f, pref), getQueryValue(f, pref))))
     };
 
-    private Stream<SqlField> toSqlField(Field f){
+    private String getName(Field f, String pref) {
+        if(f.getName().equals("version")) return pref.substring(0, pref.length() - 1) + f.getName();
+        else return f.getName();
+    }
+
+    private String getQueryValue(Field f, String pref) {
+        if(f.getName().equals("version")) return String.format("CAST(%sversion as bigint) %sversion", pref, pref.substring(0, pref.length() - 1));
+        else return  pref + f.getName();
+    }
+
+    private Stream<SqlField> toSqlField(Field f, String queryPrefix){
         for(FieldOperations op : operations){
             if(op.predicate.test(f))
-                return op.function.apply(f);
+                return op.function.apply(f, queryPrefix);
         }
         return Stream.empty();
     }

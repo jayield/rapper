@@ -231,11 +231,8 @@ public class UnitOfWork {
     public void rollback() {
         try {
             connection.rollback();
-        /*for (DomainObject obj : newObjects)
-            MapperRegistry.getMapper(obj.getClass()).getIdentityMap().remove(obj.getIdentityKey());*/
 
-            newObjects.forEach(domainObject ->
-                    getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
+            newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
 
             for (DomainObject obj : dirtyObjects) {
                 clonedObjects
@@ -246,6 +243,7 @@ public class UnitOfWork {
                                 clone -> getRepository(obj.getClass()).validate(clone.getIdentityKey(), clone)
                         );
             }
+
             removedObjects
                     .stream()
                     .filter(obj -> !dirtyObjects.contains(obj))

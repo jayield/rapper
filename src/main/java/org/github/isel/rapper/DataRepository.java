@@ -40,10 +40,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Optional<T>> findById(K k) {
         checkUnitOfWork();
-        if(identityMap.containsKey(k)){
-            return CompletableFuture.completedFuture(Optional.of(identityMap.get(k)));
-        }
-        return mapper.findById(k).thenApply(t -> { t.ifPresent(this::putOrReplace); return t; });
+
+        return CompletableFuture.completedFuture(
+                Optional.ofNullable(
+                        identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).join().orElse(null))
+                )
+        );
     }
 
     @Override

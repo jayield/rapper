@@ -87,7 +87,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             T t = constructor.newInstance();
             Object primaryKey = primaryKeyConstructor != null ? primaryKeyConstructor.newInstance() : null;
 
-            //Set t's primary key field to primaryKey
+            //Set t's primary key field to primaryKey if its a composed primary key
             if(primaryKey != null) {
                 SqlConsumer<Field> fieldConsumer = field -> {
                     field.setAccessible(true);
@@ -117,7 +117,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             return t;
         } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
-            throw new RuntimeException(e);
+            throw new DataMapperException(e);
         }
     }
 
@@ -130,8 +130,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 s.setObject(i+1, values[i].getValue());
             }
         };
+        SqlFunction<PreparedStatement, Stream<T>> streamSqlFunction = s -> stream(s, s.getResultSet());
         return SQLUtils.execute(query, consumer.wrap())
-                .thenApply(((SqlFunction<PreparedStatement, Stream<T>>)s -> stream(s, s.getResultSet())).wrap())
+                .thenApply(streamSqlFunction.wrap())
                 .thenApply(s -> s.collect(Collectors.toList()));
     }
 
@@ -139,12 +140,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public CompletableFuture<Optional<T>> findById(K id) {
         UnitOfWork unitOfWork = UnitOfWork.getCurrent();
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
-        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt ->
-                setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
-                .thenApply(func.wrap())
-                .thenApply(Stream::findFirst)
-                .thenApply(optionalT -> {
+        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
+                .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
+                    Optional<T> optionalT = func.wrap().apply(ps).findFirst();
                     optionalT.ifPresent(t -> externalHandler.populateExternals(t).join());
                     return optionalT;
                 });
@@ -164,10 +163,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
      * If the parent implements DomainObject (meaning it has a mapper), gets its mapper, else returns an empty Optional.
      * @return Optional of DataMapper or empty Optional
      */
-    private Optional<DataMapper<? super T, ?>> getParentMapper(){
+    private Optional<DataMapper<? super T, ? super K>> getParentMapper(){
         Class<? super T> aClass = type.getSuperclass();
         if(aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            DataMapper<? super T, ?> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass).getMapper();
+            DataMapper<? super T, ? super K> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass).getMapper();
             return Optional.of(classMapper);
         }
         return Optional.empty();
