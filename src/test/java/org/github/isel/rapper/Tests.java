@@ -23,20 +23,20 @@ public class Tests {
 
     @Test
     public void test1(){
-        CompletableFuture.supplyAsync(() -> Integer.parseInt("1")) // input String: "not detected"
+        Double join = CompletableFuture.supplyAsync(() -> Integer.parseInt("sasd")) // input String: "not detected"
                 .thenApply(r -> r * 2 * Math.PI)
                 //.thenApply(s -> "apply>> " + s)
-                //.exceptionally(ex -> "Error: " + ex.getMessage())
-                .handle((result, ex) -> {
+                .exceptionally(ex -> Double.valueOf(0))
+                /*.handle((result, ex) -> {
                     if (result != null) {
                         return result;
                     } else {
                         return ex;
                     }
-                })
+                })*/
                 .join();
 
-        System.out.println("");
+        System.out.println(join);
     }
 
     @Test
@@ -47,8 +47,8 @@ public class Tests {
 
         System.out.println(connection);
 
-        PreparedStatement preparedStatement = connection.prepareStatement("INSERT into Person(nif) values (2)");
-        preparedStatement.executeUpdate();
+        PreparedStatement preparedStatement = connection.prepareStatement("delete from TopStudent where dbo.TopStudent.nif = 321");
+        System.out.println(preparedStatement.executeUpdate());
 
         connection.rollback();
 

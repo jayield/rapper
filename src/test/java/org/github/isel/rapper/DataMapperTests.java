@@ -1,10 +1,7 @@
 package org.github.isel.rapper;
 
 import javafx.util.Pair;
-import org.github.isel.rapper.domainModel.Car;
-import org.github.isel.rapper.domainModel.Company;
-import org.github.isel.rapper.domainModel.Person;
-import org.github.isel.rapper.domainModel.TopStudent;
+import org.github.isel.rapper.domainModel.*;
 import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
@@ -32,6 +29,7 @@ public class DataMapperTests {
 
     private final DataMapper<Person, Integer> personMapper = (DataMapper<Person, Integer>) MapperRegistry.getRepository(Person.class).getMapper();
     private final DataMapper<Car, Car.PrimaryPk> carMapper = (DataMapper<Car, Car.PrimaryPk>) MapperRegistry.getRepository(Car.class).getMapper();
+    private final DataMapper<Student, Integer> studentMapper = (DataMapper<Student, Integer>) MapperRegistry.getRepository(Student.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
 
@@ -112,7 +110,7 @@ public class DataMapperTests {
         completableFutures.add(topStudentMapper
                 .findById(454)
                 .thenApply(topStudent -> topStudent.orElse(new TopStudent()))
-                .thenAccept(topStudent -> assertSingleRow(current, topStudent, topStudentSelectQuery, getTopStudentPSConsumer(454), AssertUtils::assertTopStudent))
+                .thenAccept(topStudent -> assertSingleRow(current, topStudent, topStudentSelectQuery, getPersonPSConsumer(454), AssertUtils::assertTopStudent))
         );
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
@@ -141,21 +139,25 @@ public class DataMapperTests {
         //Arrange
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
+        Student student = new Student(321, "Jose", new Date(1996, 6, 2), 0, 4, 0);
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
         List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.create(person));
         completableFutures.add(carMapper.create(car));
+        //completableFutures.add(studentMapper.create(student));
         completableFutures.add(topStudentMapper.create(topStudent));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
+        completableFutures.forEach(b -> assertTrue(b.join()));
 
         //Assert
         assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
         assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        //assertSingleRow(UnitOfWork.getCurrent(), student, studentSelectQuery, getPersonPSConsumer(student.getNif()), AssertUtils::assertStudent);
+        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
@@ -168,7 +170,7 @@ public class DataMapperTests {
 
         rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getTopStudentPSConsumer(454));
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454));
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
@@ -179,17 +181,18 @@ public class DataMapperTests {
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
+        completableFutures.forEach(b -> assertTrue(b.join()));
 
         assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
         assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
     public void delete() {
         Person person = new Person(321, null, null, 0);
         Car car = new Car(2, "23we45", null, null, 0);
-        TopStudent topStudent = new TopStudent(321, null, null, 0, 0, 0, 0, 0, 0);
+        TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
 
         List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.delete(person));
@@ -198,10 +201,11 @@ public class DataMapperTests {
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
+        completableFutures.forEach(b -> assertTrue(b.join()));
 
         assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()));
         assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
-        assertNotFound(topStudentSelectQuery, getTopStudentPSConsumer(topStudent.getNif()));
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()));
     }
 
 }

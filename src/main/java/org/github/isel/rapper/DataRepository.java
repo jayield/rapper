@@ -43,11 +43,16 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Optional<T>> findById(K k) {
         checkUnitOfWork();
 
-        return CompletableFuture.completedFuture(
+        if(identityMap.containsKey(k)){
+            return CompletableFuture.completedFuture(Optional.of(identityMap.get(k)));
+        }
+        return mapper.findById(k).thenApply(t -> { t.ifPresent(this::putOrReplace); return t; });
+
+        /*return CompletableFuture.completedFuture(
                 Optional.ofNullable(
                         identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).join().orElse(null))
                 )
-        );
+        );*/
     }
 
     @Override
@@ -86,9 +91,13 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
         checkUnitOfWork();
         t.forEach(t1 -> {
-            if(identityMap.containsKey(t1.getIdentityKey())){
+            identityMap.computeIfPresent(t1.getIdentityKey(), (k, t2) -> {
+                t2.markToBeDirty();
+                return t2;
+            });
+            /*if(identityMap.containsKey(t1.getIdentityKey())){
                 identityMap.get(t1.getIdentityKey()).markToBeDirty();
-            }
+            }*/
             t1.markDirty();
         });
         return UnitOfWork.getCurrent().commit();
@@ -97,10 +106,18 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Boolean> deleteById(K k) {
         checkUnitOfWork();
-        if(identityMap.containsKey(k)){
+        CompletableFuture<Boolean>[] future = new CompletableFuture[1];
+        identityMap.computeIfPresent(k, (key, t) -> {
+            t.markRemoved();
+            future[0] = UnitOfWork.getCurrent().commit();
+            return t;
+        });
+
+        if(future[0] != null) return future[0];
+        /*if(identityMap.containsKey(k)){
             identityMap.get(k).markRemoved();
             return UnitOfWork.getCurrent().commit();
-        }
+        }*/
         else {
             Function<T, Boolean> consumer = t1 -> {
                 t1.markRemoved();
@@ -126,11 +143,19 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
         checkUnitOfWork();
-        List<CompletableFuture<Boolean>> list = new ArrayList<>();
-        keys.forEach(k -> list.add(deleteById(k)));
-        return list
-                .stream()
-                .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2));
+
+        keys.forEach(k -> {
+            boolean isPresent = identityMap.computeIfPresent(k, (key, t) -> {
+                t.markRemoved();
+                return t;
+            }) != null;
+
+            if(!isPresent){
+                findById(k).join().ifPresent(DomainObject::markRemoved);
+            }
+        });
+
+        return UnitOfWork.getCurrent().commit();
     }
 
     private void putOrReplace(T item){

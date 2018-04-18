@@ -99,6 +99,24 @@ public class AssertUtils {
         }
     }
 
+    public static void assertStudent(Student student, ResultSet rs) {
+        try{
+            Field personVersion = Person.class.getDeclaredField("version");
+
+            personVersion.setAccessible(true);
+
+            assertEquals(student.getNif(), rs.getInt("nif"));
+            assertEquals(student.getName(), rs.getString("name"));
+            //assertEquals(student.getBirthday(), rs.getDate("birthday"));
+            assertEquals(student.getVersion(), rs.getLong("Cversion"));
+            assertNotEquals(0, student.getVersion());
+            assertEquals(student.getStudentNumber(), rs.getInt("studentNumber"));
+            assertEquals(personVersion.get(student), rs.getLong("P1version"));
+        } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     //---------------------------ResultSets assertions-----------------------------------
     public static<U> void assertSingleRow(UnitOfWork current, U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
         try{

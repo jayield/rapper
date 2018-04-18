@@ -18,6 +18,8 @@ public class TestUtils {
     public static final String personSelectQuery = "select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?";
     public static final String carSelectQuery = "select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?";
     public static final String employeeSelectQuery = "select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where name = ?";
+    public static final String studentSelectQuery = "select C.studentNumber, CAST(C.version as bigint) Cversion, P1.name, P1.birthday, CAST(P1.version as bigint) P1version, P1.nif\n" +
+            "  from Student C inner join Person P1 on C.nif = P1.nif where C.nif = ?";
     public static final String topStudentSelectQuery = "select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year,\n" +
             "  CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = ?";
 
@@ -52,13 +54,6 @@ public class TestUtils {
             ps.setString(2, plate);
         };
         return carPSConsumer.wrap();
-    }
-
-    public static Consumer<PreparedStatement> getTopStudentPSConsumer(int nif) {
-        SqlConsumer<PreparedStatement> consumer = ps -> {
-            ps.setInt(1, nif);
-        };
-        return consumer.wrap();
     }
 
     public static Consumer<PreparedStatement> getEmployeePSConsumer(String name){
