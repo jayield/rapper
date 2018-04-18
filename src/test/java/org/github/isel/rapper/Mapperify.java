@@ -1,5 +1,7 @@
 package org.github.isel.rapper;
 
+import javafx.util.Pair;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -15,6 +17,11 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
         this.other = other;
         ifindById = Countify.of(other::findById);
         ifindAll = Countify.of(i -> other.findAll());
+    }
+
+    @Override
+    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        return other.findWhere(values);
     }
 
     @Override

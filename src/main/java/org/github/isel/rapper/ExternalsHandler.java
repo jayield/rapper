@@ -39,7 +39,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         if(externals != null)
             externals.forEach(sqlFieldExternal -> {
                 Class<? extends DomainObject> collectionObjectsType = sqlFieldExternal.type;
-                DataMapper<? extends DomainObject, ?> collectionObjectsTypeMapper = MapperRegistry.getRepository(collectionObjectsType).getMapper();
+                Mapper<? extends DomainObject, ?> collectionObjectsTypeMapper = MapperRegistry.getRepository(collectionObjectsType).getMapper();
                 String[] columnsNames = sqlFieldExternal.columnsNames;
 
                 SqlFunction<SqlField.SqlFieldId, Object> function = sqlFieldId -> {
@@ -83,7 +83,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param mapper
      * @param idValues
      */
-    private<V> CompletableFuture<Void> populateWithExternalTable(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, V> mapper, Iterator<Object> idValues) {
+    private<V> CompletableFuture<Void> populateWithExternalTable(T t, SqlField.SqlFieldExternal sqlFieldExternal, Mapper<? extends DomainObject, V> mapper, Iterator<Object> idValues) {
         SqlConsumer<PreparedStatement> preparedStatementConsumer = stmt -> {
             for (int i = 1; idValues.hasNext(); i++) {
                 stmt.setObject(i, idValues.next());
@@ -140,7 +140,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param columnsNames
      * @param idValues
      */
-    private CompletableFuture<Void> populateWithDataMapper(T t, SqlField.SqlFieldExternal sqlFieldExternal, DataMapper<? extends DomainObject, ?> mapper, String[] columnsNames, Iterator<Object> idValues) {
+    private CompletableFuture<Void> populateWithDataMapper(T t, SqlField.SqlFieldExternal sqlFieldExternal, Mapper<? extends DomainObject, ?> mapper, String[] columnsNames, Iterator<Object> idValues) {
         Pair<String, Object>[] pairs = Arrays.stream(columnsNames)
                 .map(str -> new Pair<>(str, idValues.next()))
                 .toArray(Pair[]::new);

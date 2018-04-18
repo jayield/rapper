@@ -1,10 +1,21 @@
 package org.github.isel.rapper;
 
+import javafx.util.Pair;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 public interface Mapper<T extends DomainObject<K>, K> {
+
+    /**
+     * It will try to locate T with the given properties passed in values
+     * @param values a pair containing the properties to search T, the key must be the name of the column and the value the expected value of the column
+     * @param <R> The type of the column
+     * @return a list of T's which match with the properties passed
+     */
+    <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values);
+
     /**
      * Tries to locate T with the given key K
      * @param k key of T

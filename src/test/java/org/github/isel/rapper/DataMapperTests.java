@@ -30,10 +30,10 @@ import static org.junit.Assert.*;
 public class DataMapperTests {
     private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
 
-    private final DataMapper<Person, Integer> personMapper = MapperRegistry.getRepository(Person.class).getMapper();
-    private final DataMapper<Car, Car.PrimaryPk> carMapper = MapperRegistry.getRepository(Car.class).getMapper();
-    private final DataMapper<TopStudent, Integer> topStudentMapper = MapperRegistry.getRepository(TopStudent.class).getMapper();
-    private final DataMapper<Company, Company.PrimaryKey> companyMapper = MapperRegistry.getRepository(Company.class).getMapper();
+    private final DataMapper<Person, Integer> personMapper = (DataMapper<Person, Integer>) MapperRegistry.getRepository(Person.class).getMapper();
+    private final DataMapper<Car, Car.PrimaryPk> carMapper = (DataMapper<Car, Car.PrimaryPk>) MapperRegistry.getRepository(Car.class).getMapper();
+    private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
+    private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
 
     @Before
     public void start() throws SQLException {

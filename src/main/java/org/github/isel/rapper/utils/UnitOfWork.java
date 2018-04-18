@@ -5,6 +5,7 @@ import javafx.util.Pair;
 import org.github.isel.rapper.DataMapper;
 import org.github.isel.rapper.DataRepository;
 import org.github.isel.rapper.DomainObject;
+import org.github.isel.rapper.Mapper;
 import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
 import org.slf4j.Logger;
@@ -119,13 +120,13 @@ public class UnitOfWork {
 
     public CompletableFuture<Boolean> commit() {
         Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                List<CompletableFuture<Boolean>>> insertPair = executeFilteredBiFunctionInList(DataMapper::create, newObjects, domainObject -> true);
+                List<CompletableFuture<Boolean>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
 
         Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                List<CompletableFuture<Boolean>>> updatePair = executeFilteredBiFunctionInList(DataMapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+                List<CompletableFuture<Boolean>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
 
         Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                List<CompletableFuture<Boolean>>> deletePair = executeFilteredBiFunctionInList(DataMapper::delete, removedObjects, domainObject -> true);
+                List<CompletableFuture<Boolean>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
 
         List<CompletableFuture<Boolean>> completableFutures = insertPair.getValue();
         completableFutures.addAll(updatePair.getValue());
@@ -205,7 +206,7 @@ public class UnitOfWork {
      * The value of the Pair is a List containing the completableFutures of the calls of the mapper
      */
     private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> executeFilteredBiFunctionInList(
-            BiFunction<DataMapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
+            BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
             List<DomainObject> list,
             Predicate<DomainObject> predicate
     ) {

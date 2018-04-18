@@ -121,7 +121,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         }
     }
 
-    protected<R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values){
+    @Override
+    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values){
         String query = Arrays.stream(values)
                 .map(p -> p.getKey() + " = ? ")
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
@@ -163,10 +164,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
      * If the parent implements DomainObject (meaning it has a mapper), gets its mapper, else returns an empty Optional.
      * @return Optional of DataMapper or empty Optional
      */
-    private Optional<DataMapper<? super T, ? super K>> getParentMapper(){
+    private Optional<Mapper<? super T, ? super K>> getParentMapper(){
         Class<? super T> aClass = type.getSuperclass();
         if(aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            DataMapper<? super T, ? super K> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass).getMapper();
+            Mapper<? super T, ? super K> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass).getMapper();
             return Optional.of(classMapper);
         }
         return Optional.empty();

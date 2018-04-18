@@ -1,5 +1,6 @@
 package org.github.isel.rapper;
 
+import javafx.util.Pair;
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.DBsPath;
 import org.github.isel.rapper.utils.UnitOfWork;
@@ -22,8 +23,8 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         this.mapper = mapper;
     }
 
-    public DataMapper<T, K> getMapper() {
-        return (DataMapper<T, K>) mapper;
+    public Mapper<T, K> getMapper() {
+        return mapper;
     }
 
     private void checkUnitOfWork(){
@@ -31,6 +32,11 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
             ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.DEFAULTDB);
             UnitOfWork.newCurrent(connectionManager::getConnection);
         }
+    }
+
+    @Override
+    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        return null;
     }
 
     @Override
