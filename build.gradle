@@ -1,7 +1,9 @@
 group 'org.github.isel'
 version '1.0-SNAPSHOT'
 
+apply plugin: 'maven-publish'
 apply plugin: 'java'
+apply plugin: 'signing'
 sourceCompatibility = 1.8
 
 repositories {
@@ -14,4 +16,137 @@ dependencies {
     compile group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: '6.3.6.jre8-preview'
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testCompile group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.25'
+}
+
+task sourceJar(type: Jar) {
+    classifier "sources"
+    from sourceSets.main.allJava
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier "javadoc"
+    from javadoc.destinationDir
+}
+
+artifacts {
+    archives jar
+    archives sourceJar
+    archives javadocJar
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            customizePom(pom)
+
+            from components.java
+
+            // create the sign pom artifact
+            pom.withXml {
+                def pomFile = file("${project.buildDir}/generated-pom.xml")
+                writeTo(pomFile)
+                def pomAscFile = signing.sign(pomFile).signatureFiles[0]
+                artifact(pomAscFile) {
+                    classifier = null
+                    extension = 'pom.asc'
+                }
+            }
+
+            artifact(sourceJar) {
+                classifier = 'sources'
+            }
+            artifact(javadocJar) {
+                classifier = 'javadoc'
+            }
+
+            // create the signed artifacts
+            project.tasks.signArchives.signatureFiles.each {
+                artifact(it) {
+                    def matcher = it.file =~ /-(sources|javadoc)\.jar\.asc$/
+                    if (matcher.find()) {
+                        classifier = matcher.group(1)
+                    } else {
+                        classifier = null
+                    }
+                    extension = 'jar.asc'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            url //""
+            credentials {
+                username //""
+                password //""
+            }
+        }
+    }
+}
+
+def customizePom(pom) {
+    pom.withXml {
+        def root = asNode()
+
+        // eliminate test-scoped dependencies (no need in maven central POMs)
+        root.dependencies.removeAll { dep ->
+            dep.scope == "test"
+        }
+
+        // add all items necessary for maven central publication
+        root.children().last() + {
+            resolveStrategy = Closure.DELEGATE_FIRST
+
+            description 'Async DataMapper for JDBC'
+            name 'Rapper'
+            url 'https://github.com/jayield/rapper'
+            organization {
+                name 'com.github.jayield'
+                url 'https://github.com/jayield'
+            }
+            issueManagement {
+                system 'GitHub'
+                url 'https://github.com/jayield/rapper/issues'
+            }
+            licenses {
+                license {
+                    name 'MIT License'
+                    url 'https://github.com/jayield/rapper/blob/master/license.txt'
+                    distribution 'repo'
+                }
+            }
+            scm {
+                url 'https://github.com/jayield/rapper'
+                connection 'scm:git:git://github.com/jayield/rapper.git'
+                developerConnection 'scm:git:ssh://git@github.com:jayield/rapper.git'
+            }
+            developers {
+                developer {
+                    name 'Diogo'
+                }
+                developer {
+                    name 'João'
+                }
+                developer {
+                    name 'Tiago'
+                }
+            }
+        }
+    }
+}
+
+model {
+    tasks.generatePomFileForMavenJavaPublication {
+        destination = file("$buildDir/generated-pom.xml")
+    }
+    tasks.publishMavenJavaPublicationToMavenLocal {
+        dependsOn project.tasks.signArchives
+    }
+    tasks.publishMavenJavaPublicationToMavenRepository {
+        dependsOn project.tasks.signArchives
+    }
+}
+
+signing {
+    sign configurations.archives
 }

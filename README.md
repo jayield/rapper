@@ -32,6 +32,22 @@ The Rapper implementation use the following design patterns:
  - The Identity Map implements a LRU cache. They have a limit of what they can hold in memory, and when it reaches the limit, 
  they will delete the least-read elements.
  
+### Rules
+ - You must create an environment variable to connect to the DB. <br />
+The environment variable must have the following format:
+
+Name:
+
+```sh
+DB_CONNECTION_STRING
+```
+
+Value:
+
+```sh
+servername;database;user;password
+```
+
  - All domain objects must implement interface <code>DomainObject</code> and each domain object must have a field called version 
  and the same for the DB tables.
  
@@ -47,19 +63,3 @@ The Rapper implementation use the following design patterns:
  where the ID of the other `DomainObject` takes place. `foreignName` is only needed when `table` is setted
  
  - A `DomainObject` and the class that contains the keys and respective names must have a 0 arguments constructor
- 
-### Rules
-You must create an environment variable to connect to the DB. <br />
-The environment variable must have the following format:
-
-Name:
-
-```sh
-DB_CONNECTION_STRING
-```
-
-Value:
-
-```sh
-servername;database;user;password
-```
