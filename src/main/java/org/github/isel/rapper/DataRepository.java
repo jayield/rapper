@@ -3,8 +3,10 @@ package org.github.isel.rapper;
 import javafx.util.Pair;
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.DBsPath;
+import org.github.isel.rapper.utils.SqlSupplier;
 import org.github.isel.rapper.utils.UnitOfWork;
 
+import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -12,6 +14,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
@@ -30,13 +33,14 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     private void checkUnitOfWork(){
         if(UnitOfWork.getCurrent() == null) {
             ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.DEFAULTDB);
-            UnitOfWork.newCurrent(connectionManager::getConnection);
+            SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+            UnitOfWork.newCurrent(connectionSupplier.wrap());
         }
     }
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        return null;
+        return mapper.findWhere(values);
     }
 
     @Override
@@ -53,6 +57,8 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                         identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).join().orElse(null))
                 )
         );*/
+
+        //return identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).thenApply(t -> t.orElse(null)));
     }
 
     @Override

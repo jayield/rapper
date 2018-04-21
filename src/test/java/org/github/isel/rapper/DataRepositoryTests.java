@@ -3,10 +3,7 @@ package org.github.isel.rapper;
 import org.github.isel.rapper.domainModel.Employee;
 import org.github.isel.rapper.domainModel.Person;
 import org.github.isel.rapper.domainModel.TopStudent;
-import org.github.isel.rapper.utils.ConnectionManager;
-import org.github.isel.rapper.utils.DBsPath;
-import org.github.isel.rapper.utils.MapperRegistry;
-import org.github.isel.rapper.utils.UnitOfWork;
+import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,10 +17,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import static org.github.isel.rapper.AssertUtils.assertMultipleRows;
 import static org.github.isel.rapper.AssertUtils.assertNotFound;
 import static org.github.isel.rapper.AssertUtils.assertSingleRow;
+import static org.github.isel.rapper.DBStatements.createTables;
+import static org.github.isel.rapper.DBStatements.deleteDB;
+import static org.github.isel.rapper.DBStatements.populateDB;
 import static org.github.isel.rapper.TestUtils.*;
 import static org.github.isel.rapper.utils.DBsPath.TESTDB;
 import static org.junit.Assert.*;
@@ -61,7 +62,9 @@ public class DataRepositoryTests {
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
-        con.close();
+        /*createTables(con);
+        deleteDB(con);
+        populateDB(con);*/
 
         topStudentMapperify = new Mapperify<>(topStudentMapper);
         topStudentRepository = new DataRepository<>(topStudentMapperify);
@@ -152,7 +155,8 @@ public class DataRepositoryTests {
     @Test
     public void update() throws SQLException {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        UnitOfWork.newCurrent(connectionManager::getConnection);
+        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
 
         ResultSet rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
@@ -175,7 +179,8 @@ public class DataRepositoryTests {
     @Test
     public void updateAll() throws SQLException {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        UnitOfWork.newCurrent(connectionManager::getConnection);
+        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
 
         List<Person> list = new ArrayList<>(2);
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
@@ -226,7 +231,8 @@ public class DataRepositoryTests {
     @Test
     public void deleteAll() throws SQLException {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        UnitOfWork.newCurrent(connectionManager::getConnection);
+        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
 
         List<Integer> list = new ArrayList<>(2);
         ResultSet rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Bob"));

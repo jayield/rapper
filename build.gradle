@@ -1,5 +1,5 @@
-group 'org.github.isel'
-version '1.0-SNAPSHOT'
+group 'com.github.jayield'
+version '1.0.1'
 
 apply plugin: 'maven-publish'
 apply plugin: 'java'
@@ -11,7 +11,6 @@ repositories {
 }
 
 dependencies {
-    // https://mvnrepository.com/artifact/org.slf4j/slf4j-api
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
     compile group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: '6.3.6.jre8-preview'
     testCompile group: 'junit', name: 'junit', version: '4.12'
@@ -20,7 +19,7 @@ dependencies {
 
 task sourceJar(type: Jar) {
     classifier "sources"
-    from sourceSets.main.allJava
+    from sourceSets.main.allSource
 }
 
 task javadocJar(type: Jar, dependsOn: javadoc) {
@@ -38,6 +37,9 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             customizePom(pom)
+            groupId 'com.github.jayield'
+            artifactId 'rapper'
+            version '1.0.1'
 
             from components.java
 
@@ -75,10 +77,10 @@ publishing {
     }
     repositories {
         maven {
-            url //""
+            url "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
             credentials {
-                username //""
-                password //""
+                username sonatypeUsername
+                password sonatypePassword
             }
         }
     }

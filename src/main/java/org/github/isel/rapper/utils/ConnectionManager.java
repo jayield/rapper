@@ -6,28 +6,34 @@ import org.slf4j.LoggerFactory;
 
 import javax.sql.ConnectionPoolDataSource;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.function.Supplier;
 
 public class ConnectionManager {
     private static final Logger staticLogger = LoggerFactory.getLogger(ConnectionManager.class);
     private static ConnectionManager connectionManager = null;
 
-    private final Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
-    private final ConnectionPoolDataSource dataSource; /**CONNECTION STRING FORMAT: SERVERNAME;DATABASE;USER;PASSWORD*/
+    private final ConnectionPoolDataSource poolDataSource;
 
-    private ConnectionManager(String envVarName){
-        dataSource = getDataSource(envVarName);
+    private ConnectionManager(DBsPath envVarName){
+        poolDataSource = getDataSource(envVarName);
     }
 
     public static ConnectionManager getConnectionManager(DBsPath envVar){
-        if(connectionManager == null) connectionManager = new ConnectionManager(envVar.toString());
+        if(connectionManager == null) {
+            staticLogger.info("Creating new ConnectionManager for " +  envVar.name());
+            connectionManager = new ConnectionManager(envVar);
+        }
         return connectionManager;
     }
 
-    private static ConnectionPoolDataSource getDataSource(String envVar){
-        String connectionString = System.getenv(envVar);
-        staticLogger.info(connectionString +" - "+ envVar);
-        String [] connectionStringParts = connectionString.split(";");
+    private static ConnectionPoolDataSource getDataSource(DBsPath envVar){
+        //CONNECTION STRING FORMAT: SERVERNAME;DATABASE;USER;PASSWORD
+        String connectionString = System.getenv(envVar.toString());
+        String[] connectionStringParts = connectionString.split(";");
+
+        staticLogger.info("The connection string retrieved was " + connectionString + "\nTaken from " + envVar + " environment variable");
 
         SQLServerConnectionPoolDataSource dataSource = new SQLServerConnectionPoolDataSource();
 
@@ -39,16 +45,10 @@ public class ConnectionManager {
         return dataSource;
     }
 
-    public Connection getConnection() {
-        try {
-            Connection connection = dataSource
-                    .getPooledConnection()
-                    .getConnection();
-            connection.setAutoCommit(false);
-            return connection;
-        } catch (SQLException e) {
-            logger.info("Error on establishing connection to the DB \n" + e.getMessage());
-        }
-        return null;
+    public Connection getConnection() throws SQLException {
+        Connection connection = poolDataSource.getPooledConnection().getConnection();
+        connection.setAutoCommit(false);
+
+        return connection;
     }
 }

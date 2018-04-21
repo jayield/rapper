@@ -12,7 +12,7 @@ public interface SqlConsumer<T> {
 
     default Consumer<T> wrap(){
         return t -> {
-            try{ this.accept(t);}
+            try{ this.accept(t); }
             catch (Exception e){//TODO
                 throw new DataMapperException(e);
             }
