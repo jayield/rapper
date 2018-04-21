@@ -13,8 +13,12 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 import static org.github.isel.rapper.AssertUtils.*;
+import static org.github.isel.rapper.DBStatements.createTables;
+import static org.github.isel.rapper.DBStatements.deleteDB;
+import static org.github.isel.rapper.DBStatements.populateDB;
 import static org.github.isel.rapper.TestUtils.*;
 import static org.github.isel.rapper.utils.DBsPath.TESTDB;
 import static org.junit.Assert.*;
@@ -36,11 +40,15 @@ public class DataMapperTests {
     @Before
     public void start() throws SQLException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
-        UnitOfWork.newCurrent(manager::getConnection);
+        SqlSupplier<Connection> connectionSupplier = manager::getConnection;
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
         Connection con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
+        /*createTables(con);
+        deleteDB(con);
+        populateDB(con);*/
     }
 
     @After

@@ -4,7 +4,7 @@ public enum DBsPath {
     DEFAULTDB ("DB_CONNECTION_STRING"),
     TESTDB ("DBTEST_CONNECTION_STRING");
 
-    String value;
+    private String value;
     DBsPath(String value) {
         this.value = value;
     }

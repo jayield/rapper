@@ -16,8 +16,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 
 import static org.github.isel.rapper.AssertUtils.*;
+import static org.github.isel.rapper.DBStatements.createTables;
+import static org.github.isel.rapper.DBStatements.deleteDB;
+import static org.github.isel.rapper.DBStatements.populateDB;
 import static org.github.isel.rapper.TestUtils.*;
 import static org.github.isel.rapper.utils.DBsPath.TESTDB;
 import static org.github.isel.rapper.utils.MapperRegistry.getRepository;
@@ -58,11 +62,15 @@ public class UnitOfWorkTests {
     @Before
     public void before() throws SQLException, NoSuchFieldException, IllegalAccessException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
-        UnitOfWork.newCurrent(manager::getConnection);
+        SqlSupplier<Connection> connectionSupplier = manager::getConnection;
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
         Connection con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
+        /*createTables(con);
+        deleteDB(con);
+        populateDB(con);*/
 
         container = new Container();
 

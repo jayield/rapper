@@ -2,6 +2,7 @@ package org.github.isel.rapper;
 
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.DBsPath;
+import org.github.isel.rapper.utils.SqlSupplier;
 import org.github.isel.rapper.utils.UnitOfWork;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -13,6 +14,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertFalse;
 
@@ -36,19 +38,20 @@ public class Tests {
                 })*/
                 .join();
 
-        System.out.println(join);
+        logger.info(join.toString());
     }
 
     @Test
     public void test2() throws SQLException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        UnitOfWork.newCurrent(manager::getConnection);
+        SqlSupplier<Connection> connectionSupplier = manager::getConnection;
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
         Connection connection = UnitOfWork.getCurrent().getConnection();
 
-        System.out.println(connection);
+        logger.info(manager.getConnection().toString());
 
         PreparedStatement preparedStatement = connection.prepareStatement("delete from TopStudent where dbo.TopStudent.nif = 321");
-        System.out.println(preparedStatement.executeUpdate());
+        logger.info("" + preparedStatement.executeUpdate());
 
         connection.rollback();
 
@@ -58,6 +61,6 @@ public class Tests {
 
         assertFalse(rs.next());
 
-        System.out.println(manager.getConnection());
+        logger.info(manager.getConnection().toString());
     }
 }

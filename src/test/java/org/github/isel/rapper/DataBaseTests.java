@@ -2,7 +2,6 @@ package org.github.isel.rapper;
 
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.DBsPath;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -11,67 +10,42 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
-import static junit.framework.TestCase.assertTrue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class DataBaseTests {
 
-    private static final ConnectionManager manager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-
-    public static Connection getConnection() {
-        return manager.getConnection();
-    }
-
-    private Connection con;
+    private ConnectionManager connectionManager;
 
     @Before
-    public void start() throws SQLException {
-        con = getConnection();
-        con.setAutoCommit(false);
-    }
-
-    @After
-    public void finish() throws SQLException {
-        con.rollback();
-        con.close();
+    public void before() throws SQLException {
+        connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
+        Connection con = connectionManager.getConnection();
+        //DBStatements.createTables(con);
     }
 
     @Test
-    public void test() throws SQLException {
-        PreparedStatement s = con.prepareStatement("select * from Person");
-        ResultSet rs = s.executeQuery();
-        rs.next();
-        for (int i = 0; i < 10000; i++) {
-            System.out.println(rs.getObject("nif"));
+    public void crud() throws SQLException {
+        try (Connection con = connectionManager.getConnection()) {
+            PreparedStatement stmt = con.prepareStatement("insert into Person(nif, name, birthday) values (1, 'Test', '1990-05-02')");
+            int update = stmt.executeUpdate();
+            assertEquals(1, update);
+
+            stmt = con.prepareStatement("select * from Person");
+            ResultSet rs = stmt.executeQuery();
+            assertTrue(rs.next());
+
+            stmt = con.prepareStatement("update Person set name = 'test2' where nif = ?");
+            stmt.setInt(1, 1);
+            update = stmt.executeUpdate();
+            assertEquals(1, update);
+
+            stmt = con.prepareStatement("delete from Person where nif = ?");
+            stmt.setInt(1, 1);
+            update = stmt.executeUpdate();
+            assertEquals(1, update);
+
+            con.rollback();
         }
-
-        System.out.println(rs.getObject("nif"));
-    }
-
-    @Test
-    public void CRUDTest() throws SQLException {
-        PreparedStatement statement = con.prepareStatement("INSERT INTO ApiDatabase.[Local] ([Address], Country) Values (?, ?)");
-        statement.setString(1, "Rua do Teste da Base de Dados");
-        statement.setString(2, "Dataland");
-        statement.executeUpdate();
-
-        statement = con.prepareStatement("SELECT * FROM ApiDatabase.[Local] WHERE Country = ?");
-        statement.setString(1, "Dataland");
-        ResultSet rs = statement.executeQuery();
-
-        assertTrue(rs.next());
-        assertEquals("Rua do Teste da Base de Dados", rs.getString("Address"));
-
-        statement = con.prepareStatement("UPDATE ApiDatabase.[Local] SET ZIPCode = 404 WHERE [Address] = ?");
-        statement.setString(1, "Rua do Teste da Base de Dados");
-        int rows = statement.executeUpdate();
-
-        assertEquals(1, rows);
-
-        statement = con.prepareStatement("DELETE FROM ApiDatabase.[Local] WHERE [Address] = ?");
-        statement.setString(1, "Rua do Teste da Base de Dados");
-        rows = statement.executeUpdate();
-
-        assertEquals(1, rows);
     }
 }
