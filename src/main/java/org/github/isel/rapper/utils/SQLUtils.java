@@ -1,5 +1,6 @@
 package org.github.isel.rapper.utils;
 
+import javafx.util.Pair;
 import org.github.isel.rapper.exceptions.DataMapperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

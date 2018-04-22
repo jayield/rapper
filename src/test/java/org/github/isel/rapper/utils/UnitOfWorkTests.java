@@ -93,7 +93,7 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        assertTrue(UnitOfWork.getCurrent().commit().join());
+        assertEquals(7, (int) UnitOfWork.getCurrent().commit().join());
 
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
         identityMapField.setAccessible(true);
@@ -122,7 +122,7 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        assertFalse(UnitOfWork.getCurrent().commit().join());
+        assertEquals(0, (int) UnitOfWork.getCurrent().commit().join());
 
         removedObjects.remove(chat);
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");

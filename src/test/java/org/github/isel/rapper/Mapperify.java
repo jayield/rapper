@@ -35,37 +35,37 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<Boolean> create(T t) {
+    public CompletableFuture<Integer> create(T t) {
         return other.create(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> createAll(Iterable<T> t) {
+    public CompletableFuture<Integer> createAll(Iterable<T> t) {
         return other.createAll(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> update(T t) {
+    public CompletableFuture<Integer> update(T t) {
         return other.update(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
+    public CompletableFuture<Integer> updateAll(Iterable<T> t) {
         return other.updateAll(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteById(K k) {
+    public CompletableFuture<Integer> deleteById(K k) {
         return other.deleteById(k);
     }
 
     @Override
-    public CompletableFuture<Boolean> delete(T t) {
+    public CompletableFuture<Integer> delete(T t) {
         return other.delete(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Integer> deleteAll(Iterable<K> keys) {
         return other.deleteAll(keys);
     }
 

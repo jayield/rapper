@@ -119,10 +119,10 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        Boolean success = topStudentRepository.create(topStudent).join();
+        int rows = topStudentRepository.create(topStudent).join();
 
         //Assert
-        assertEquals(true, success);
+        assertEquals(1, rows);
 
         Optional<TopStudent> first = topStudentRepository.findById(456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
@@ -138,10 +138,10 @@ public class DataRepositoryTests {
         list.add(new TopStudent(457, "Maria", null, 0, 2, 18, 2010, 0, 0));
 
         //Act
-        Boolean success = topStudentRepository.createAll(list).join();
+        int rows = topStudentRepository.createAll(list).join();
 
         //Assert
-        assertEquals(true, success);
+        assertEquals(2, rows);
 
         Optional<TopStudent> first = topStudentRepository.findById(456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
@@ -164,9 +164,9 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        boolean success = topStudentRepository.update(topStudent).join();
+        int rows = topStudentRepository.update(topStudent).join();
 
-        assertTrue(success);
+        assertEquals(1, rows);
 
         Optional<TopStudent> first = topStudentRepository.findById(454).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
@@ -189,9 +189,9 @@ public class DataRepositoryTests {
         rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(454));
         list.add(new Person(454, "Ze Miguens", new Date(1080, 2, 4), rs.getLong(1)));
 
-        boolean success = personRepository.updateAll(list).join();
+        int rows = personRepository.updateAll(list).join();
 
-        assertTrue(success);
+        assertEquals(0, rows);
 
         Optional<Person> first = personRepository.findById(321).join();
         assertEquals(0, personMapperify.getIfindById().getCount());
@@ -204,9 +204,9 @@ public class DataRepositoryTests {
 
     @Test
     public void deleteById() {
-        boolean success = topStudentRepository.deleteById(454).join();
+        int rows = topStudentRepository.deleteById(454).join();
 
-        assertTrue(success);
+        assertEquals(0, rows);
 
         Optional<TopStudent> optionalTopStudent = topStudentRepository.findById(454).join();
         assertEquals(2, topStudentMapperify.getIfindById().getCount());
@@ -218,9 +218,9 @@ public class DataRepositoryTests {
     public void delete() {
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
 
-        boolean success = topStudentRepository.delete(topStudent).join();
+        int rows = topStudentRepository.delete(topStudent).join();
 
-        assertTrue(success);
+        assertEquals(0, rows);
 
         Optional<TopStudent> optionalTopStudent = topStudentRepository.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
@@ -241,9 +241,9 @@ public class DataRepositoryTests {
         rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Charles"));
         list.add(rs.getInt("id"));
 
-        boolean success = employeeRepository.deleteAll(list).join();
+        int rows = employeeRepository.deleteAll(list).join();
 
-        assertTrue(success);
+        assertEquals(0, rows);
 
         Optional<Employee> optionalPerson = employeeRepository.findById(321).join();
         assertEquals(3, employeeMapperify.getIfindById().getCount());

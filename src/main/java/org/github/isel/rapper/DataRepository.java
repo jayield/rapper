@@ -70,21 +70,21 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> create(T t) {
+    public CompletableFuture<Integer> create(T t) {
         checkUnitOfWork();
         t.markNew();
         return UnitOfWork.getCurrent().commit();
     }
 
     @Override
-    public CompletableFuture<Boolean> createAll(Iterable<T> t) {
+    public CompletableFuture<Integer> createAll(Iterable<T> t) {
         checkUnitOfWork();
         t.forEach(DomainObject::markNew);
         return UnitOfWork.getCurrent().commit();
     }
 
     @Override
-    public CompletableFuture<Boolean> update(T t) {
+    public CompletableFuture<Integer> update(T t) {
         checkUnitOfWork();
         if(identityMap.containsKey(t.getIdentityKey())){
             identityMap.get(t.getIdentityKey()).markToBeDirty();
@@ -94,7 +94,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
+    public CompletableFuture<Integer> updateAll(Iterable<T> t) {
         checkUnitOfWork();
         t.forEach(t1 -> {
             identityMap.computeIfPresent(t1.getIdentityKey(), (k, t2) -> {
@@ -110,9 +110,9 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteById(K k) {
+    public CompletableFuture<Integer> deleteById(K k) {
         checkUnitOfWork();
-        CompletableFuture<Boolean>[] future = new CompletableFuture[1];
+        CompletableFuture<Integer>[] future = new CompletableFuture[1];
         identityMap.computeIfPresent(k, (key, t) -> {
             t.markRemoved();
             future[0] = UnitOfWork.getCurrent().commit();
@@ -125,7 +125,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
             return UnitOfWork.getCurrent().commit();
         }*/
         else {
-            Function<T, Boolean> consumer = t1 -> {
+            Function<T, Integer> consumer = t1 -> {
                 t1.markRemoved();
                 return UnitOfWork.getCurrent().commit().join();
             };
@@ -134,20 +134,20 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                     .thenApply(t -> {
                         if(t.isPresent())
                             return consumer.apply(t.get());
-                        else return false;
+                        else return 0;
                     });
         }
     }
 
     @Override
-    public CompletableFuture<Boolean> delete(T t) {
+    public CompletableFuture<Integer> delete(T t) {
         checkUnitOfWork();
         t.markRemoved();
         return UnitOfWork.getCurrent().commit();
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Integer> deleteAll(Iterable<K> keys) {
         checkUnitOfWork();
 
         keys.forEach(k -> {

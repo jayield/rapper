@@ -151,7 +151,7 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Integer>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.create(person));
         completableFutures.add(carMapper.create(car));
         //completableFutures.add(studentMapper.create(student));
@@ -159,7 +159,7 @@ public class DataMapperTests {
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
-        completableFutures.forEach(b -> assertTrue(b.join()));
+        completableFutures.forEach(b -> assertEquals(3, (int) b.join()));
 
         //Assert
         assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
@@ -182,14 +182,14 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Integer>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.update(person));
         completableFutures.add(carMapper.update(car));
         completableFutures.add(topStudentMapper.update(topStudent));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
-        completableFutures.forEach(b -> assertTrue(b.join()));
+        completableFutures.forEach(b -> assertEquals(3, (int) b.join()));
 
         assertSingleRow(UnitOfWork.getCurrent(), person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
         assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
@@ -202,14 +202,14 @@ public class DataMapperTests {
         Car car = new Car(2, "23we45", null, null, 0);
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
 
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Integer>> completableFutures = new ArrayList<>();
         completableFutures.add(personMapper.delete(person));
         completableFutures.add(carMapper.delete(car));
         completableFutures.add(topStudentMapper.delete(topStudent));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
-        completableFutures.forEach(b -> assertTrue(b.join()));
+        completableFutures.forEach(b -> assertEquals(3, (int) b.join()));
 
         assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()));
         assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
