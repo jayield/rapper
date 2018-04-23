@@ -99,11 +99,11 @@ public class MapperSettings {
                 .collect(Collectors.toList());
 
         StringBuilder suffix = new StringBuilder();
-        suffix.append(" from ").append(type.getSimpleName()).append(" C ");
+        suffix.append(" from [").append(type.getSimpleName()).append("] C ");
 
         int[] i = { 1 };
         for(Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass(), i[0]++){
-            suffix.append("inner join ").append(clazz.getSimpleName()).append(String.format(" P%d ", i[0])).append("on ");
+            suffix.append("inner join [").append(clazz.getSimpleName()).append(String.format("] P%d ", i[0])).append("on ");
 
             //Set the comparisions
             for (int j = 0; j < idName.size(); j++) {
@@ -154,7 +154,7 @@ public class MapperSettings {
         if(!collect.equals(", ")) idsNames = collect;
 
         insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
-                .collect(Collectors.joining(", ","insert into " + type.getSimpleName() + " ( ", " ) ")) +
+                .collect(Collectors.joining(", ","insert into [" + type.getSimpleName() + "] ( ", " ) ")) +
                 "output " + idsNames + "CAST(INSERTED.version as bigint) version " +
                 (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                         .map(c -> "?")
@@ -163,7 +163,7 @@ public class MapperSettings {
         updateQuery = columnsNames
                 .stream()
                 .map(c -> c + " = ?")
-                .collect(Collectors.joining(", ","update " + type.getSimpleName() + " set "," output CAST(INSERTED.version as bigint) version where "))
+                .collect(Collectors.joining(", ","update [" + type.getSimpleName() + "] set "," output CAST(INSERTED.version as bigint) version where "))
                 + idName.stream()
                 .map(id -> id + " = ?")
                 .collect(Collectors.joining(" and "))
@@ -171,7 +171,7 @@ public class MapperSettings {
 
         deleteQuery = idName.stream()
                 .map(id -> id + " = ?")
-                .collect(Collectors.joining(" and ", "delete from " + type.getSimpleName() + " where ",""));
+                .collect(Collectors.joining(" and ", "delete from [" + type.getSimpleName() + "] where ",""));
     }
 
     class FieldOperations {
