@@ -4,45 +4,18 @@ import org.github.isel.rapper.exceptions.DataMapperException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 public class SQLUtils {
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
-    public static long getVersion(PreparedStatement statement) throws SQLException {
-        long version;
-        try (ResultSet inserted = statement.getResultSet()) {
-            if (inserted.next()){
-                version = inserted.getLong(1);
-            }
-            else throw new DataMapperException("Couldn't get version.");
-        }
-        return version;
-    }
-
-    public static long getGeneratedKey(PreparedStatement preparedStatement) throws SQLException {
-        logger.info("UpdateCount = " + preparedStatement.getUpdateCount());
-        if(!preparedStatement.getMoreResults()) throw new DataMapperException("Couldn't get generated key.");
-
-        long key;
-        try (ResultSet generatedKeys = preparedStatement.getGeneratedKeys()) {
-            if (generatedKeys.next()){
-                key = generatedKeys.getLong(1);
-            }
-            else throw new DataMapperException("Couldn't get generated key.");
-        }
-        return key;
-    }
-
     public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement){
         Connection con = UnitOfWork.getCurrent().getConnection();
         try{
-            PreparedStatement preparedStatement = con.prepareStatement(sqlQuery);
+            PreparedStatement preparedStatement = con.prepareStatement(sqlQuery, Statement.RETURN_GENERATED_KEYS);
             handleStatement.accept(preparedStatement);
             return CompletableFuture.supplyAsync(()-> {
                 try {
@@ -55,5 +28,9 @@ public class SQLUtils {
         } catch (SQLException e) {
             throw new DataMapperException(e);
         }
+    }
+
+    public static void setValuesInStatement(Stream<? extends SqlField> fields, PreparedStatement stmt, Object obj){
+        CollectionUtils.zipWithIndex(fields).forEach(entry -> entry.item.setValueInStatement(stmt, entry.index+1, obj));
     }
 }

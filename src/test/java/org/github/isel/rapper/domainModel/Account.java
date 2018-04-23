@@ -15,7 +15,7 @@ public class Account implements DomainObject<Long> {
     protected final String email;
     protected final String password;
     protected final float rating;
-    private final long version;
+    protected final long version;
 
     @ColumnName(name = "accountId")
     protected final CompletableFuture<List<Job>> offeredJobs;
@@ -50,6 +50,19 @@ public class Account implements DomainObject<Long> {
         this.comments = comments;
         this.following = following;
         this.version = version;
+    }
+
+    public Account(){
+
+        email = null;
+        password = null;
+        rating = 0;
+        version = 0;
+        offeredJobs = null;
+        comments = null;
+        chats = null;
+        ratings = null;
+        following = null;
     }
 
     public String getEmail() {

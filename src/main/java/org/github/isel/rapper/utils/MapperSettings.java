@@ -144,9 +144,18 @@ public class MapperSettings {
                 .stream()
                 .anyMatch(f -> f.identity);
 
+        //TODO clean
+        String collect = ids
+                .stream()
+                .filter(f -> f.identity)
+                .map(f -> "INSERTED." + f.name)
+                .collect(Collectors.joining(", ", "", ", "));
+        String idsNames = "";
+        if(!collect.equals(", ")) idsNames = collect;
+
         insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
-                .collect(Collectors.joining(", ","insert into "+type.getSimpleName()+" ( ", " ) ")) +
-                "output CAST(INSERTED.version as bigint) version " +
+                .collect(Collectors.joining(", ","insert into " + type.getSimpleName() + " ( ", " ) ")) +
+                "output " + idsNames + "CAST(INSERTED.version as bigint) version " +
                 (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                         .map(c -> "?")
                         .collect(Collectors.joining(", ", "values ( ", " )"));

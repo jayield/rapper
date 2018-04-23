@@ -23,7 +23,7 @@ public class QueryTests {
 
         assertEquals("select C.id, C.name, C.companyId, C.companyCid, CAST(C.version as bigint) Cversion from Employee C ", employeeMapper.getSelectQuery());
         assertEquals("delete from Employee where id = ?", employeeMapper.getDeleteQuery());
-        assertEquals("insert into Employee ( name, companyId, companyCid ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", employeeMapper.getInsertQuery());
+        assertEquals("insert into Employee ( name, companyId, companyCid ) output INSERTED.id, CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", employeeMapper.getInsertQuery());
         assertEquals("update Employee set name = ?, companyId = ?, companyCid = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeMapper.getUpdateQuery());
     }
 

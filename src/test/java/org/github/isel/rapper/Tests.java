@@ -1,5 +1,6 @@
 package org.github.isel.rapper;
 
+import org.github.isel.rapper.domainModel.Account;
 import org.github.isel.rapper.utils.ConnectionManager;
 import org.github.isel.rapper.utils.DBsPath;
 import org.github.isel.rapper.utils.SqlSupplier;
@@ -62,5 +63,12 @@ public class Tests {
         assertFalse(rs.next());
 
         logger.info(manager.getConnection().toString());
+    }
+
+    @Test
+    public void test3(){
+        DataMapper<Account, Long> accountMapper = new DataMapper<>(Account.class);
+
+        logger.info("" + accountMapper.getInsertQuery());
     }
 }

@@ -1,10 +1,8 @@
 package org.github.isel.rapper;
 
 import javafx.util.Pair;
-import org.github.isel.rapper.exceptions.ConcurrencyException;
 import org.github.isel.rapper.exceptions.DataMapperException;
 import org.github.isel.rapper.utils.*;
-import org.github.isel.rapper.utils.SqlField.SqlFieldId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,9 +12,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -29,22 +26,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private Constructor<?> primaryKeyConstructor = null;
     private final MapperSettings mapperSettings;
     private final Constructor<T> constructor;
-    private final Logger logger = LoggerFactory.getLogger(DataMapper.class);
     private ExternalsHandler<T, K> externalHandler;
-
-    public MapperSettings getMapperSettings() {
-        return mapperSettings;
-    }
 
     public DataMapper(Class<T> type){
         this.type = type;
         try {
-            /*Class[] parameterTypes = mapperSettings
-                    .getAllFields()
-                    .stream()
-                    .map(f -> f.field.getType())
-                    .toArray(Class[]::new);*/
-
             Class<?>[] declaredClasses = type.getDeclaredClasses();
             if(declaredClasses.length > 0){
                 primaryKey = declaredClasses[0];
@@ -141,7 +127,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public CompletableFuture<Optional<T>> findById(K id) {
         UnitOfWork unitOfWork = UnitOfWork.getCurrent();
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
-        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
+        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
                 .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
                     Optional<T> optionalT = func.wrap().apply(ps).findFirst();
@@ -175,15 +161,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> create(T obj) {
-        SqlConsumer<PreparedStatement> consumer = stmt -> setVersion(stmt, obj);
-        SqlConsumer<PreparedStatement> func = consumer.compose(stmt -> {
-            SqlConsumer<SqlField> fieldSqlConsumer = field -> {
-                    field.field.setAccessible(true);
-                    field.field.set(obj, SQLUtils.getGeneratedKey(stmt));
-                };
-            mapperSettings.getIds().stream().filter(f->f.identity).forEach(fieldSqlConsumer.wrap());
-            return stmt;
-        });
+        SqlConsumer<PreparedStatement> consumer = stmt -> {
+            ResultSet rs = stmt.getResultSet();
+            setVersion(obj, rs);
+            setGeneratedKeys(obj, rs);
+        };
 
         //This is only done once because it will be recursive (The parentClass will check if its parentClass is a DomainObject and therefore call its insert)
         boolean[] parentSucess = { true };
@@ -193,12 +175,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         if(!parentSucess[0]) return CompletableFuture.completedFuture(parentSucess[0]);
 
         return SQLUtils.execute(mapperSettings.getInsertQuery(), stmt ->
-            setValuesInStatement(
-                    Stream.concat(mapperSettings.getIds().stream(), mapperSettings.getColumns().stream())
+            SQLUtils.setValuesInStatement(
+                    Stream.concat(mapperSettings.getIds().stream().filter(sqlFieldId -> !sqlFieldId.identity), mapperSettings.getColumns().stream())
                             .sorted(Comparator.comparing(SqlField::byInsert)), stmt, obj)
         )
                 .thenApply(ps ->{
-                    func.wrap().accept(ps);
+                    consumer.wrap().accept(ps);
                     return true;
                 })
                 .exceptionally(throwable -> {
@@ -213,25 +195,37 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return null;
     }
 
-    private T setVersion(PreparedStatement stmt, T obj) throws SQLException, IllegalAccessException {
-        if(stmt.getUpdateCount()==0) throw new ConcurrencyException("Concurrency problem found");
-        Field version = null;
-        try {
-            version = type.getDeclaredField("version");
-            version.setAccessible(true);
-            version.set(obj, SQLUtils.getVersion(stmt));
-        } catch (NoSuchFieldException ignored) { logger.info("version field not found on " + type.getSimpleName()); }
+    private void setGeneratedKeys(T obj, ResultSet rs) {
+        SqlConsumer<SqlField> fieldSqlConsumer = field -> {
+            field.field.setAccessible(true);
+            field.field.set(obj, rs.getObject(field.name));
+        };
 
-        return obj;
+        mapperSettings
+                .getIds()
+                .stream()
+                .filter(f -> f.identity)
+                .forEach(fieldSqlConsumer.wrap());
     }
 
-    private void setValuesInStatement(Stream<? extends SqlField> fields, PreparedStatement stmt, Object obj){
-        CollectionUtils.zipWithIndex(fields).forEach(entry -> entry.item.setValueInStatement(stmt, entry.index+1, obj));
+    private void setVersion(T obj, ResultSet rs) throws SQLException, IllegalAccessException {
+        //if(stmt.getUpdateCount()==0) throw new ConcurrencyException("Concurrency problem found");
+        if(rs.next()) {
+            Field version;
+            try {
+                version = type.getDeclaredField("version");
+                version.setAccessible(true);
+                version.set(obj, rs.getLong("version"));
+            } catch (NoSuchFieldException ignored) {
+                log.info("version field not found on " + type.getSimpleName());
+            }
+        }
+        else throw new DataMapperException("Couldn't get version.");
     }
 
     @Override
     public CompletableFuture<Boolean> update(T obj) {
-        SqlConsumer<PreparedStatement> func = s -> setVersion(s, obj);
+        SqlConsumer<PreparedStatement> func = s -> setVersion(obj, s.getResultSet());
 
         //Updates parents first
         boolean[] parentSucess = { true };
@@ -240,7 +234,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         if(!parentSucess[0]) return CompletableFuture.completedFuture(parentSucess[0]);
 
         return SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
-            setValuesInStatement(
+            SQLUtils.setValuesInStatement(
                     Stream.concat(mapperSettings.getIds().stream(), mapperSettings.getColumns().stream())
                             .sorted(Comparator.comparing(SqlField::byUpdate)), stmt, obj);
             //Since each object has its own version, we want the version from type not from the subClass
@@ -283,7 +277,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public CompletableFuture<Boolean> delete(T obj) {
         UnitOfWork unit = UnitOfWork.getCurrent();
         return SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt ->
-                setValuesInStatement(mapperSettings.getIds().stream(), stmt, obj)
+                SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, obj)
         )
                 .thenCompose(preparedStatement -> {
                     UnitOfWork.setCurrent(unit);

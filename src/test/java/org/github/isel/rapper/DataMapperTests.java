@@ -35,6 +35,7 @@ public class DataMapperTests {
     private final DataMapper<Car, Car.PrimaryPk> carMapper = (DataMapper<Car, Car.PrimaryPk>) MapperRegistry.getRepository(Car.class).getMapper();
     private final DataMapper<Student, Integer> studentMapper = (DataMapper<Student, Integer>) MapperRegistry.getRepository(Student.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
+    private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
 
     @Before
@@ -149,6 +150,7 @@ public class DataMapperTests {
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
         Student student = new Student(321, "Jose", new Date(1996, 6, 2), 0, 4, 0);
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
+        Employee employee = new Employee(0, "Ze Manel", 1, 1, 0, ArrayList::new);
 
         //Act
         List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
@@ -156,6 +158,7 @@ public class DataMapperTests {
         completableFutures.add(carMapper.create(car));
         //completableFutures.add(studentMapper.create(student));
         completableFutures.add(topStudentMapper.create(topStudent));
+        completableFutures.add(employeeMapper.create(employee));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();
@@ -166,6 +169,7 @@ public class DataMapperTests {
         assertSingleRow(UnitOfWork.getCurrent(), car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
         //assertSingleRow(UnitOfWork.getCurrent(), student, studentSelectQuery, getPersonPSConsumer(student.getNif()), AssertUtils::assertStudent);
         assertSingleRow(UnitOfWork.getCurrent(), topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(UnitOfWork.getCurrent(), employee, employeeSelectQuery, getEmployeePSConsumer(employee.getName()), AssertUtils::assertEmployee);
     }
 
     @Test

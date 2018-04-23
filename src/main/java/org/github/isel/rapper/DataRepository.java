@@ -58,7 +58,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                 )
         );*/
 
-        //return identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).thenApply(t -> t.orElse(null)));
+        /*return identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).thenApply(t -> t.orElse(null)))
+                .thenApply(Optional::of)
+                .thenApply(t -> {
+                    if (!t.isPresent()) identityMap.remove(k);
+                    return t;
+                });*/
     }
 
     @Override
@@ -86,9 +91,13 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Boolean> update(T t) {
         checkUnitOfWork();
-        if(identityMap.containsKey(t.getIdentityKey())){
+        /*if(identityMap.containsKey(t.getIdentityKey())){
             identityMap.get(t.getIdentityKey()).markToBeDirty();
-        }
+        }*/
+        identityMap.computeIfPresent(t.getIdentityKey(), (k, t1) -> {
+            t.markToBeDirty();
+            return t;
+        });
         t.markDirty();
         return UnitOfWork.getCurrent().commit();
     }
