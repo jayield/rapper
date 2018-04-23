@@ -38,6 +38,7 @@ public class SqlField {
     public static class SqlFieldId extends SqlField{
         public final boolean identity;
         public final boolean embeddedId;
+        public boolean isFromParent = false;
 
         public SqlFieldId(Field field, String name, String queryValue, boolean identity, boolean embeddedId) {
             super(field, name, queryValue);

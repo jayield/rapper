@@ -79,6 +79,7 @@ public class MapperSettings {
             List<SqlFieldId> sqlFieldIds = parentFieldMap.getOrDefault(SqlFieldId.class, new ArrayList<>())
                     .stream()
                     .map(f -> ((SqlFieldId) f))
+                    .peek(sqlFieldId -> sqlFieldId.isFromParent = true)
                     .collect(Collectors.toList());
 
             allFields.addAll(parentFieldMap.get(SqlField.class));
@@ -142,12 +143,12 @@ public class MapperSettings {
 
         boolean identity = ids
                 .stream()
-                .anyMatch(f -> f.identity);
+                .anyMatch(f -> f.identity && !f.isFromParent);
 
         //TODO clean
         String collect = ids
                 .stream()
-                .filter(f -> f.identity)
+                .filter(f -> f.identity && !f.isFromParent)
                 .map(f -> "INSERTED." + f.name)
                 .collect(Collectors.joining(", ", "", ", "));
         String idsNames = "";
