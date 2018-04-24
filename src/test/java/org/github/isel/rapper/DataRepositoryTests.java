@@ -9,10 +9,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +58,8 @@ public class DataRepositoryTests {
         Connection con = manager.getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
+        PreparedStatement statement = con.prepareStatement("delete from EmployeeJunior");
+        statement.executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);

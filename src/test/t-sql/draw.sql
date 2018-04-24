@@ -44,3 +44,5 @@ select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birth
   CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = 454
 
 insert into Employee ( name ) output inserted.id, CAST(INSERTED.version as bigint) version values ( 'ZE' )
+
+select P1.name, P1.companyId, P1.companyCid, CAST(P1.version as bigint) P1version, P1.id, C.juniorsYears, CAST(C.version as bigint) Cversion from [EmployeeJunior] C inner join [Employee] P1 on C.id = P1.id

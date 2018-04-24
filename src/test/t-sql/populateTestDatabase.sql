@@ -18,6 +18,14 @@ AS
 
   insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1)
   insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1)
+
+  declare @empId1 bigint, @empId2 bigint
+
+  select @empId1 = id from Employee where name = 'Bob'
+  select @empId2 = id from Employee where name = 'Charles'
+
+  insert into EmployeeJunior (id, juniorsYears) values (@empId1, 4)
+  insert into EmployeeJunior (id, juniorsYears) values (@empId2, 1)
 GO
 
 select id, name, companyId, companyCid from Employee
@@ -26,6 +34,7 @@ if OBJECT_ID('deleteDB') is not null
   drop proc deleteDB
 create procedure deleteDB
 as
+  delete from EmployeeJunior
   delete from CompanyEmployee
   delete from Employee
   delete from TopStudent

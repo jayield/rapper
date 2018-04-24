@@ -19,8 +19,7 @@ import java.util.function.Supplier;
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private final ConcurrentMap<K, T> identityMap = new ConcurrentHashMap<>();
-    //Used to communicate with the DB
-    private final Mapper<T, K> mapper;
+    private final Mapper<T, K> mapper;    //Used to communicate with the DB
 
     public DataRepository(Mapper<T, K> mapper){
         this.mapper = mapper;

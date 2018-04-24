@@ -61,7 +61,7 @@ public class QueryTests {
         assertEquals("insert into [Student] ( nif, studentNumber ) output CAST(INSERTED.version as bigint) version values ( ?, ? )", studentMapper.getInsertQuery());
         assertEquals("update [Student] set studentNumber = ? output CAST(INSERTED.version as bigint) version where nif = ? and version = ?", studentMapper.getUpdateQuery());
 
-        assertEquals("select P1.name, P1.companyId, P1.companyCid, CAST(P1.version as bigint) P1version, P1.id, C.juniorsYears from [EmployeeJunior] C inner join [Employee] P1 on C.id = P1.id ", employeeJunior.getSelectQuery());
+        assertEquals("select P1.name, P1.companyId, P1.companyCid, CAST(P1.version as bigint) P1version, P1.id, C.juniorsYears, CAST(C.version as bigint) Cversion from [EmployeeJunior] C inner join [Employee] P1 on C.id = P1.id ", employeeJunior.getSelectQuery());
         assertEquals("delete from [EmployeeJunior] where id = ?", employeeJunior.getDeleteQuery());
         assertEquals("insert into [EmployeeJunior] ( id, juniorsYears ) output CAST(INSERTED.version as bigint) version values ( ?, ? )", employeeJunior.getInsertQuery());
         assertEquals("update [EmployeeJunior] set juniorsYears = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeJunior.getUpdateQuery());

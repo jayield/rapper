@@ -82,6 +82,19 @@ create table Employee (
 )
 go
 
+if OBJECT_ID('EmployeeJunior') is not null
+  drop table EmployeeJunior
+go
+create table EmployeeJunior (
+  id int,
+  juniorsYears int,
+  version rowversion,
+
+  PRIMARY KEY (id),
+  FOREIGN KEY (id) references Employee (id)
+)
+go
+
 if OBJECT_ID('CompanyEmployee') is not null
   drop table CompanyEmployee
 go

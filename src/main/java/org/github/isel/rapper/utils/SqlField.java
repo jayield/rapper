@@ -74,7 +74,7 @@ public class SqlField {
 
         @Override
         public int byInsert() {
-            return identity ? 3 : 0;
+            return identity && !isFromParent ? 3 : 0;
         }
     }
 

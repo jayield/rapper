@@ -36,6 +36,7 @@ public class DataMapperTests {
     private final DataMapper<Student, Integer> studentMapper = (DataMapper<Student, Integer>) MapperRegistry.getRepository(Student.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
     private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
+    private final DataMapper<EmployeeJunior, Integer> employeeJuniorMapper = (DataMapper<EmployeeJunior, Integer>) MapperRegistry.getRepository(EmployeeJunior.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
 
     @Before
@@ -138,6 +139,11 @@ public class DataMapperTests {
         completableFutures.add(carMapper
                 .findAll()
                 .thenAccept(cars -> assertMultipleRows(current, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1)));
+
+        completableFutures.add(employeeJuniorMapper
+                .findAll()
+                .thenAccept(employeeJuniors ->
+                        assertMultipleRows(current, employeeJuniors, employeeJuniorSelectQuery.substring(0, employeeJuniorSelectQuery.length()-15), AssertUtils::assertEmployeeJunior, 2)));
 
         CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .join();

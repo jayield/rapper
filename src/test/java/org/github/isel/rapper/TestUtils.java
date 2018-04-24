@@ -22,6 +22,8 @@ public class TestUtils {
             "  from Student C inner join Person P1 on C.nif = P1.nif where C.nif = ?";
     public static final String topStudentSelectQuery = "select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year,\n" +
             "  CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = ?";
+    public static final String employeeJuniorSelectQuery = "select P1.name, P1.companyId, P1.companyCid, CAST(P1.version as bigint) P1version, P1.id, C.juniorsYears, CAST(C.version as bigint) Cversion from [EmployeeJunior] " +
+            "C inner join [Employee] P1 on C.id = P1.id where C.id = ?";
 
     public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
         try {

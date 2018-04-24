@@ -67,6 +67,8 @@ public class UnitOfWorkTests {
         Connection con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
+        PreparedStatement statement = con.prepareStatement("delete from EmployeeJunior");
+        statement.executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);
