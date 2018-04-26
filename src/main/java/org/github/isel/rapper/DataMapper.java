@@ -86,10 +86,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<List<T>> findAll() {
+        UnitOfWork current = UnitOfWork.getCurrent();
         SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
                 .thenApply(func.wrap())
-                .thenApply(tStream -> tStream.peek(t -> externalHandler.populateExternals(t).join()))
+                .thenApply(tStream -> {
+                    UnitOfWork.setCurrent(current);
+                    return tStream.peek(t -> externalHandler.populateExternals(t).join());
+                })
                 .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info("Couldn't execute query on {}.", type.getSimpleName());
@@ -139,10 +143,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         SqlConsumer<PreparedStatement> func = s -> setVersion(obj, s.getResultSet());
 
         //Updates parents first
-        boolean[] parentSucess = { true };
-        getParentMapper().ifPresent(objectDataMapper -> parentSucess[0] = objectDataMapper.update(obj).join());
+        boolean[] parentSuccess = { true };
+        getParentMapper().ifPresent(objectDataMapper -> parentSuccess[0] = objectDataMapper.update(obj).join());
 
-        if(!parentSucess[0]) return CompletableFuture.completedFuture(parentSucess[0]);
+        if(!parentSuccess[0]) return CompletableFuture.completedFuture(parentSuccess[0]);
 
         return SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             SQLUtils.setValuesInStatement(
@@ -255,7 +259,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     f.field.set(t, rs.getObject(f.name));
                 }
                 catch (IllegalArgumentException e){ //If IllegalArgumentException is caught, is because field is from primaryKeyClass
-                    f.field.set(primaryKey, rs.getObject(f.name));
+                    if(primaryKey != null)
+                        f.field.set(primaryKey, rs.getObject(f.name));
+                    else throw new DataMapperException(e);
                 }
             };
             mapperSettings

@@ -58,8 +58,7 @@ public class DataRepositoryTests {
         Connection con = manager.getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
-        PreparedStatement statement = con.prepareStatement("delete from EmployeeJunior");
-        statement.executeUpdate();
+        con.prepareStatement("delete from EmployeeJunior").executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);
