@@ -50,14 +50,17 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         String query = Arrays.stream(values)
                 .map(p -> p.getKey() + " = ? ")
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
-        SqlConsumer<PreparedStatement> consumer = s -> {
-            for (int i = 0; i < values.length; i++) {
-                s.setObject(i+1, values[i].getValue());
+
+        return SQLUtils.execute(query, s -> {
+            try {
+                for (int i = 0; i < values.length; i++) {
+                    s.setObject(i+1, values[i].getValue());
+                }
+            } catch (SQLException e) {
+                throw new DataMapperException(e);
             }
-        };
-        SqlFunction<PreparedStatement, Stream<T>> streamSqlFunction = s -> stream(s, s.getResultSet());
-        return SQLUtils.execute(query, consumer.wrap())
-                .thenApply(streamSqlFunction.wrap())
+        })
+                .thenApply(this::getStream)
                 .thenApply(s -> s.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info("Couldn't execute query on {}.", type.getSimpleName());
@@ -69,11 +72,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Optional<T>> findById(K id) {
         UnitOfWork unitOfWork = UnitOfWork.getCurrent();
-        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
                 .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
-                    Optional<T> optionalT = func.wrap().apply(ps).findFirst();
+                    Optional<T> optionalT = getStream(ps).findFirst();
                     optionalT.ifPresent(t -> externalHandler.populateExternals(t).join());
                     return optionalT;
                 })
@@ -87,9 +89,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<List<T>> findAll() {
         UnitOfWork current = UnitOfWork.getCurrent();
-        SqlFunction<PreparedStatement, Stream<T>> func = stmt -> stream(stmt, stmt.getResultSet());
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s ->{})
-                .thenApply(func.wrap())
+                .thenApply(this::getStream)
                 .thenApply(tStream -> {
                     UnitOfWork.setCurrent(current);
                     return tStream.peek(t -> externalHandler.populateExternals(t).join());
@@ -104,12 +105,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> create(T obj) {
-        SqlConsumer<PreparedStatement> consumer = stmt -> {
-            ResultSet rs = stmt.getResultSet();
-            setVersion(obj, rs);
-            setGeneratedKeys(obj, rs);
-        };
-
         //This is only done once because it will be recursive (The parentClass will check if its parentClass is a DomainObject and therefore call its insert)
         boolean[] parentSuccess = { true };
         getParentMapper().ifPresent(objectDataMapper -> parentSuccess[0] = objectDataMapper.create(obj).join());
@@ -123,8 +118,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                             .sorted(Comparator.comparing(SqlField::byInsert)), stmt, obj)
         )
                 .thenApply(ps ->{
-                    consumer.wrap().accept(ps);
-                    return true;
+                    try {
+                        ResultSet rs = ps.getResultSet();
+                        setVersion(obj, rs);
+                        setGeneratedKeys(obj, rs);
+                        return true;
+                    }
+                    catch (SQLException | IllegalAccessException e) {
+                        throw new DataMapperException(e);
+                    }
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
@@ -140,35 +142,38 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> update(T obj) {
-        SqlConsumer<PreparedStatement> func = s -> setVersion(obj, s.getResultSet());
-
         //Updates parents first
-        boolean[] parentSuccess = { true };
+        boolean[] parentSuccess = {true};
         getParentMapper().ifPresent(objectDataMapper -> parentSuccess[0] = objectDataMapper.update(obj).join());
 
-        if(!parentSuccess[0]) return CompletableFuture.completedFuture(parentSuccess[0]);
+        if (!parentSuccess[0]) return CompletableFuture.completedFuture(parentSuccess[0]);
 
         return SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
-            SQLUtils.setValuesInStatement(
-                    Stream.concat(mapperSettings.getIds().stream(), mapperSettings.getColumns().stream())
-                            .sorted(Comparator.comparing(SqlField::byUpdate)), stmt, obj);
-            //Since each object has its own version, we want the version from type not from the subClass
-            SqlFunction<T, Long> getVersion = t -> {
+            try {
+                SQLUtils.setValuesInStatement(
+                        Stream.concat(mapperSettings.getIds().stream(), mapperSettings.getColumns().stream())
+                                .sorted(Comparator.comparing(SqlField::byUpdate)),
+                        stmt,
+                        obj
+                );
+
+                //Since each object has its own version, we want the version from type not from the subClass
                 Field f = type.getDeclaredField("version");
                 f.setAccessible(true);
-                return (Long) f.get(t);
-            };
+                Long version = (Long) f.get(obj);
 
-            SqlConsumer<PreparedStatement> setVersion = preparedStatement ->
-                    preparedStatement.setLong(
-                            mapperSettings.getColumns().size() + mapperSettings.getIds().size() + 1,
-                            getVersion.wrap().apply(obj)
-                    );
-            setVersion.wrap().accept(stmt);
+                stmt.setLong(mapperSettings.getColumns().size() + mapperSettings.getIds().size() + 1, version);
+            } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
+                throw new DataMapperException(e);
+            }
         })
                 .thenApply(ps -> {
-                    func.wrap().accept(ps);
-                    return true;
+                    try {
+                        setVersion(obj, ps.getResultSet());
+                        return true;
+                    } catch (SQLException | IllegalAccessException e) {
+                        throw new DataMapperException(e);
+                    }
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
@@ -320,6 +325,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             }
         }
         else throw new DataMapperException("Couldn't get version.");
+    }
+
+    private Stream<T> getStream(PreparedStatement s) {
+        try {
+            return stream(s, s.getResultSet());
+        } catch (SQLException e) {
+            throw new DataMapperException(e);
+        }
     }
 
     public String getSelectQuery() {
