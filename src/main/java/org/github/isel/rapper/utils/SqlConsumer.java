@@ -18,9 +18,4 @@ public interface SqlConsumer<T> {
             }
         };
     }
-
-    default <V> SqlConsumer<V> compose(SqlFunction<? super V, ? extends T> before) {
-        Objects.requireNonNull(before);
-        return (V v) -> accept(before.apply(v));
-    }
 }

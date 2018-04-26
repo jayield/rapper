@@ -39,6 +39,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        checkUnitOfWork();
         return mapper.findWhere(values);
     }
 
@@ -133,15 +134,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
             return UnitOfWork.getCurrent().commit();
         }*/
         else {
-            Function<T, Boolean> consumer = t1 -> {
-                t1.markRemoved();
-                return UnitOfWork.getCurrent().commit().join();
-            };
-
             return findById(k)
                     .thenApply(t -> {
-                        if(t.isPresent())
-                            return consumer.apply(t.get());
+                        if(t.isPresent()) {
+                            t.get().markRemoved();
+                            return UnitOfWork.getCurrent().commit().join();
+                        }
                         else return false;
                     });
         }

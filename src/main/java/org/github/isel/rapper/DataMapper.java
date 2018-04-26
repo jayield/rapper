@@ -13,6 +13,7 @@ import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -27,6 +28,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private Class<?> primaryKey = null;
     private Constructor<?> primaryKeyConstructor = null;
+    private Field primaryKeyField;
 
     public DataMapper(Class<T> type){
         this.type = type;
@@ -64,7 +66,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(s -> s.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info("Couldn't execute query on {}.", type.getSimpleName());
-                    throwable.printStackTrace();
+                    //throwable.printStackTrace();
                     return Collections.emptyList();
                 });
     }
@@ -81,7 +83,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't execute query on {}.", type.getSimpleName());
-                    throwable.printStackTrace();
+                    //throwable.printStackTrace();
                     return Optional.empty();
                 });
     }
@@ -98,7 +100,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info("Couldn't execute query on {}.", type.getSimpleName());
-                    throwable.printStackTrace();
+                    //throwable.printStackTrace();
                     return Collections.emptyList();
                 });
     }
@@ -124,7 +126,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                         setGeneratedKeys(obj, rs);
                         return true;
                     }
-                    catch (SQLException | IllegalAccessException e) {
+                    catch (SQLException e) {
                         throw new DataMapperException(e);
                     }
                 })
@@ -136,8 +138,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> createAll(Iterable<T> t) {
-        //TODO
-        return null;
+        return reduceCompletableFutures(t, this::create);
     }
 
     @Override
@@ -160,7 +161,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 //Since each object has its own version, we want the version from type not from the subClass
                 Field f = type.getDeclaredField("version");
                 f.setAccessible(true);
-                Long version = (Long) f.get(obj);
+                long version = (long) f.get(obj);
 
                 stmt.setLong(mapperSettings.getColumns().size() + mapperSettings.getIds().size() + 1, version);
             } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
@@ -171,7 +172,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     try {
                         setVersion(obj, ps.getResultSet());
                         return true;
-                    } catch (SQLException | IllegalAccessException e) {
+                    } catch (SQLException e) {
                         throw new DataMapperException(e);
                     }
                 })
@@ -183,14 +184,27 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
-        //TODO
-        return null;
+        return reduceCompletableFutures(t, this::update);
     }
 
     @Override
     public CompletableFuture<Boolean> deleteById(K k) {
-        //TODO
-        return null;
+        try {
+            if(primaryKeyField != null) {
+                primaryKeyField = Arrays.stream(type.getDeclaredFields())
+                        .filter(field -> field.isAnnotationPresent(Id.class) || field.isAnnotationPresent(EmbeddedId.class))
+                        .findFirst()
+                        .orElseThrow(DataMapperException::new);
+                primaryKeyField.setAccessible(true);
+            }
+
+            T t = constructor.newInstance();
+
+            primaryKeyField.set(t, k);
+            return delete(t);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+            throw new DataMapperException(e);
+        }
     }
 
     @Override
@@ -213,8 +227,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
-        //TODO
-        return null;
+        return reduceCompletableFutures(keys, this::deleteById);
+    }
+
+    private <R> CompletableFuture<Boolean> reduceCompletableFutures(Iterable<R> r, Function<R, CompletableFuture<Boolean>> function) {
+        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
+        r.forEach(k -> completableFutures.add(function.apply(k)));
+        return completableFutures
+                .stream()
+                .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2));
     }
 
     private Stream<T> stream(Statement statement, ResultSet rs) throws DataMapperException{
@@ -313,18 +334,19 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .forEach(fieldSqlConsumer.wrap());
     }
 
-    private void setVersion(T obj, ResultSet rs) throws SQLException, IllegalAccessException {
-        if(rs.next()) {
-            Field version;
-            try {
+    private void setVersion(T obj, ResultSet rs) {
+        try {
+            if (rs.next()) {
+                Field version;
+
                 version = type.getDeclaredField("version");
                 version.setAccessible(true);
                 version.set(obj, rs.getLong("version"));
-            } catch (NoSuchFieldException ignored) {
-                log.info("version field not found on " + type.getSimpleName());
-            }
+
+            } else throw new DataMapperException("Couldn't get version.");
+        } catch (NoSuchFieldException | SQLException | IllegalAccessException ignored) {
+            log.info("version field not found on " + type.getSimpleName());
         }
-        else throw new DataMapperException("Couldn't get version.");
     }
 
     private Stream<T> getStream(PreparedStatement s) {
