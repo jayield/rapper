@@ -46,3 +46,7 @@ select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birth
 insert into Employee ( name ) output inserted.id, CAST(INSERTED.version as bigint) version values ( 'ZE' )
 
 select P1.name, P1.companyId, P1.companyCid, CAST(P1.version as bigint) P1version, P1.id, C.juniorsYears, CAST(C.version as bigint) Cversion from [EmployeeJunior] C inner join [Employee] P1 on C.id = P1.id
+
+select CAST(version as bigint) From Employee where name = 'Ze Manel'
+
+select * from Employee
