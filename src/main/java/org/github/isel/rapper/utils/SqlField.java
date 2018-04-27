@@ -80,10 +80,8 @@ public class SqlField {
 
     public static class SqlFieldExternal extends SqlField{
         public final String[] foreignNames;
-        //Type of the elements in the collection
-        public final Class<? extends DomainObject> type;
-        //Type of the collection / supplier
-        public final Class<?> fType;
+        public final Class<? extends DomainObject> type;        //Type of the elements in the collection
+        public final Class<?> fType;                            //Type of the field that holds the collection
         public final String table;
         public final String selectTableQuery;
         public final String[] columnsNames;
