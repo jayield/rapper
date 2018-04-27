@@ -1,7 +1,6 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
-import org.github.isel.rapper.domainModel.*;
 import org.junit.Test;
 
 import static org.junit.Assert.*;

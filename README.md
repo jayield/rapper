@@ -1,4 +1,9 @@
 # Rapper
+
+[![Build Status](https://sonarcloud.io/api/project_badges/measure?project=com.github.jayield%3Arapper&metric=alert_status)](https://sonarcloud.io/dashboard?id=com.github.jayield%3Arapper)
+[![Maven Central Version](http://img.shields.io/maven-central/v/com.github.jayield/rapper.svg)](http://search.maven.org/#search%7Cga%7C1%7Cjayield%20rapper)
+[![Coverage Status](https://sonarcloud.io/api/project_badges/measure?project=com.github.jayield%3Arapper&metric=coverage)](https://sonarcloud.io/component_measures?id=com.github.jayield%3Arapper&metric=Coverage)
+
 ### ["I'm beginning to feel like a Rap God"](https://www.youtube.com/watch?v=XbGs_qK2PQA) 
 DataMapper in rap for domain model
 

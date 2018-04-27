@@ -6,7 +6,6 @@ import com.github.jayield.rapper.utils.SQLUtils;
 import com.github.jayield.rapper.utils.SqlConsumer;
 import com.github.jayield.rapper.utils.SqlField;
 import javafx.util.Pair;
-import org.github.isel.rapper.utils.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

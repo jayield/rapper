@@ -5,7 +5,6 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.TestUtils;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.AssertUtils;
-import org.github.isel.rapper.domainModel.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;

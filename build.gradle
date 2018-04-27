@@ -1,3 +1,7 @@
+plugins {
+    id "org.sonarqube" version "2.6.1"
+}
+
 group 'com.github.jayield'
 version '1.0.1'
 

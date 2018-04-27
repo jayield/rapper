@@ -3,8 +3,6 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.utils.*;
 import javafx.util.Pair;
-import org.github.isel.rapper.domainModel.*;
-import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -224,7 +222,7 @@ public class DataMapperTests {
 
     @Test
     public void test() throws SQLException {
-        Connection con = UnitOfWork.getCurrent().getConnection();
+        /*Connection con = UnitOfWork.getCurrent().getConnection();
         PreparedStatement preparedStatement = con.prepareStatement("insert into Employee(name) values('Ze Manel') ",
                 new String[] {"id", "version"});
         preparedStatement.executeUpdate();
@@ -234,6 +232,6 @@ public class DataMapperTests {
             System.out.println(rs.getObject(1));
         }
 
-        con.commit();
+        con.commit();*/
     }
 }

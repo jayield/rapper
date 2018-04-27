@@ -5,7 +5,6 @@ import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
 import com.github.jayield.rapper.Id;
-import org.github.isel.rapper.*;
 
 import java.lang.reflect.Field;
 import java.sql.Date;

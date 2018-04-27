@@ -4,7 +4,6 @@ import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.domainModel.Person;
 import com.github.jayield.rapper.domainModel.TopStudent;
 import com.github.jayield.rapper.utils.*;
-import org.github.isel.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
