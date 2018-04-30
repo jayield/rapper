@@ -12,26 +12,22 @@ import org.slf4j.LoggerFactory;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
+import static com.github.jayield.rapper.AssertUtils.*;
+import static com.github.jayield.rapper.TestUtils.*;
 import static com.github.jayield.rapper.utils.DBsPath.TESTDB;
 import static org.junit.Assert.*;
 
-/**
- * PersonMapper -> Simple Class with @Id annotation
- * CarMapper -> Simple Class with @EmbeddedId annotation
- * TopStudentMapper -> Class that extends Student and Person
- */
 public class DataMapperTests {
+    private static String detailMessage = "DomainObject wasn't found";
+
     private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
 
     private final DataMapper<Person, Integer> personMapper = (DataMapper<Person, Integer>) MapperRegistry.getRepository(Person.class).getMapper();
     private final DataMapper<Car, Car.PrimaryPk> carMapper = (DataMapper<Car, Car.PrimaryPk>) MapperRegistry.getRepository(Car.class).getMapper();
-    private final DataMapper<Student, Integer> studentMapper = (DataMapper<Student, Integer>) MapperRegistry.getRepository(Student.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
-    private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
-    private final DataMapper<EmployeeJunior, Integer> employeeJuniorMapper = (DataMapper<EmployeeJunior, Integer>) MapperRegistry.getRepository(EmployeeJunior.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
+    private final DataMapper<Book, Long> bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class).getMapper();
 
     @Before
     public void start() throws SQLException {
@@ -42,9 +38,6 @@ public class DataMapperTests {
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
-        /*createTables(con);
-        deleteDB(con);
-        populateDB(con);*/
     }
 
     @After
@@ -53,185 +46,193 @@ public class DataMapperTests {
         UnitOfWork.getCurrent().closeConnection();
     }
 
+    //-----------------------------------FindWhere-----------------------------------//
     @Test
-    public void findWhere() {
-        SqlConsumer<List<Person>> personConsumer = people -> {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?");
-            ps.setString(1, "Jose");
-            ResultSet rs = ps.executeQuery();
+    public void testSimpleFindWhere() throws SQLException {
+        List<Person> people = personMapper.findWhere(new Pair<>("name", "Jose")).join();
 
-            if (rs.next())
-                AssertUtils.assertPerson(people.remove(0), rs);
-            else fail("Database has no data");
-        };
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?");
+        ps.setString(1, "Jose");
+        ResultSet rs = ps.executeQuery();
 
-        SqlConsumer<List<Car>> carConsumer = cars -> {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
-            ps.setString(1, "Mitsubishi");
-            ResultSet rs = ps.executeQuery();
-
-            if (rs.next())
-                AssertUtils.assertCar(cars.remove(0), rs);
-            else fail("Database has no data");
-        };
-
-        personMapper
-                .findWhere(new Pair<>("name", "Jose"))
-                .thenAccept(personConsumer.wrap());
-
-        carMapper
-                .findWhere(new Pair<>("brand", "Mitsubishi"))
-                .thenAccept(carConsumer.wrap());
+        if (rs.next())
+            assertPerson(people.remove(0), rs);
+        else fail("Database has no data");
     }
 
     @Test
-    public void findById() {
+    public void testEmbeddedIdFindWhere() throws SQLException {
+        List<Car> cars = carMapper.findWhere(new Pair<>("brand", "Mitsubishi")).join();
+
+        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
+        ps.setString(1, "Mitsubishi");
+        ResultSet rs = ps.executeQuery();
+
+        if (rs.next())
+            assertCar(cars.remove(0), rs);
+        else fail("Database has no data");
+    }
+
+    @Test
+    public void testNNExternalFindWhere(){
+        Book book = bookMapper.findWhere(new Pair<>("name", "1001 noites")).join().get(0);
+        assertSingleRow(book, bookSelectQuery, getBookPSConsumer(book.getName()), AssertUtils::assertBook);
+    }
+
+    //-----------------------------------FindById-----------------------------------//
+    @Test
+    public void testSimpleFindById(){
         int nif = 321;
-        int owner = 2; String plate = "23we45";
-        int companyId = 1, companyCid = 1;
-        UnitOfWork current = UnitOfWork.getCurrent();
-
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        completableFutures.add(personMapper
+        Person person = personMapper
                 .findById(nif)
-                .thenApply(person -> person.orElse(new Person()))
-                .thenAccept(person -> AssertUtils.assertSingleRow(current, person, TestUtils.personSelectQuery,
-                        TestUtils.getPersonPSConsumer(nif), AssertUtils::assertPerson)));
+                .join()
+                .orElseThrow(() -> new AssertionError(detailMessage));
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(nif), AssertUtils::assertPerson);
+    }
 
-        completableFutures.add(carMapper
+    @Test
+    public void testEmbeddedIdFindById(){
+        int owner = 2; String plate = "23we45";
+        Car car = carMapper
                 .findById(new Car.PrimaryPk(owner, plate))
-                .thenApply(car -> car.orElse(new Car()))
-                .thenAccept(car -> AssertUtils.assertSingleRow(current, car, TestUtils.carSelectQuery,
-                        TestUtils.getCarPSConsumer(owner, plate), AssertUtils::assertCar)));
+                .join()
+                .orElseThrow(() -> new AssertionError(detailMessage));
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(owner, plate), AssertUtils::assertCar);
+    }
 
-
-        completableFutures.add(companyMapper
-                .findById(new Company.PrimaryKey(companyId, companyCid))
-                .thenApply(company -> company.orElse(new Company()))
-                .thenAccept(company -> AssertUtils.assertSingleRow(current, company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
-                        TestUtils.getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> AssertUtils.assertCompany(company1, resultSet, current))));
-
-        completableFutures.add(topStudentMapper
+    @Test
+    public void testHierarchyFindById(){
+        TopStudent topStudent = topStudentMapper
                 .findById(454)
-                .thenApply(topStudent -> topStudent.orElse(new TopStudent()))
-                .thenAccept(topStudent -> AssertUtils.assertSingleRow(current, topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(454), AssertUtils::assertTopStudent))
-        );
-
-        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                .join();
+                .join()
+                .orElseThrow(() -> new AssertionError(detailMessage));
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(454), AssertUtils::assertTopStudent);
     }
 
     @Test
-    public void findAll() {
-        UnitOfWork current = UnitOfWork.getCurrent();
+    public void testEmbeddedIdExternalFindById(){
+        int companyId = 1, companyCid = 1;
+        Company company = companyMapper
+                .findById(new Company.PrimaryKey(companyId, companyCid))
+                .join()
+                .orElseThrow(() -> new AssertionError(detailMessage));
+        assertSingleRow(company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
+                getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, UnitOfWork.getCurrent()));
+    }
 
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        completableFutures.add(personMapper
-                .findAll()
-                .thenAccept(people -> AssertUtils.assertMultipleRows(current, people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2)));
-
-        completableFutures.add(carMapper
-                .findAll()
-                .thenAccept(cars -> AssertUtils.assertMultipleRows(current, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1)));
-
-        completableFutures.add(employeeJuniorMapper
-                .findAll()
-                .thenAccept(employeeJuniors ->
-                        AssertUtils.assertMultipleRows(current, employeeJuniors, TestUtils.employeeJuniorSelectQuery.substring(0, TestUtils.employeeJuniorSelectQuery.length()-15), AssertUtils::assertEmployeeJunior, 2)));
-
-        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                .join();
+    //-----------------------------------FindAll-----------------------------------//
+    @Test
+    public void testSimpleFindAll(){
+        List<Person> people = personMapper.findAll().join();
+        assertMultipleRows(UnitOfWork.getCurrent(), people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2);
     }
 
     @Test
-    public void create() {
-        //Arrange
+    public void testEmbeddedIdFindAll(){
+        List<Car> cars = carMapper.findAll().join();
+        assertMultipleRows(UnitOfWork.getCurrent(), cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
+    }
+
+    @Test
+    public void testHierarchyFindAll(){
+        List<TopStudent> topStudents = topStudentMapper.findAll().join();
+        assertMultipleRows(UnitOfWork.getCurrent(), topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
+    }
+
+    //-----------------------------------Create-----------------------------------//
+    @Test
+    public void testSimpleCreate(){
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
-        Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        Student student = new Student(321, "Jose", new Date(1996, 6, 2), 0, 4, 0);
-        TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
-        Employee employee = new Employee(0, "Ze Manel", 1, 1, 0, ArrayList::new);
-
-        //Act
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
-        completableFutures.add(personMapper.create(person));
-        completableFutures.add(carMapper.create(car));
-        //completableFutures.add(studentMapper.create(student));
-        completableFutures.add(topStudentMapper.create(topStudent));
-        completableFutures.add(employeeMapper.create(employee));
-
-        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                .join();
-        completableFutures.forEach(b -> assertTrue(b.join()));
-
-        //Assert
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        //assertSingleRow(UnitOfWork.getCurrent(), student, studentSelectQuery, getPersonPSConsumer(student.getNif()), AssertUtils::assertStudent);
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), employee, TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer(employee.getName()), AssertUtils::assertEmployee);
+        assertTrue(personMapper.create(person).join());
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
     }
 
     @Test
-    public void update() throws SQLException {
-        ResultSet rs = TestUtils.executeQuery("select CAST(version as bigint) version from Person where nif = ?", TestUtils.getPersonPSConsumer(321));
+    public void testEmbeddedIdCreate(){
+        Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
+        assertTrue(carMapper.create(car).join());
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+    }
+
+    @Test
+    public void testHierarchyCreate(){
+        TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
+        assertTrue(topStudentMapper.create(topStudent).join());
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+    }
+
+    //-----------------------------------Update-----------------------------------//
+    @Test
+    public void testSimpleUpdate() throws SQLException {
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
-        rs = TestUtils.executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", TestUtils.getCarPSConsumer(2, "23we45"));
+        assertTrue(personMapper.update(person).join());
+
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+    }
+
+    @Test
+    public void testEmbeddedIdUpdate() throws SQLException {
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"));
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
-        rs = TestUtils.executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+        assertTrue(carMapper.update(car).join());
+
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+    }
+
+    @Test
+    public void testHierarchyUpdate() throws SQLException {
+        ResultSet rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", TestUtils.getPersonPSConsumer(454));
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454));
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
-        completableFutures.add(personMapper.update(person));
-        completableFutures.add(carMapper.update(car));
-        completableFutures.add(topStudentMapper.update(topStudent));
+        assertTrue(topStudentMapper.update(topStudent).join());
 
-        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                .join();
-        completableFutures.forEach(b -> assertTrue(b.join()));
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+    }
 
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+    //-----------------------------------DeleteById-----------------------------------//
+    @Test
+    public void testSimpleDeleteById(){
+        assertTrue(personMapper.deleteById(321).join());
+        assertNotFound(personSelectQuery, getPersonPSConsumer(321));
     }
 
     @Test
-    public void delete() {
+    public void testEmbeddedDeleteById(){
+        assertTrue(carMapper.deleteById(new Car.PrimaryPk(2, "23we45")).join());
+        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"));
+    }
+
+    @Test
+    public void testHierarchyDeleteById(){
+        assertTrue(topStudentMapper.deleteById(454).join());
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454));
+    }
+
+    //-----------------------------------Delete-----------------------------------//
+    @Test
+    public void testSimpleDelete(){
         Person person = new Person(321, null, null, 0);
-        Car car = new Car(2, "23we45", null, null, 0);
-        TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
-
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
-        completableFutures.add(personMapper.delete(person));
-        completableFutures.add(carMapper.delete(car));
-        completableFutures.add(topStudentMapper.delete(topStudent));
-
-        CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                .join();
-        completableFutures.forEach(b -> assertTrue(b.join()));
-
-        AssertUtils.assertNotFound(TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()));
-        AssertUtils.assertNotFound(TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
-        AssertUtils.assertNotFound(TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()));
+        assertTrue(personMapper.delete(person).join());
+        assertNotFound(personSelectQuery, getPersonPSConsumer(321));
     }
 
     @Test
-    public void test() throws SQLException {
-        /*Connection con = UnitOfWork.getCurrent().getConnection();
-        PreparedStatement preparedStatement = con.prepareStatement("insert into Employee(name) values('Ze Manel') ",
-                new String[] {"id", "version"});
-        preparedStatement.executeUpdate();
-        ResultSet rs = preparedStatement.getGeneratedKeys();
+    public void testEmbeddedDelete(){
+        Car car = new Car(2, "23we45", null, null, 0);
+        assertTrue(carMapper.delete(car).join());
+        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"));
+    }
 
-        while (rs.next()){
-            System.out.println(rs.getObject(1));
-        }
-
-        con.commit();*/
+    @Test
+    public void testHierarchyDelete(){
+        TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
+        assertTrue(topStudentMapper.delete(topStudent).join());
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454));
     }
 }

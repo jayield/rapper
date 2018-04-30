@@ -63,7 +63,6 @@ public class UnitOfWorkTests {
         Connection con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
-        con.prepareStatement("delete from EmployeeJunior").executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);
@@ -149,7 +148,7 @@ public class UnitOfWorkTests {
             assertNotFound(TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer(originalEmployee.getName()));
         }
         else{
-            assertSingleRow(UnitOfWork.getCurrent(), originalEmployee, TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee);
+            assertSingleRow(originalEmployee, TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee);
         }
     }
 
@@ -168,9 +167,9 @@ public class UnitOfWorkTests {
             topStudent = container.getOriginalTopStudent();
         }
 
-        assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        assertSingleRow(car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        assertSingleRow(topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     private void assertNewObjects(boolean isCommit) {
@@ -179,9 +178,9 @@ public class UnitOfWorkTests {
         TopStudent topStudent = container.getInsertedTopStudent();
 
         if(isCommit) {
-            assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-            assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-            assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+            assertSingleRow(person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+            assertSingleRow(car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+            assertSingleRow(topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
         }
         else {
             assertNotFound(TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()));
@@ -260,7 +259,7 @@ public class UnitOfWorkTests {
 
             rs = TestUtils.executeQuery(TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer("Charles"));
             originalEmployee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getInt("companyId"), rs.getInt("companyCid"),
-                    rs.getLong("version"), null);
+                    rs.getLong("version"));
         }
 
         public TopStudent getOriginalTopStudent() {

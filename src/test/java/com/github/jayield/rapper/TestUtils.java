@@ -1,19 +1,23 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.utils.DBsPath;
 import com.github.jayield.rapper.utils.SqlConsumer;
 import com.github.jayield.rapper.utils.UnitOfWork;
 
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.function.Consumer;
 
+import static com.github.jayield.rapper.utils.ConnectionManager.getConnectionManager;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 public class TestUtils {
     public static final String personSelectQuery = "select nif, name, birthday, CAST(version as bigint) version from Person where nif = ?";
+    public static final String bookSelectQuery = "select id, name, CAST(version as bigint) version from Book where name = ?";
     public static final String carSelectQuery = "select owner, plate, brand, model, CAST(version as bigint) version from Car where owner = ? and plate = ?";
     public static final String employeeSelectQuery = "select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where name = ?";
     public static final String studentSelectQuery = "select C.studentNumber, CAST(C.version as bigint) Cversion, P1.name, P1.birthday, CAST(P1.version as bigint) P1version, P1.nif\n" +
@@ -25,7 +29,7 @@ public class TestUtils {
 
     public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
         try {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            PreparedStatement ps = getConnectionManager(DBsPath.TESTDB).getConnection().prepareStatement(sql);
             preparedStatementConsumer.accept(ps);
             ResultSet rs = ps.executeQuery();
             rs.next();
@@ -64,4 +68,11 @@ public class TestUtils {
         return consumer.wrap();
     }
 
+    public static Consumer<PreparedStatement> getBookPSConsumer(String name){
+        SqlConsumer<PreparedStatement> consumer = ps -> {
+            ps.setString(1, name);
+        };
+
+        return consumer.wrap();
+    }
 }

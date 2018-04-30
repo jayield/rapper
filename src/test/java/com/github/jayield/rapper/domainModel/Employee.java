@@ -5,7 +5,7 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Id;
 
 import java.util.List;
-import java.util.function.Supplier;
+import java.util.concurrent.CompletableFuture;
 
 public class Employee implements DomainObject<Integer> {
     @Id(isIdentity = true)
@@ -13,16 +13,13 @@ public class Employee implements DomainObject<Integer> {
     private final String name;
     private final int companyId;
     private final int companyCid;
-    @ColumnName(name = "employeeId", table = "CompanyEmployee")
-    private final Supplier<List<Company>> companies;
     private final long version;
 
-    public Employee(int id, String name, int companyId, int companyCid, long version, Supplier<List<Company>> companies) {
+    public Employee(int id, String name, int companyId, int companyCid, long version) {
         this.id = id;
         this.name = name;
         this.companyId = companyId;
         this.companyCid = companyCid;
-        this.companies = companies;
         this.version = version;
     }
 
@@ -31,7 +28,6 @@ public class Employee implements DomainObject<Integer> {
         name = null;
         companyId = 0;
         companyCid = 0;
-        companies = null;
         version = 0;
     }
 
@@ -49,10 +45,6 @@ public class Employee implements DomainObject<Integer> {
 
     public int getCompanyCid() {
         return companyCid;
-    }
-
-    public Supplier<List<Company>> getCompanies() {
-        return companies;
     }
 
     @Override

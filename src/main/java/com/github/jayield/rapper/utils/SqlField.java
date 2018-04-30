@@ -38,7 +38,7 @@ public class SqlField {
     public static class SqlFieldId extends SqlField{
         public final boolean identity;
         public final boolean embeddedId;
-        public boolean isFromParent = false;
+        private boolean isFromParent = false;
 
         public SqlFieldId(Field field, String name, String queryValue, boolean identity, boolean embeddedId) {
             super(field, name, queryValue);
@@ -76,6 +76,14 @@ public class SqlField {
         public int byInsert() {
             return identity && !isFromParent ? 3 : 0;
         }
+
+        public boolean isFromParent() {
+            return isFromParent;
+        }
+
+        public void setFromParent(boolean fromParent) {
+            isFromParent = fromParent;
+        }
     }
 
     public static class SqlFieldExternal extends SqlField{
@@ -84,7 +92,7 @@ public class SqlField {
         public final Class<?> fType;                            //Type of the field that holds the collection
         public final String table;
         public final String selectTableQuery;
-        public final String[] columnsNames;
+        public final String[] foreignColumns;
 
         public SqlFieldExternal(Field field, Class<?> fType, String name, String queryValue, String columnName[], String table, String[] foreignName, Class<? extends DomainObject> type) {
             super(field, name, queryValue);
@@ -92,13 +100,13 @@ public class SqlField {
             this.table = table;
             this.foreignNames = foreignName;
             this.type = type;
-            this.columnsNames = columnName;
+            this.foreignColumns = columnName;
 
             StringBuilder sb = new StringBuilder();
             sb.append("select * from ").append(table).append(" where ");
-            for (int i = 0; i < columnsNames.length; i++) {
-                sb.append(columnsNames[i]).append(" = ? ");
-                if(i + 1 != columnsNames.length) sb.append("and ");
+            for (int i = 0; i < foreignColumns.length; i++) {
+                sb.append(foreignColumns[i]).append(" = ? ");
+                if(i + 1 != foreignColumns.length) sb.append("and ");
             }
 
             selectTableQuery = sb.toString();

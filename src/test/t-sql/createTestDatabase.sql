@@ -82,29 +82,40 @@ create table Employee (
 )
 go
 
-if OBJECT_ID('EmployeeJunior') is not null
-  drop table EmployeeJunior
+if OBJECT_ID('Book') is not null
+  drop table Book
 go
-create table EmployeeJunior (
-  id int,
-  juniorsYears int,
+create table Book (
+  id bigint identity,
+  name varchar(20),
   version rowversion,
 
-  PRIMARY KEY (id),
-  FOREIGN KEY (id) references Employee (id)
+  PRIMARY KEY (id)
 )
 go
 
-if OBJECT_ID('CompanyEmployee') is not null
-  drop table CompanyEmployee
+if OBJECT_ID('Author') is not null
+drop table Author
 go
-create table CompanyEmployee (
-  employeeId int references Employee,
-  companyId int,
-  companyCid int,
+create table Author (
+  id bigint identity,
+  name varchar(20),
   version rowversion,
 
-  PRIMARY KEY (employeeId, companyId, companyCid),
-  FOREIGN KEY (companyId, companyCid) REFERENCES Company (id, cid)
+  PRIMARY KEY (id)
 )
 go
+
+if OBJECT_ID('BookAuthor') is not null
+  drop table BookAuthor
+go
+create table BookAuthor (
+  bookId int,
+  authorId int,
+  version rowversion,
+
+  PRIMARY KEY (bookId, authorId)
+)
+go
+
+rollback

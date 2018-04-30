@@ -12,12 +12,12 @@ import java.util.stream.Stream;
 public class SQLUtils {
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
-    public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement){
+    public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement) {
         Connection con = UnitOfWork.getCurrent().getConnection();
-        try{
+        try {
             PreparedStatement preparedStatement = con.prepareStatement(sqlQuery, Statement.RETURN_GENERATED_KEYS);
             handleStatement.accept(preparedStatement);
-            return CompletableFuture.supplyAsync(()-> {
+            return CompletableFuture.supplyAsync(() -> {
                 try {
                     preparedStatement.execute();
                     return preparedStatement;
@@ -30,7 +30,8 @@ public class SQLUtils {
         }
     }
 
-    public static void setValuesInStatement(Stream<? extends SqlField> fields, PreparedStatement stmt, Object obj){
-        CollectionUtils.zipWithIndex(fields).forEach(entry -> entry.item.setValueInStatement(stmt, entry.index+1, obj));
+    public static void setValuesInStatement(Stream<? extends SqlField> fields, PreparedStatement stmt, Object obj) {
+        CollectionUtils.zipWithIndex(fields)
+                .forEach(entry -> entry.item.setValueInStatement(stmt, entry.index + 1, obj));
     }
 }

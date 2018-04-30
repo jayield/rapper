@@ -15,6 +15,7 @@ public class CollectionUtils {
         return StreamSupport.stream(new Spliterators.AbstractSpliterator<Indexer<T>>(Long.MAX_VALUE, Spliterator.ORDERED | Spliterator.IMMUTABLE) {
             int[] index = {0};
             Spliterator<? extends T> spliterator = stream.spliterator();
+
             @Override
             public boolean tryAdvance(Consumer<? super Indexer<T>> action) {
                 return spliterator.tryAdvance(i -> action.accept(new Indexer<T>(i, index[0]++)));
@@ -30,7 +31,7 @@ public class CollectionUtils {
         return zipWithIndex(stream).map(entry -> mapper.apply(entry.index, entry.item));
     }
 
-    public static class Indexer<T>{
+    public static class Indexer<T> {
         public final T item;
         public final int index;
 
@@ -49,6 +50,6 @@ public class CollectionUtils {
 
         System.out.println();
         System.out.println("Test mapWithIndex");
-        mapWithIndex(Arrays.stream(names), (Integer index, String name) -> index+"="+name).forEach(System.out::println);
+        mapWithIndex(Arrays.stream(names), (Integer index, String name) -> index + "=" + name).forEach(System.out::println);
     }
 }

@@ -1,5 +1,6 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import javafx.util.Pair;
 import com.github.jayield.rapper.utils.ConnectionManager;
 import com.github.jayield.rapper.utils.DBsPath;
@@ -12,6 +13,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+
+import static com.github.jayield.rapper.utils.ConnectionManager.*;
 
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
@@ -27,8 +30,10 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     private void checkUnitOfWork(){
-        if(UnitOfWork.getCurrent() == null) {
-            ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.DEFAULTDB);
+        try {
+            UnitOfWork.getCurrent();
+        }catch (UnitOfWorkException e){
+            ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
             SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
             UnitOfWork.newCurrent(connectionSupplier.wrap());
         }

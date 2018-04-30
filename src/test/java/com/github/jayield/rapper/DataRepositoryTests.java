@@ -49,7 +49,6 @@ public class DataRepositoryTests {
         Connection con = manager.getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
-        con.prepareStatement("delete from EmployeeJunior").executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);
@@ -75,10 +74,6 @@ public class DataRepositoryTests {
     }
 
     @Test
-    public void findWhere(){
-    }
-
-    @Test
     public void findById() {
         Optional<TopStudent> first = topStudentRepository.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
@@ -88,7 +83,7 @@ public class DataRepositoryTests {
 
         assertEquals(first.get(), second.get());
 
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), second.get(), TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(second.get().getNif()), AssertUtils::assertTopStudent);
+        AssertUtils.assertSingleRow(second.get(), TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(second.get().getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
@@ -143,10 +138,6 @@ public class DataRepositoryTests {
 
     @Test
     public void update() throws SQLException {
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-
         ResultSet rs = TestUtils.executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
                 "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", TestUtils.getPersonPSConsumer(454));
@@ -167,10 +158,6 @@ public class DataRepositoryTests {
 
     @Test
     public void updateAll() throws SQLException {
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-
         List<Person> list = new ArrayList<>(2);
         ResultSet rs = TestUtils.executeQuery("select CAST(version as bigint) version from Person where nif = ?", TestUtils.getPersonPSConsumer(321));
         list.add(new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1)));
@@ -219,10 +206,6 @@ public class DataRepositoryTests {
 
     @Test
     public void deleteAll() throws SQLException {
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-
         List<Integer> list = new ArrayList<>(2);
         ResultSet rs = TestUtils.executeQuery("select id from Employee where name = ?", TestUtils.getEmployeePSConsumer("Bob"));
         list.add(rs.getInt("id"));

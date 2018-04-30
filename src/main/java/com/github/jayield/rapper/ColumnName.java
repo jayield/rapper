@@ -5,10 +5,9 @@ import java.lang.annotation.RetentionPolicy;
 
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ColumnName {
-    String[] name();
+    String[] foreignName();
     String table() default "";
     //Name of the other column(s) with the Id of the other Entity
-    //If embeddedId separate the Ids with "|" ex: name = "Id|SomeOtherId"
     //The names must be in the same order as the constructor
-    String[] foreignName() default {};
+    String[] externalName() default {};
 }

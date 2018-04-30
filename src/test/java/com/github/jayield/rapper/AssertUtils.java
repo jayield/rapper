@@ -71,7 +71,7 @@ public class AssertUtils {
             assertEquals(company.getVersion(), rs.getLong("version"));
             assertNotEquals(0, company.getVersion());
 
-            List<Employee> employees = company.getCurrentEmployees().get();
+            List<Employee> employees = company.getEmployees().join();
             PreparedStatement ps = current.getConnection()
                     .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
             ps.setInt(1, company.getIdentityKey().getId());
@@ -99,6 +99,37 @@ public class AssertUtils {
         }
     }
 
+    public static void assertBook(Book book, ResultSet rs){
+        try {
+            assertEquals((long) book.getIdentityKey(), rs.getLong("id"));
+            assertEquals(book.getName(), rs.getString("name"));
+            assertEquals(book.getVersion(), rs.getLong("version"));
+
+            Author author = book.getAuthors().join().get(0);
+            PreparedStatement ps = UnitOfWork.getCurrent()
+                    .getConnection().prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
+            ps.setLong(1, author.getIdentityKey());
+
+            rs = ps.executeQuery();
+
+            while (rs.next())
+                assertAuthor(author, rs);
+
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private static void assertAuthor(Author author, ResultSet rs) {
+        try {
+            assertEquals((long) author.getIdentityKey(), rs.getLong("id"));
+            assertEquals(author.getName(), rs.getString("name"));
+            assertEquals(author.getVersion(), rs.getLong("version"));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void assertStudent(Student student, ResultSet rs) {
         try{
             Field personVersion = Person.class.getDeclaredField("version");
@@ -117,29 +148,10 @@ public class AssertUtils {
         }
     }
 
-    public static void assertEmployeeJunior(EmployeeJunior employeeJunior, ResultSet rs) {
-        try {
-            Field employeeVersion = Employee.class.getDeclaredField("version");
-
-            employeeVersion.setAccessible(true);
-
-            assertEquals(employeeJunior.getId(), rs.getInt("id"));
-            assertEquals(employeeJunior.getName(), rs.getString("name"));
-            assertEquals(employeeJunior.getCompanyId(), rs.getInt("companyId"));
-            assertEquals(employeeJunior.getCompanyCid(), rs.getInt("companyCid"));
-            assertEquals(employeeVersion.get(employeeJunior), rs.getLong("P1version"));
-            assertEquals(employeeJunior.getVersion(), rs.getLong("Cversion"));
-            assertEquals(employeeJunior.getJuniorsYears(), rs.getLong("juniorsYears"));
-            assertNotEquals(0, employeeJunior.getVersion());
-        } catch (SQLException | NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     //---------------------------ResultSets assertions-----------------------------------
-    public static<U> void assertSingleRow(UnitOfWork current, U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
+    public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
         try{
-            PreparedStatement ps = current.getConnection().prepareStatement(sql);
+            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
             prepareStatement.accept(ps);
             ResultSet rs = ps.executeQuery();
 
