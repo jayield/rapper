@@ -4,55 +4,36 @@ import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Id;
 
-import java.util.List;
-import java.util.function.Supplier;
+import java.util.concurrent.CompletableFuture;
 
 public class Employee implements DomainObject<Integer> {
     @Id(isIdentity = true)
     private final int id;
     private final String name;
-    private final int companyId;
-    private final int companyCid;
-    @ColumnName(name = "employeeId", table = "CompanyEmployee")
-    private final Supplier<List<Company>> companies;
     private final long version;
+    @ColumnName(name = {"companyId", "companyCid"})
+    private final CompletableFuture<Company> company;
 
-    public Employee(int id, String name, int companyId, int companyCid, long version, Supplier<List<Company>> companies) {
+    public Employee(int id, String name, long version, CompletableFuture<Company> company) {
         this.id = id;
         this.name = name;
-        this.companyId = companyId;
-        this.companyCid = companyCid;
-        this.companies = companies;
         this.version = version;
+        this.company = company;
     }
 
     public Employee() {
         id = 0;
         name = null;
-        companyId = 0;
-        companyCid = 0;
-        companies = null;
         version = 0;
-    }
-
-    public int getId() {
-        return id;
+        company = null;
     }
 
     public String getName() {
         return name;
     }
 
-    public int getCompanyId() {
-        return companyId;
-    }
-
-    public int getCompanyCid() {
-        return companyCid;
-    }
-
-    public Supplier<List<Company>> getCompanies() {
-        return companies;
+    public CompletableFuture<Company> getCompany() {
+        return company;
     }
 
     @Override

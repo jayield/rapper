@@ -1,10 +1,14 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.domainModel.Company;
+import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.utils.ConnectionManager;
 import com.github.jayield.rapper.utils.DBsPath;
+import com.github.jayield.rapper.utils.MapperRegistry;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.ParameterizedType;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -47,5 +51,15 @@ public class DataBaseTests {
 
             con.rollback();
         }
+    }
+
+    @Test
+    public void test() throws NoSuchFieldException {
+        System.out.println(
+                ((ParameterizedType) Employee.class.getDeclaredField("company").getGenericType()).getActualTypeArguments()
+        );
+
+        //DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
+        DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
     }
 }

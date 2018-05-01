@@ -15,10 +15,12 @@ import java.lang.reflect.Field;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
 
 import static com.github.jayield.rapper.AssertUtils.*;
+import static com.github.jayield.rapper.TestUtils.*;
 import static com.github.jayield.rapper.utils.DBsPath.TESTDB;
 import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 import static org.junit.Assert.assertEquals;
@@ -63,7 +65,6 @@ public class UnitOfWorkTests {
         Connection con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
-        con.prepareStatement("delete from EmployeeJunior").executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);
@@ -146,10 +147,10 @@ public class UnitOfWorkTests {
         Employee originalEmployee = container.getOriginalEmployee();
 
         if(isCommit) {
-            assertNotFound(TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer(originalEmployee.getName()));
+            assertNotFound(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()));
         }
         else{
-            assertSingleRow(UnitOfWork.getCurrent(), originalEmployee, TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee);
+            assertSingleRow(originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee);
         }
     }
 
@@ -168,9 +169,9 @@ public class UnitOfWorkTests {
             topStudent = container.getOriginalTopStudent();
         }
 
-        assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
     }
 
     private void assertNewObjects(boolean isCommit) {
@@ -179,14 +180,14 @@ public class UnitOfWorkTests {
         TopStudent topStudent = container.getInsertedTopStudent();
 
         if(isCommit) {
-            assertSingleRow(UnitOfWork.getCurrent(), person, TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-            assertSingleRow(UnitOfWork.getCurrent(), car, TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-            assertSingleRow(UnitOfWork.getCurrent(), topStudent, TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+            assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+            assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+            assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
         }
         else {
-            assertNotFound(TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(person.getNif()));
-            assertNotFound(TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
-            assertNotFound(TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()));
+            assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()));
+            assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
+            assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()));
         }
     }
 
@@ -236,31 +237,33 @@ public class UnitOfWorkTests {
             insertedCar = new Car(1, "58en60", "Mercedes", "ES1", 0);
             insertedTopStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
-            ResultSet rs = TestUtils.executeQuery("select CAST(version as bigint) version from Person where nif = ?", TestUtils.getPersonPSConsumer(321));
+            ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
             updatedPerson = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
-            rs = TestUtils.executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", TestUtils.getCarPSConsumer(2, "23we45"));
+            rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"));
             updatedCar = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
-            rs = TestUtils.executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+            rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                     "inner join Student S2 on P.nif = S2.nif " +
-                    "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", TestUtils.getPersonPSConsumer(454));
+                    "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454));
             updatedTopStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                     4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-            rs = TestUtils.executeQuery(TestUtils.personSelectQuery, TestUtils.getPersonPSConsumer(321));
+            rs = executeQuery(personSelectQuery, getPersonPSConsumer(321));
             originalPerson = new Person(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), rs.getLong("version"));
 
-            rs = TestUtils.executeQuery(TestUtils.carSelectQuery, TestUtils.getCarPSConsumer(2, "23we45"));
+            rs = executeQuery(carSelectQuery, getCarPSConsumer(2, "23we45"));
             originalCar = new Car(rs.getInt("owner"), rs.getString("plate"), rs.getString("brand"), rs.getString("model"), rs.getLong("version"));
 
-            rs = TestUtils.executeQuery(TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(454));
+            rs = executeQuery(topStudentSelectQuery, getPersonPSConsumer(454));
             originalTopStudent = new TopStudent(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), rs.getLong("P1version"), rs.getInt("studentNumber"),
                     rs.getInt("topGrade"), rs.getInt("year"), rs.getLong("Cversion"), rs.getLong("P2version"));
 
-            rs = TestUtils.executeQuery(TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer("Charles"));
-            originalEmployee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getInt("companyId"), rs.getInt("companyCid"),
-                    rs.getLong("version"), null);
+            rs = executeQuery(companySelectQuery, getCompanyPSConsumer(1, 1));
+            Company originalCompany = new Company(new Company.PrimaryKey(rs.getInt("id"), rs.getInt("cid")), rs.getString("motto"), null, rs.getLong("Cversion"));
+
+            rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Charles"));
+            originalEmployee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getLong("version"), CompletableFuture.completedFuture(originalCompany));
         }
 
         public TopStudent getOriginalTopStudent() {

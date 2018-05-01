@@ -11,7 +11,6 @@ AS
   insert into Car (owner, plate, brand, model) values (2, '23we45', 'Mitsubishi', 'lancer')
 
   insert into Student (nif, studentNumber) values (454, 3)
-
   insert into TopStudent (nif, topGrade, year) values (454, 20, 2017)
 
   insert into Company (id, cid, motto) values (1, 1, 'Living la vida loca')
@@ -19,23 +18,24 @@ AS
   insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1)
   insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1)
 
-  declare @empId1 bigint, @empId2 bigint
+  declare @authorId int, @bookId int
 
-  select @empId1 = id from Employee where name = 'Bob'
-  select @empId2 = id from Employee where name = 'Charles'
+  insert into Author(name) values ('Ze')
+  insert into Book(name) values ('1001 noites')
 
-  insert into EmployeeJunior (id, juniorsYears) values (@empId1, 4)
-  insert into EmployeeJunior (id, juniorsYears) values (@empId2, 1)
+  select @authorId = id from Author where name = 'Ze'
+  select @bookId = id from Book where name = '1001 noites'
+
+  insert into BookAuthor(bookId, authorId) values (@bookId, @authorId)
 GO
-
-select id, name, companyId, companyCid from Employee
 
 if OBJECT_ID('deleteDB') is not null
   drop proc deleteDB
 create procedure deleteDB
 as
-  delete from EmployeeJunior
-  delete from CompanyEmployee
+  delete from Author
+  delete from Book
+  delete from BookAuthor
   delete from Employee
   delete from TopStudent
   delete from Student

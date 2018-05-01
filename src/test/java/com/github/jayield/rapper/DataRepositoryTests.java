@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.github.jayield.rapper.TestUtils.*;
 import static org.junit.Assert.*;
 
 public class DataRepositoryTests {
@@ -40,7 +41,7 @@ public class DataRepositoryTests {
 
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
         repositoryMapField.setAccessible(true);
-        repositoryMap = (Map<Class, DataRepository>) repositoryMapField.get(new MapperRegistry());
+        repositoryMap = (Map<Class, DataRepository>) repositoryMapField.get(null);
     }
 
     @Before
@@ -49,7 +50,6 @@ public class DataRepositoryTests {
         Connection con = manager.getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
-        con.prepareStatement("delete from EmployeeJunior").executeUpdate();
         con.commit();
         /*createTables(con);
         deleteDB(con);
@@ -75,10 +75,6 @@ public class DataRepositoryTests {
     }
 
     @Test
-    public void findWhere(){
-    }
-
-    @Test
     public void findById() {
         Optional<TopStudent> first = topStudentRepository.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
@@ -88,7 +84,7 @@ public class DataRepositoryTests {
 
         assertEquals(first.get(), second.get());
 
-        AssertUtils.assertSingleRow(UnitOfWork.getCurrent(), second.get(), TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(second.get().getNif()), AssertUtils::assertTopStudent);
+        AssertUtils.assertSingleRow(second.get(), topStudentSelectQuery, getPersonPSConsumer(second.get().getNif()), AssertUtils::assertTopStudent);
     }
 
     @Test
@@ -99,7 +95,7 @@ public class DataRepositoryTests {
         List<TopStudent> second = topStudentRepository.findAll().join();
         assertEquals(2, topStudentMapperify.getIfindAll().getCount());
 
-        AssertUtils.assertMultipleRows(UnitOfWork.getCurrent(), second, TestUtils.topStudentSelectQuery.substring(0, TestUtils.topStudentSelectQuery.length()-16), AssertUtils::assertTopStudent, second.size());
+        AssertUtils.assertMultipleRows(UnitOfWork.getCurrent(), second, topStudentSelectQuery.substring(0, topStudentSelectQuery.length()-16), AssertUtils::assertTopStudent, second.size());
     }
 
     @Test
@@ -143,13 +139,9 @@ public class DataRepositoryTests {
 
     @Test
     public void update() throws SQLException {
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-
-        ResultSet rs = TestUtils.executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+        ResultSet rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", TestUtils.getPersonPSConsumer(454));
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454));
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
@@ -167,15 +159,11 @@ public class DataRepositoryTests {
 
     @Test
     public void updateAll() throws SQLException {
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-
         List<Person> list = new ArrayList<>(2);
-        ResultSet rs = TestUtils.executeQuery("select CAST(version as bigint) version from Person where nif = ?", TestUtils.getPersonPSConsumer(321));
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
         list.add(new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1)));
 
-        rs = TestUtils.executeQuery("select CAST(version as bigint) version from Person where nif = ?", TestUtils.getPersonPSConsumer(454));
+        rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(454));
         list.add(new Person(454, "Ze Miguens", new Date(1080, 2, 4), rs.getLong(1)));
 
         boolean success = personRepository.updateAll(list).join();
@@ -200,7 +188,7 @@ public class DataRepositoryTests {
         Optional<TopStudent> optionalTopStudent = topStudentRepository.findById(454).join();
         assertEquals(2, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
-        AssertUtils.assertNotFound(TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(454));
+        AssertUtils.assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454));
     }
 
     @Test
@@ -214,20 +202,16 @@ public class DataRepositoryTests {
         Optional<TopStudent> optionalTopStudent = topStudentRepository.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
-        AssertUtils.assertNotFound(TestUtils.topStudentSelectQuery, TestUtils.getPersonPSConsumer(topStudent.getNif()));
+        AssertUtils.assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()));
     }
 
     @Test
     public void deleteAll() throws SQLException {
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-
         List<Integer> list = new ArrayList<>(2);
-        ResultSet rs = TestUtils.executeQuery("select id from Employee where name = ?", TestUtils.getEmployeePSConsumer("Bob"));
+        ResultSet rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Bob"));
         list.add(rs.getInt("id"));
 
-        rs = TestUtils.executeQuery("select id from Employee where name = ?", TestUtils.getEmployeePSConsumer("Charles"));
+        rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Charles"));
         list.add(rs.getInt("id"));
 
         boolean success = employeeRepository.deleteAll(list).join();
@@ -242,8 +226,8 @@ public class DataRepositoryTests {
         assertEquals(4, employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson2.isPresent());
 
-        AssertUtils.assertNotFound(TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer("Bob"));
-        AssertUtils.assertNotFound(TestUtils.employeeSelectQuery, TestUtils.getEmployeePSConsumer("Charles"));
+        AssertUtils.assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        AssertUtils.assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Charles"));
 
     }
 }

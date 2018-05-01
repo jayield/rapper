@@ -18,6 +18,11 @@ public class ConnectionManager {
         poolDataSource = getDataSource(envVarName);
     }
 
+    /**
+     * If there isn't a ConnectionManager instance it will create a new one connected to the given DBPath, else it will return the existing ConnectionManager
+     * @param envVar
+     * @return
+     */
     public static ConnectionManager getConnectionManager(DBsPath envVar){
         if(connectionManager == null) {
             staticLogger.info("Creating new ConnectionManager for " +  envVar.name());

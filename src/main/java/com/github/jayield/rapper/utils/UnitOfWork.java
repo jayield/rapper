@@ -5,6 +5,7 @@ import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.ConcurrencyException;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import javafx.util.Pair;
 import com.github.jayield.rapper.Mapper;
 import org.slf4j.Logger;
@@ -112,7 +113,10 @@ public class UnitOfWork {
     }
 
     public static UnitOfWork getCurrent() {
-        return current.get();
+        UnitOfWork unitOfWork = current.get();
+        if(unitOfWork == null)
+            throw new UnitOfWorkException("The Unit of Work you're trying to access is currently NULL. You must create or set it first.");
+        return unitOfWork;
     }
 
     public CompletableFuture<Boolean> commit() {

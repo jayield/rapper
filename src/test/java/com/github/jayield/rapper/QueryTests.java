@@ -16,7 +16,7 @@ public class QueryTests {
         assertEquals("insert into [Person] ( nif, name, birthday ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", dataMapper.getInsertQuery());
         assertEquals("update [Person] set name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ? and version = ?", dataMapper.getUpdateQuery());
 
-        assertEquals("select C.id, C.name, C.companyId, C.companyCid, CAST(C.version as bigint) Cversion from [Employee] C ", employeeMapper.getSelectQuery());
+        assertEquals("select C.id, C.name, CAST(C.version as bigint) Cversion, C.companyId, C.companyCid from [Employee] C ", employeeMapper.getSelectQuery());
         assertEquals("delete from [Employee] where id = ?", employeeMapper.getDeleteQuery());
         assertEquals("insert into [Employee] ( name, companyId, companyCid ) output INSERTED.id, CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", employeeMapper.getInsertQuery());
         assertEquals("update [Employee] set name = ?, companyId = ?, companyCid = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeMapper.getUpdateQuery());
@@ -42,7 +42,6 @@ public class QueryTests {
     public void shouldObtainQueriesForEntitiesWithInheritance(){
         DataMapper<Student, Integer> studentMapper = new DataMapper<>(Student.class);
         DataMapper<TopStudent, Integer> topStudentMapper = new DataMapper<>(TopStudent.class);
-        DataMapper<EmployeeJunior, Integer> employeeJunior = new DataMapper<>(EmployeeJunior.class);
 
         assertEquals("select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year, " +
                 "CAST(C.version as bigint) Cversion from [TopStudent] C inner join [Student] P1 on C.nif = P1.nif inner join [Person] P2 on P1.nif = P2.nif ", topStudentMapper.getSelectQuery());
@@ -55,10 +54,5 @@ public class QueryTests {
         assertEquals("delete from [Student] where nif = ?", studentMapper.getDeleteQuery());
         assertEquals("insert into [Student] ( nif, studentNumber ) output CAST(INSERTED.version as bigint) version values ( ?, ? )", studentMapper.getInsertQuery());
         assertEquals("update [Student] set studentNumber = ? output CAST(INSERTED.version as bigint) version where nif = ? and version = ?", studentMapper.getUpdateQuery());
-
-        assertEquals("select P1.name, P1.companyId, P1.companyCid, CAST(P1.version as bigint) P1version, P1.id, C.juniorsYears, CAST(C.version as bigint) Cversion from [EmployeeJunior] C inner join [Employee] P1 on C.id = P1.id ", employeeJunior.getSelectQuery());
-        assertEquals("delete from [EmployeeJunior] where id = ?", employeeJunior.getDeleteQuery());
-        assertEquals("insert into [EmployeeJunior] ( id, juniorsYears ) output CAST(INSERTED.version as bigint) version values ( ?, ? )", employeeJunior.getInsertQuery());
-        assertEquals("update [EmployeeJunior] set juniorsYears = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeJunior.getUpdateQuery());
     }
 }

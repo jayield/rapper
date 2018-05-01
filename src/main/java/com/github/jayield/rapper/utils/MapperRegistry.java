@@ -8,6 +8,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class MapperRegistry {
+
+    private MapperRegistry(){}
+
     private static Map<Class, DataRepository> repositoryMap = new HashMap<>();
 
     public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> domainObject) {

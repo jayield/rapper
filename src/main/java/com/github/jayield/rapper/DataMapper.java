@@ -18,7 +18,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static com.github.jayield.rapper.utils.SqlField.*;
+
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
+
+    private static final String QUERY_ERROR = "Couldn't execute query on {}.\nReason: {}";
 
     private final Logger log = LoggerFactory.getLogger(DataMapper.class);
     private final Class<T> type;
@@ -26,29 +30,28 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final Constructor<T> constructor;
     private final ExternalsHandler<T, K> externalHandler;
 
-    private Class<?> primaryKey = null;
+    private Class<?> primaryKeyType = null;
     private Constructor<?> primaryKeyConstructor = null;
-    private Field primaryKeyField;
 
     public DataMapper(Class<T> type) {
         this.type = type;
         try {
             Class<?>[] declaredClasses = type.getDeclaredClasses();
             if (declaredClasses.length > 0) {
-                primaryKey = declaredClasses[0];
-                primaryKeyConstructor = primaryKey.getConstructor();
+                primaryKeyType = declaredClasses[0]; //TODO change, don't get it from declaredClasses
+                primaryKeyConstructor = primaryKeyType.getConstructor();
             }
-
             constructor = type.getConstructor();
         } catch (NoSuchMethodException e) {
-            throw new RuntimeException(e);
+            throw new DataMapperException(e);
         }
         mapperSettings = new MapperSettings(type);
-        externalHandler = new ExternalsHandler<>(mapperSettings.getIds(), mapperSettings.getExternals(), primaryKey, primaryKeyConstructor);
+        externalHandler = new ExternalsHandler<>(mapperSettings.getIds(), mapperSettings.getExternals(), primaryKeyType, primaryKeyConstructor);
     }
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        UnitOfWork current = UnitOfWork.getCurrent();
         String query = Arrays.stream(values)
                 .map(p -> p.getKey() + " = ? ")
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
@@ -63,9 +66,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             }
         })
                 .thenApply(this::getStream)
+                .thenApply(tStream -> {
+                    UnitOfWork.setCurrent(current);
+                    return tStream.peek(externalHandler::populateExternals);
+                })
                 .thenApply(s -> s.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
-                    log.info("Couldn't execute query on {}.", type.getSimpleName());
+                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
                     //throwable.printStackTrace();
                     return Collections.emptyList();
                 });
@@ -78,11 +85,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
                     Optional<T> optionalT = getStream(ps).findFirst();
-                    optionalT.ifPresent(t -> externalHandler.populateExternals(t).join());
+                    optionalT.ifPresent(externalHandler::populateExternals);
                     return optionalT;
                 })
                 .exceptionally(throwable -> {
-                    log.info("Couldn't execute query on {}.", type.getSimpleName());
+                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
                     //throwable.printStackTrace();
                     return Optional.empty();
                 });
@@ -96,11 +103,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(this::getStream)
                 .thenApply(tStream -> {
                     UnitOfWork.setCurrent(current);
-                    return tStream.peek(t -> externalHandler.populateExternals(t).join());
+                    return tStream.peek(externalHandler::populateExternals);
                 })
                 .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
-                    log.info("Couldn't execute query on {}.", type.getSimpleName());
+                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
                     //throwable.printStackTrace();
                     return Collections.emptyList();
                 });
@@ -117,7 +124,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
         return SQLUtils.execute(mapperSettings.getInsertQuery(), stmt ->
                 SQLUtils.setValuesInStatement(
-                        Stream.concat(mapperSettings.getIds().stream().filter(sqlFieldId -> !sqlFieldId.identity || sqlFieldId.isFromParent), mapperSettings.getColumns().stream())
+                        Stream.concat(mapperSettings.getIds().stream().filter(sqlFieldId -> !sqlFieldId.identity || sqlFieldId.isFromParent()), mapperSettings.getColumns().stream())
                                 .sorted(Comparator.comparing(SqlField::byInsert)), stmt, obj)
         )
                 .thenApply(ps -> {
@@ -189,22 +196,20 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Boolean> deleteById(K k) {
-        try {
-            if (primaryKeyField != null) {
-                primaryKeyField = Arrays.stream(type.getDeclaredFields())
-                        .filter(field -> field.isAnnotationPresent(Id.class) || field.isAnnotationPresent(EmbeddedId.class))
-                        .findFirst()
-                        .orElseThrow(DataMapperException::new);
-                primaryKeyField.setAccessible(true);
-            }
-
-            T t = constructor.newInstance();
-
-            primaryKeyField.set(t, k);
-            return delete(t);
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
-            throw new DataMapperException(e);
-        }
+        UnitOfWork unit = UnitOfWork.getCurrent();
+        return SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt ->
+                SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, k)
+        )
+                .thenCompose(preparedStatement -> {
+                    UnitOfWork.setCurrent(unit);
+                    return getParentMapper()
+                            .map(objectDataMapper -> objectDataMapper.deleteById(k))
+                            .orElse(CompletableFuture.completedFuture(true));
+                })
+                .exceptionally(throwable -> {
+                    log.info("Couldn't deleteById {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    return false;
+                });
     }
 
     @Override
@@ -238,7 +243,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2));
     }
 
-    private Stream<T> stream(Statement statement, ResultSet rs) throws DataMapperException {
+    private Stream<T> stream(Statement statement, ResultSet rs) {
         return StreamSupport.stream(new Spliterators.AbstractSpliterator<T>(
                 Long.MAX_VALUE, Spliterator.ORDERED) {
             @Override
@@ -268,35 +273,61 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             //Set t's primary key field to primaryKey if its a composed primary key
             if (primaryKey != null) {
-                SqlConsumer<Field> fieldConsumer = field -> {
-                    field.setAccessible(true);
-                    field.set(t, primaryKey);
-                };
-
                 Arrays.stream(type.getDeclaredFields())
-                        .filter(field -> field.getType() == this.primaryKey)
+                        .filter(field -> field.getType() == this.primaryKeyType)
                         .findFirst()
-                        .ifPresent(fieldConsumer.wrap());
+                        .ifPresent(field -> {
+                            try {
+                                field.setAccessible(true);
+                                field.set(t, primaryKey);
+                            } catch (IllegalAccessException e) {
+                                throw new DataMapperException(e);
+                            }
+                        });
             }
 
-            SqlConsumer<SqlField> fieldSetter = f -> {
-                f.field.setAccessible(true);
-                try {
-                    f.field.set(t, rs.getObject(f.name));
-                } catch (IllegalArgumentException e) { //If IllegalArgumentException is caught, is because field is from primaryKeyClass
-                    if (primaryKey != null)
-                        f.field.set(primaryKey, rs.getObject(f.name));
-                    else throw new DataMapperException(e);
-                }
-            };
             mapperSettings
                     .getAllFields()
                     .stream()
                     .filter(field -> mapperSettings.getFieldPredicate().test(field.field))
-                    .forEach(fieldSetter.wrap());
+                    .forEach(sqlField -> setField(rs, t, primaryKey, sqlField));
 
             return t;
         } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+            throw new DataMapperException(e);
+        }
+    }
+
+    private void setField(ResultSet rs, T t, Object primaryKey, SqlField sqlField) {
+        Field field = sqlField.field;
+        String name = sqlField.name;
+        try {
+            field.setAccessible(true);
+            //Get the Id from foreign table if the field annotated with ColumnName has NAME defined
+            if(name.equals(SQL_FIELD_EXTERNAL)){
+                SqlFieldExternal sqlFieldExternal = (SqlFieldExternal) sqlField;
+
+                String[] names = sqlFieldExternal.names;
+                Object[] objects = new Object[names.length];
+                for (int i = 0; i < names.length; i++) {
+                    String s = names[i];
+                    objects[i] = rs.getObject(s);
+                }
+
+                sqlFieldExternal.setIdValues(objects);
+            }
+            else
+                field.set(t, rs.getObject(name));
+        } catch (IllegalArgumentException e) { //If IllegalArgumentException is caught, is because field is from primaryKeyClass
+            try {
+                if (primaryKey != null)
+                    field.set(primaryKey, rs.getObject(name));
+                else
+                    throw new DataMapperException(e);
+            } catch (SQLException | IllegalAccessException e1) {
+                throw new DataMapperException(e1);
+            }
+        } catch (SQLException | IllegalAccessException e) {
             throw new DataMapperException(e);
         }
     }
@@ -323,16 +354,18 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
      * @param rs
      */
     private void setGeneratedKeys(T obj, ResultSet rs) {
-        SqlConsumer<SqlField> fieldSqlConsumer = field -> {
-            field.field.setAccessible(true);
-            field.field.set(obj, rs.getObject(field.name));
-        };
-
         mapperSettings
                 .getIds()
                 .stream()
-                .filter(f -> f.identity && !f.isFromParent)
-                .forEach(fieldSqlConsumer.wrap());
+                .filter(f -> f.identity && !f.isFromParent())
+                .forEach(field -> {
+                    try {
+                        field.field.setAccessible(true);
+                        field.field.set(obj, rs.getObject(field.name));
+                    } catch (IllegalAccessException | SQLException e) {
+                        throw new DataMapperException(e);
+                    }
+                });
     }
 
     private void setVersion(T obj, ResultSet rs) {
@@ -346,7 +379,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             } else throw new DataMapperException("Couldn't get version.");
         } catch (NoSuchFieldException | IllegalAccessException ignored) {
-            log.info("Version field not found on " + type.getSimpleName());
+            log.info("Version field not found on {}.", type.getSimpleName());
         } catch (SQLException e) {
             log.info("Couldn't set version on {}.\nReason: {}", type.getSimpleName(), e.getMessage());
         }
@@ -374,5 +407,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     public String getDeleteQuery() {
         return mapperSettings.getDeleteQuery();
+    }
+
+    public Constructor<?> getPrimaryKeyConstructor() {
+        return primaryKeyConstructor;
+    }
+
+    public Class<?> getPrimaryKeyType() {
+        return primaryKeyType;
     }
 }
