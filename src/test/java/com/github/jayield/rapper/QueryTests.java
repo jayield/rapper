@@ -16,7 +16,7 @@ public class QueryTests {
         assertEquals("insert into [Person] ( nif, name, birthday ) output CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", dataMapper.getInsertQuery());
         assertEquals("update [Person] set name = ?, birthday = ? output CAST(INSERTED.version as bigint) version where nif = ? and version = ?", dataMapper.getUpdateQuery());
 
-        assertEquals("select C.id, C.name, C.companyId, C.companyCid, CAST(C.version as bigint) Cversion from [Employee] C ", employeeMapper.getSelectQuery());
+        assertEquals("select C.id, C.name, CAST(C.version as bigint) Cversion, C.companyId, C.companyCid from [Employee] C ", employeeMapper.getSelectQuery());
         assertEquals("delete from [Employee] where id = ?", employeeMapper.getDeleteQuery());
         assertEquals("insert into [Employee] ( name, companyId, companyCid ) output INSERTED.id, CAST(INSERTED.version as bigint) version values ( ?, ?, ? )", employeeMapper.getInsertQuery());
         assertEquals("update [Employee] set name = ?, companyId = ?, companyCid = ? output CAST(INSERTED.version as bigint) version where id = ? and version = ?", employeeMapper.getUpdateQuery());

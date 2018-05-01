@@ -43,9 +43,13 @@ creation of multiple connections.
 they will delete the least-read elements.
  
 - A `DomainObject` may contain a `CompletableFuture<List<DomainObject>>` as a reference to another table. The field holding it, must be annotated with 
-<code>@ColumnName</code>, in which is passed `foreignName` as the name of the column in the referenced table where the ID of the `DomainObject` 
-takes place, the `table` in case of N-N relation and the `externalName` which is the name of the column in the referenced table 
+<code>@ColumnName</code>, in which is passed `foreignName` as the name of the column(s) in the referenced table where the ID of the `DomainObject` 
+takes place, the `table` in case of N-N relation and the `externalName` which is the name of the column(s) in the referenced table 
 where the ID of the external `DomainObject` takes place. `externalName` is only needed when `table` is given.
+
+- As an alternative a `DomainObject` may contain a `CompletableFuture<DomainObject>` as a reference to another table. The field holding it, must be annotated with 
+<code>@ColumnName</code>, in which is passed `name` as the name of the column(s) in the table where the ID of the external `DomainObject` 
+takes place.
  
 ### Rules
 - You must create an environment variable to connect to the DB. The environment variable must have the following format:

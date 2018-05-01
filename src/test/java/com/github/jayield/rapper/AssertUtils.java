@@ -88,12 +88,13 @@ public class AssertUtils {
 
     public static void assertEmployee(Employee employee, ResultSet rs) {
         try {
-            assertEquals(employee.getId(), rs.getInt("id"));
+            assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
             assertEquals(employee.getName(), rs.getString("name"));
-            assertEquals(employee.getCompanyId(), rs.getInt("companyId"));
-            assertEquals(employee.getCompanyCid(), rs.getInt("companyCid"));
             assertEquals(employee.getVersion(), rs.getLong("version"));
-            assertNotEquals(0, employee.getVersion());
+
+            Company company = employee.getCompany().join();
+            assertEquals(company.getIdentityKey().getId(), rs.getInt("companyId"));
+            assertEquals(company.getIdentityKey().getCid(), rs.getInt("companyCid"));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

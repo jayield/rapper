@@ -28,6 +28,7 @@ public class DataMapperTests {
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
     private final DataMapper<Book, Long> bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class).getMapper();
+    private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
 
     @Before
     public void start() throws SQLException {
@@ -77,6 +78,12 @@ public class DataMapperTests {
     public void testNNExternalFindWhere(){
         Book book = bookMapper.findWhere(new Pair<>("name", "1001 noites")).join().get(0);
         assertSingleRow(book, bookSelectQuery, getBookPSConsumer(book.getName()), AssertUtils::assertBook);
+    }
+
+    @Test
+    public void testParentExternalFindWhere(){
+        Employee employee = employeeMapper.findWhere(new Pair<>("name", "Bob")).join().get(0);
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Bob"), AssertUtils::assertEmployee);
     }
 
     //-----------------------------------FindById-----------------------------------//

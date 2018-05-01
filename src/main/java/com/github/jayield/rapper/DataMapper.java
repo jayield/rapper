@@ -18,6 +18,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
+import static com.github.jayield.rapper.utils.SqlField.*;
+
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private static final String QUERY_ERROR = "Couldn't execute query on {}.\nReason: {}";
@@ -36,7 +38,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         try {
             Class<?>[] declaredClasses = type.getDeclaredClasses();
             if (declaredClasses.length > 0) {
-                primaryKeyType = declaredClasses[0];
+                primaryKeyType = declaredClasses[0]; //TODO change, don't get it from declaredClasses
                 primaryKeyConstructor = primaryKeyType.getConstructor();
             }
             constructor = type.getConstructor();
@@ -271,35 +273,61 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             //Set t's primary key field to primaryKey if its a composed primary key
             if (primaryKey != null) {
-                SqlConsumer<Field> fieldConsumer = field -> {
-                    field.setAccessible(true);
-                    field.set(t, primaryKey);
-                };
-
                 Arrays.stream(type.getDeclaredFields())
                         .filter(field -> field.getType() == this.primaryKeyType)
                         .findFirst()
-                        .ifPresent(fieldConsumer.wrap());
+                        .ifPresent(field -> {
+                            try {
+                                field.setAccessible(true);
+                                field.set(t, primaryKey);
+                            } catch (IllegalAccessException e) {
+                                throw new DataMapperException(e);
+                            }
+                        });
             }
 
-            SqlConsumer<SqlField> fieldSetter = f -> {
-                f.field.setAccessible(true);
-                try {
-                    f.field.set(t, rs.getObject(f.name));
-                } catch (IllegalArgumentException e) { //If IllegalArgumentException is caught, is because field is from primaryKeyClass
-                    if (primaryKey != null)
-                        f.field.set(primaryKey, rs.getObject(f.name));
-                    else throw new DataMapperException(e);
-                }
-            };
             mapperSettings
                     .getAllFields()
                     .stream()
                     .filter(field -> mapperSettings.getFieldPredicate().test(field.field))
-                    .forEach(fieldSetter.wrap());
+                    .forEach(sqlField -> setField(rs, t, primaryKey, sqlField));
 
             return t;
         } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+            throw new DataMapperException(e);
+        }
+    }
+
+    private void setField(ResultSet rs, T t, Object primaryKey, SqlField sqlField) {
+        Field field = sqlField.field;
+        String name = sqlField.name;
+        try {
+            field.setAccessible(true);
+            //Get the Id from foreign table if the field annotated with ColumnName has NAME defined
+            if(name.equals(SQL_FIELD_EXTERNAL)){
+                SqlFieldExternal sqlFieldExternal = (SqlFieldExternal) sqlField;
+
+                String[] names = sqlFieldExternal.names;
+                Object[] objects = new Object[names.length];
+                for (int i = 0; i < names.length; i++) {
+                    String s = names[i];
+                    objects[i] = rs.getObject(s);
+                }
+
+                sqlFieldExternal.setIdValues(objects);
+            }
+            else
+                field.set(t, rs.getObject(name));
+        } catch (IllegalArgumentException e) { //If IllegalArgumentException is caught, is because field is from primaryKeyClass
+            try {
+                if (primaryKey != null)
+                    field.set(primaryKey, rs.getObject(name));
+                else
+                    throw new DataMapperException(e);
+            } catch (SQLException | IllegalAccessException e1) {
+                throw new DataMapperException(e1);
+            }
+        } catch (SQLException | IllegalAccessException e) {
             throw new DataMapperException(e);
         }
     }
@@ -326,16 +354,18 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
      * @param rs
      */
     private void setGeneratedKeys(T obj, ResultSet rs) {
-        SqlConsumer<SqlField> fieldSqlConsumer = field -> {
-            field.field.setAccessible(true);
-            field.field.set(obj, rs.getObject(field.name));
-        };
-
         mapperSettings
                 .getIds()
                 .stream()
                 .filter(f -> f.identity && !f.isFromParent())
-                .forEach(fieldSqlConsumer.wrap());
+                .forEach(field -> {
+                    try {
+                        field.field.setAccessible(true);
+                        field.field.set(obj, rs.getObject(field.name));
+                    } catch (IllegalAccessException | SQLException e) {
+                        throw new DataMapperException(e);
+                    }
+                });
     }
 
     private void setVersion(T obj, ResultSet rs) {
@@ -377,5 +407,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     public String getDeleteQuery() {
         return mapperSettings.getDeleteQuery();
+    }
+
+    public Constructor<?> getPrimaryKeyConstructor() {
+        return primaryKeyConstructor;
+    }
+
+    public Class<?> getPrimaryKeyType() {
+        return primaryKeyType;
     }
 }

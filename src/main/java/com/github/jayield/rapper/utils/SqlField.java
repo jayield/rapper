@@ -1,16 +1,21 @@
 package com.github.jayield.rapper.utils;
 
+import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Field;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class SqlField {
     public final Field field;
     public final String name;
     public final String selectQueryValue;
+    public static final String SQL_FIELD_EXTERNAL = "SqlFieldExternal";
 
     public SqlField(Field field, String name, String selectQueryValue) {
         this.field = field;
@@ -81,35 +86,92 @@ public class SqlField {
             return isFromParent;
         }
 
-        public void setFromParent(boolean fromParent) {
-            isFromParent = fromParent;
+        void setFromParent() {
+            isFromParent = true;
         }
     }
 
     public static class SqlFieldExternal extends SqlField{
+        public final Class<?> type;                                         //Type of the field that holds the collection
+        public final Class<? extends DomainObject> domainObjectType;        //Type of the elements in the collection
+        public final String[] names;
         public final String[] foreignNames;
-        public final Class<? extends DomainObject> type;        //Type of the elements in the collection
-        public final Class<?> fType;                            //Type of the field that holds the collection
-        public final String table;
+        public final String[] externalNames;
         public final String selectTableQuery;
-        public final String[] foreignColumns;
+        private final List<Integer> values;
+        private Object[] idValues;
 
-        public SqlFieldExternal(Field field, Class<?> fType, String name, String queryValue, String columnName[], String table, String[] foreignName, Class<? extends DomainObject> type) {
-            super(field, name, queryValue);
-            this.fType = fType;
-            this.table = table;
-            this.foreignNames = foreignName;
-            this.type = type;
-            this.foreignColumns = columnName;
+        public SqlFieldExternal(Field field, String pref) {
+            super(field, SQL_FIELD_EXTERNAL, buildSelectQueryValue(field, pref));
+            type = field.getType();
+            domainObjectType = ReflectionUtils.getGenericType(field.getGenericType());
+            ColumnName annotation = field.getAnnotation(ColumnName.class);
+            names = annotation.name();
+            foreignNames = annotation.foreignName();
+            externalNames = annotation.externalName();
+            selectTableQuery = buildSelectQuery(annotation.table());
+            values = getBytes(annotation);
+        }
 
+        private static String buildSelectQueryValue(Field field, String pref) {
+            ColumnName annotation = field.getAnnotation(ColumnName.class);
+            String[] names = annotation.name();
+            StringBuilder sb = new StringBuilder();
+            if (names.length != 0)
+                for (int i = 0; i < names.length; i++) {
+                    sb.append(pref).append(names[i]);
+                    if (i + 1 != names.length) sb.append(", ");
+                }
+            return sb.toString();
+        }
+
+        /**
+         * Used for ExternalsHandler mapper to know what to execute, depending on ColumnName values
+         * @param annotation ColumnName annotation
+         * @return
+         */
+        private ArrayList<Integer> getBytes(ColumnName annotation) {
+            try {
+                String[] nameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("name").getDefaultValue();
+                String[] foreignNameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("foreignName").getDefaultValue();
+                String tableDefaultValue = (String) ColumnName.class.getDeclaredMethod("table").getDefaultValue();
+
+                boolean nameEqualsDefaultValue = Arrays.equals(annotation.name(), nameDefaultValue);
+                boolean foreignNameEqualsDefaultValue = Arrays.equals(annotation.foreignName(), foreignNameDefaultValue);
+                if (!nameEqualsDefaultValue && !foreignNameEqualsDefaultValue)
+                    throw new DataMapperException("The annotation ColumnName shouldn't have both name and foreignName defined!");
+
+                ArrayList<Integer> bytes = new ArrayList<>(4);
+                bytes.add(Arrays.equals(annotation.name(), nameDefaultValue) ? 0 : 1);
+                bytes.add(Arrays.equals(annotation.foreignName(), foreignNameDefaultValue) ? 0 : 1);
+                bytes.add(annotation.table().equals(tableDefaultValue) ? 0 : 1);
+                bytes.add(Arrays.equals(annotation.externalName(), nameDefaultValue) ? 0 : 1);
+                return bytes;
+            } catch (NoSuchMethodException e) {
+                throw new DataMapperException(e);
+            }
+        }
+
+        private String buildSelectQuery(String table) {
             StringBuilder sb = new StringBuilder();
             sb.append("select * from ").append(table).append(" where ");
-            for (int i = 0; i < foreignColumns.length; i++) {
-                sb.append(foreignColumns[i]).append(" = ? ");
-                if(i + 1 != foreignColumns.length) sb.append("and ");
+            for (int i = 0; i < foreignNames.length; i++) {
+                sb.append(foreignNames[i]).append(" = ? ");
+                if(i + 1 != foreignNames.length) sb.append("and ");
             }
+            return sb.toString();
+        }
 
-            selectTableQuery = sb.toString();
+        public List<Integer> getValues() {
+            return values;
+        }
+
+        public Object[] getIdValues() {
+            return idValues;
+        }
+
+        public void setIdValues(Object[] idValues) {
+            this.idValues = idValues;
         }
     }
 }

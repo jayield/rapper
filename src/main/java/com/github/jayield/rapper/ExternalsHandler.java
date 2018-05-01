@@ -8,26 +8,61 @@ import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-class ExternalsHandler<T extends DomainObject<K>, K> {
+import static com.github.jayield.rapper.utils.SqlField.*;
+
+public class ExternalsHandler<T extends DomainObject<K>, K> {
 
     private final Logger logger = LoggerFactory.getLogger(ExternalsHandler.class);
-    private final List<SqlField.SqlFieldId> ids;
-    private final List<SqlField.SqlFieldExternal> externals;
+    private final List<SqlFieldId> ids;
+    private final List<SqlFieldExternal> externals;
     private final Constructor<?> primaryKeyConstructor;
     private final Field[] primaryKeyDeclaredFields;
 
-    ExternalsHandler(List<SqlField.SqlFieldId> ids, List<SqlField.SqlFieldExternal> externals, Class<?> primaryKey, Constructor<?> primaryKeyConstructor) {
+    private final HashMap<List<Integer>, BiConsumer<T, SqlFieldExternal>> map;
+
+    ExternalsHandler(List<SqlFieldId> ids, List<SqlFieldExternal> externals, Class<?> primaryKey, Constructor<?> primaryKeyConstructor) {
         this.ids = ids;
         this.externals = externals;
         this.primaryKeyConstructor = primaryKeyConstructor;
         primaryKeyDeclaredFields = primaryKey != null ? primaryKey.getDeclaredFields() : null;
+
+        map = new HashMap<>();
+        map.put(Arrays.asList(1, 0, 0, 0), (t, sqlFieldExternal) -> {
+            Mapper<? extends DomainObject, ?> externalMapper = MapperRegistry.getRepository(sqlFieldExternal.domainObjectType).getMapper();
+
+            Stream<Object> idValues = Arrays.stream(sqlFieldExternal.getIdValues());
+
+            populate(t, sqlFieldExternal, externalMapper, idValues.iterator());
+        });
+
+        map.put(Arrays.asList(0, 1, 0, 0), (t, sqlFieldExternal) -> {
+            Mapper<? extends DomainObject, ?> externalMapper = MapperRegistry.getRepository(sqlFieldExternal.domainObjectType).getMapper();
+
+            Stream<Object> idValues = ids
+                    .stream()
+                    .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
+
+            populateWithDataMapper(t, sqlFieldExternal, externalMapper, idValues.iterator());
+        });
+
+        map.put(Arrays.asList(0, 1, 1, 1), (t, sqlFieldExternal) -> {
+            Mapper<? extends DomainObject, ?> externalMapper = MapperRegistry.getRepository(sqlFieldExternal.domainObjectType).getMapper();
+
+            Stream<Object> idValues = ids
+                    .stream()
+                    .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
+
+            populateWithExternalTable(t, sqlFieldExternal, externalMapper, idValues.iterator());
+        });
     }
 
     /**
@@ -40,21 +75,42 @@ class ExternalsHandler<T extends DomainObject<K>, K> {
                 .forEach(sqlFieldExternal -> populateExternal(t, sqlFieldExternal));
     }
 
-    private void populateExternal(T t, SqlField.SqlFieldExternal sqlFieldExternal) {
-        try {
-            Mapper<? extends DomainObject, ?> externalMapper = MapperRegistry.getRepository(sqlFieldExternal.type).getMapper();
+    private void populateExternal(T t, SqlFieldExternal sqlFieldExternal) {
+        BiConsumer<T, SqlFieldExternal> biConsumer = map.get(sqlFieldExternal.getValues());
+        if(biConsumer == null)
+            throw new DataMapperException("The annotation ColumnName didn't follow the rules");
+        biConsumer.accept(t, sqlFieldExternal);
+    }
 
-            Stream<Object> idValues = ids
-                    .stream()
-                    .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
-
-            if (sqlFieldExternal.table.equals(ColumnName.class.getDeclaredMethod("table").getDefaultValue()))
-                populateWithDataMapper(t, sqlFieldExternal, externalMapper, idValues.iterator());
-            else
-                populateWithExternalTable(t, sqlFieldExternal, externalMapper, idValues.iterator());
-        } catch (NoSuchMethodException e) {
-            throw new DataMapperException(e);
+    private <V> void populate(T t, SqlFieldExternal sqlFieldExternal, Mapper<? extends DomainObject, V> mapper, Iterator<Object> idValues) {
+        Object id;
+        DataMapper<?, V> externalMapper = (DataMapper<?, V>) mapper;
+        Constructor<?> externalPrimaryKeyConstructor = externalMapper.getPrimaryKeyConstructor();
+        if (externalPrimaryKeyConstructor == null){
+            id = idValues.next();
         }
+        else {
+            try {
+                id = externalPrimaryKeyConstructor.newInstance();
+                Object[] idValues1 = sqlFieldExternal.getIdValues();
+                Field[] declaredFields = externalMapper
+                        .getPrimaryKeyType()
+                        .getDeclaredFields();
+                for (int i = 0; i < idValues1.length; i++) {
+                    declaredFields[i].setAccessible(true);
+                    declaredFields[i].set(id, idValues1[i]);
+                }
+            } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
+                logger.info("Couldn't populate externals of {}. \nReason: {}", t.getClass().getSimpleName(), e.getMessage());
+                throw new DataMapperException(e);
+            }
+        }
+
+        CompletableFuture<? extends DomainObject> domainObjects = mapper
+                .findById((V) id)
+                .thenApply(domainObject -> domainObject.
+                        orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". \nThe object wasn't found in the DB")));
+        setExternal(t, domainObjects, sqlFieldExternal.field, sqlFieldExternal.type);
     }
 
     /**
@@ -65,12 +121,12 @@ class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param mapper
      * @param idValues
      */
-    private void populateWithDataMapper(T t, SqlField.SqlFieldExternal sqlFieldExternal, Mapper<? extends DomainObject, ?> mapper, Iterator<Object> idValues) {
-        Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.foreignColumns)
+    private void populateWithDataMapper(T t, SqlFieldExternal sqlFieldExternal, Mapper<? extends DomainObject, ?> mapper, Iterator<Object> idValues) {
+        Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.foreignNames)
                 .map(str -> new Pair<>(str, idValues.next()))
                 .toArray(Pair[]::new);
 
-        setExternal(t, mapper.findWhere(pairs), sqlFieldExternal.field, sqlFieldExternal.fType);
+        setExternal(t, mapper.findWhere(pairs), sqlFieldExternal.field, sqlFieldExternal.type);
     }
 
     /**
@@ -85,7 +141,7 @@ class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param mapper
      * @param idValues
      */
-    private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlField.SqlFieldExternal sqlFieldExternal, Mapper<N, V> mapper, Iterator<Object> idValues) {
+    private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlFieldExternal sqlFieldExternal, Mapper<N, V> mapper, Iterator<Object> idValues) {
         UnitOfWork current = UnitOfWork.getCurrent();
         CompletableFuture<List<N>> completableFuture = SQLUtils.execute(sqlFieldExternal.selectTableQuery, stmt -> {
             try {
@@ -97,7 +153,7 @@ class ExternalsHandler<T extends DomainObject<K>, K> {
                 .thenCompose(preparedStatement -> {
                     try {
                         UnitOfWork.setCurrent(current);
-                        return getExternalObjects(mapper, sqlFieldExternal.foreignNames, preparedStatement.getResultSet())
+                        return getExternalObjects(mapper, sqlFieldExternal.externalNames, preparedStatement.getResultSet())
                                 .collect(Collectors.collectingAndThen(Collectors.toList(), this::listToCP));
                     } catch (SQLException e) {
                         throw new DataMapperException(e);
@@ -108,7 +164,7 @@ class ExternalsHandler<T extends DomainObject<K>, K> {
                     return Collections.emptyList();
                 });
 
-        setExternal(t, completableFuture, sqlFieldExternal.field, sqlFieldExternal.fType);
+        setExternal(t, completableFuture, sqlFieldExternal.field, sqlFieldExternal.type);
     }
 
     /**
@@ -217,7 +273,7 @@ class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param fieldType
      * @throws DataMapperException
      */
-    private <N extends DomainObject> void setExternal(T t, CompletableFuture<List<N>> domainObjects, Field field, Class<?> fieldType) {
+    private <N extends DomainObject> void setExternal(T t, Object domainObjects, Field field, Class<?> fieldType) {
         try {
             if (fieldType.isAssignableFrom(CompletableFuture.class)) {
                 field.setAccessible(true);
