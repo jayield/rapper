@@ -416,4 +416,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public Class<?> getPrimaryKeyType() {
         return primaryKeyType;
     }
+
+    public Class<T> getType() {
+        return type;
+    }
 }

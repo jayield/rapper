@@ -1,13 +1,17 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import javafx.util.Pair;
 import com.github.jayield.rapper.utils.ConnectionManager;
 import com.github.jayield.rapper.utils.DBsPath;
 import com.github.jayield.rapper.utils.SqlSupplier;
 import com.github.jayield.rapper.utils.UnitOfWork;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -18,10 +22,11 @@ import static com.github.jayield.rapper.utils.ConnectionManager.*;
 
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
-    private final ConcurrentMap<K, T> identityMap = new ConcurrentHashMap<>();
+    private static final Logger logger = LoggerFactory.getLogger(DataRepository.class);
+    private final ConcurrentMap<K, CompletableFuture<T>> identityMap = new ConcurrentHashMap<>();
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
 
-    public DataRepository(Mapper<T, K> mapper){
+    public DataRepository(Mapper<T, K> mapper) {
         this.mapper = mapper;
     }
 
@@ -29,13 +34,14 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         return mapper;
     }
 
-    private void checkUnitOfWork(){
+    private UnitOfWork checkUnitOfWork() {
         try {
-            UnitOfWork.getCurrent();
-        }catch (UnitOfWorkException e){
+            return UnitOfWork.getCurrent();
+        } catch (UnitOfWorkException e) {
             ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
             SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
             UnitOfWork.newCurrent(connectionSupplier.wrap());
+            return UnitOfWork.getCurrent();
         }
     }
 
@@ -49,23 +55,16 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Optional<T>> findById(K k) {
         checkUnitOfWork();
 
-        if(identityMap.containsKey(k)){
-            return CompletableFuture.completedFuture(Optional.of(identityMap.get(k)));
-        }
-        return mapper.findById(k).thenApply(t -> { t.ifPresent(this::putOrReplace); return t; });
+        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).thenApply(t -> t.orElseThrow(() ->
+                new DataMapperException("Object was not found"))));
 
-        /*return CompletableFuture.completedFuture(
-                Optional.ofNullable(
-                        identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).join().orElse(null))
-                )
-        );*/
-
-        /*return identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).thenApply(t -> t.orElse(null)))
+        return completableFuture
                 .thenApply(Optional::of)
-                .thenApply(t -> {
-                    if (!t.isPresent()) identityMap.remove(k);
-                    return t;
-                });*/
+                .exceptionally(throwable -> {
+                    logger.debug("Removing CompletableFuture from identityMap.\nReason: {}", throwable.getMessage());
+                    identityMap.remove(k);
+                    return Optional.empty();
+                });
     }
 
     @Override
@@ -78,103 +77,112 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<Boolean> create(T t) {
-        checkUnitOfWork();
+        UnitOfWork unitOfWork = checkUnitOfWork();
         t.markNew();
-        return UnitOfWork.getCurrent().commit();
+        return unitOfWork.commit();
     }
 
     @Override
     public CompletableFuture<Boolean> createAll(Iterable<T> t) {
-        checkUnitOfWork();
+        UnitOfWork unitOfWork = checkUnitOfWork();
         t.forEach(DomainObject::markNew);
-        return UnitOfWork.getCurrent().commit();
+        return unitOfWork.commit();
     }
 
     @Override
     public CompletableFuture<Boolean> update(T t) {
-        checkUnitOfWork();
-        /*if(identityMap.containsKey(t.getIdentityKey())){
-            identityMap.get(t.getIdentityKey()).markToBeDirty();
-        }*/
-        identityMap.computeIfPresent(t.getIdentityKey(), (k, t1) -> {
-            t.markToBeDirty();
-            return t;
-        });
-        t.markDirty();
-        return UnitOfWork.getCurrent().commit();
-    }
+        UnitOfWork unitOfWork = checkUnitOfWork();
 
-    @Override
-    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
-        checkUnitOfWork();
-        t.forEach(t1 -> {
-            identityMap.computeIfPresent(t1.getIdentityKey(), (k, t2) -> {
-                t2.markToBeDirty();
-                return t2;
+        CompletableFuture<T> future = identityMap.computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
+                tCompletableFuture.thenApply(t2 -> {
+                    t2.markToBeDirty();
+                    return t2;
+                }));
+
+        if (future != null)
+            return future.thenCompose(t1 -> {
+                t.markDirty();
+                return unitOfWork.commit();
             });
-            /*if(identityMap.containsKey(t1.getIdentityKey())){
-                identityMap.get(t1.getIdentityKey()).markToBeDirty();
-            }*/
-            t1.markDirty();
-        });
-        return UnitOfWork.getCurrent().commit();
-    }
-
-    @Override
-    public CompletableFuture<Boolean> deleteById(K k) {
-        checkUnitOfWork();
-        CompletableFuture<Boolean>[] future = new CompletableFuture[1];
-        identityMap.computeIfPresent(k, (key, t) -> {
-            t.markRemoved();
-            future[0] = UnitOfWork.getCurrent().commit();
-            return t;
-        });
-
-        if(future[0] != null) return future[0];
-        /*if(identityMap.containsKey(k)){
-            identityMap.get(k).markRemoved();
-            return UnitOfWork.getCurrent().commit();
-        }*/
         else {
-            return findById(k)
-                    .thenApply(t -> {
-                        if(t.isPresent()) {
-                            t.get().markRemoved();
-                            return UnitOfWork.getCurrent().commit().join();
-                        }
-                        else return false;
-                    });
+            t.markDirty();
+            return unitOfWork.commit();
         }
     }
 
     @Override
+    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
+        UnitOfWork unitOfWork = checkUnitOfWork();
+        List<CompletableFuture<T>> completableFutures = new ArrayList<>();
+        t.forEach(t1 -> {
+            CompletableFuture<T> future = identityMap.computeIfPresent(t1.getIdentityKey(), (k, tCompletableFuture) ->
+                    tCompletableFuture.thenApply(t2 -> {
+                        t2.markToBeDirty();
+                        return t2;
+                    }));
+
+            if (future != null)
+                completableFutures.add(future);
+            t1.markDirty();
+        });
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .thenCompose(aVoid -> unitOfWork.commit());
+    }
+
+    @Override
+    public CompletableFuture<Boolean> deleteById(K k) {
+        UnitOfWork unitOfWork = checkUnitOfWork();
+        CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
+            t.markRemoved();
+            return t;
+        }));
+
+        return future != null
+                ? future.thenCompose(t -> unitOfWork.commit())
+                : findById(k)
+                .thenCompose(t -> {
+                    T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
+                    t1.markRemoved();
+                    return unitOfWork.commit();
+                });
+    }
+
+    @Override
     public CompletableFuture<Boolean> delete(T t) {
-        checkUnitOfWork();
+        UnitOfWork unitOfWork = checkUnitOfWork();
         t.markRemoved();
-        return UnitOfWork.getCurrent().commit();
+        return unitOfWork.commit();
     }
 
     @Override
     public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
-        checkUnitOfWork();
-
+        UnitOfWork unitOfWork = checkUnitOfWork();
+        List<CompletableFuture> completableFutures = new ArrayList<>();
         keys.forEach(k -> {
-            boolean isPresent = identityMap.computeIfPresent(k, (key, t) -> {
+            CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
+                UnitOfWork.setCurrent(unitOfWork);
                 t.markRemoved();
                 return t;
-            }) != null;
+            }));
 
-            if(!isPresent){
-                findById(k).join().ifPresent(DomainObject::markRemoved);
-            }
+            completableFutures.add(future == null
+                    ?
+                    findById(k)
+                            .thenAccept(t -> t.ifPresent(t1 -> {
+                                UnitOfWork.setCurrent(unitOfWork);
+                                t1.markRemoved();
+                            }))
+                    :
+                    future);
         });
 
-        return UnitOfWork.getCurrent().commit();
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                .thenCompose(aVoid -> unitOfWork.commit());
     }
 
-    private void putOrReplace(T item){
+    private void putOrReplace(T item) {
         K key = item.getIdentityKey();
-        identityMap.compute(key, (k,v)-> item);
+        identityMap.compute(key, (k, v) -> CompletableFuture.completedFuture(item));
     }
 
     public void invalidate(K identityKey) {
@@ -182,21 +190,21 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     public void validate(K identityKey, T t) {
-        identityMap.put(identityKey, t);
+        identityMap.put(identityKey, CompletableFuture.completedFuture(t));
     }
 
-    public boolean tryReplace(T obj){
+    public boolean tryReplace(T obj) {
         long target = System.currentTimeMillis() + (long) 2000;
         long remaining = target - System.currentTimeMillis();
 
-        while(remaining >= 0){
-            T observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), obj);
-            if(observedObj == null) return true;
-            if(observedObj.getVersion() < obj.getVersion()) {
-                if(identityMap.replace(obj.getIdentityKey(), observedObj, obj))
+        while (remaining >= 0) {
+            CompletableFuture<T> observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), CompletableFuture.completedFuture(obj));
+            if (observedObj == null) return true;
+            if (observedObj.join().getVersion() < obj.getVersion()) {
+                if (identityMap.replace(obj.getIdentityKey(), observedObj, CompletableFuture.completedFuture(obj)))
                     return true;
-            }
-            else return true; //TODO should we log a message saying a newer version is already present in the identityMap?
+            } else
+                return true; //TODO should we log a message saying a newer version is already present in the identityMap?
             remaining = target - System.currentTimeMillis();
             Thread.yield();
         }

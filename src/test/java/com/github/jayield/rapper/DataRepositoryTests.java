@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
 import static org.junit.Assert.*;
 
@@ -33,6 +34,7 @@ public class DataRepositoryTests {
     private final DataMapper<TopStudent, Integer> topStudentMapper;
     private final DataMapper<Person, Integer> personMapper;
     private final DataMapper<Employee, Integer> employeeMapper;
+    private Connection con;
 
     public DataRepositoryTests() throws NoSuchFieldException, IllegalAccessException {
         topStudentMapper = new DataMapper<>(TopStudent.class);
@@ -46,8 +48,10 @@ public class DataRepositoryTests {
 
     @Before
     public void before() throws SQLException {
+        UnitOfWork.removeCurrent();
+        repositoryMap.clear();
         ConnectionManager manager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        Connection con = manager.getConnection();
+        con = manager.getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
@@ -70,8 +74,9 @@ public class DataRepositoryTests {
     }
 
     @After
-    public void after(){
-        repositoryMap.clear();
+    public void after() throws SQLException {
+        con.rollback();
+        con.close();
     }
 
     @Test
@@ -84,7 +89,7 @@ public class DataRepositoryTests {
 
         assertEquals(first.get(), second.get());
 
-        AssertUtils.assertSingleRow(second.get(), topStudentSelectQuery, getPersonPSConsumer(second.get().getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(second.get(), topStudentSelectQuery, getPersonPSConsumer(second.get().getNif()), AssertUtils::assertTopStudent, con);
     }
 
     @Test
@@ -95,7 +100,7 @@ public class DataRepositoryTests {
         List<TopStudent> second = topStudentRepository.findAll().join();
         assertEquals(2, topStudentMapperify.getIfindAll().getCount());
 
-        AssertUtils.assertMultipleRows(UnitOfWork.getCurrent(), second, topStudentSelectQuery.substring(0, topStudentSelectQuery.length()-16), AssertUtils::assertTopStudent, second.size());
+        assertMultipleRows(con, second, topStudentSelectQuery.substring(0, topStudentSelectQuery.length()-16), AssertUtils::assertTopStudent, second.size());
     }
 
     @Test
@@ -188,7 +193,7 @@ public class DataRepositoryTests {
         Optional<TopStudent> optionalTopStudent = topStudentRepository.findById(454).join();
         assertEquals(2, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
-        AssertUtils.assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454));
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
     }
 
     @Test
@@ -202,7 +207,7 @@ public class DataRepositoryTests {
         Optional<TopStudent> optionalTopStudent = topStudentRepository.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
-        AssertUtils.assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()));
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), con);
     }
 
     @Test
@@ -218,16 +223,15 @@ public class DataRepositoryTests {
 
         assertTrue(success);
 
-        Optional<Employee> optionalPerson = employeeRepository.findById(321).join();
+        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
+        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Charles"), con);
+
+        Optional<Employee> optionalPerson = employeeRepository.findById(list.remove(0)).join();
         assertEquals(3, employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson.isPresent());
 
-        Optional<Employee> optionalPerson2 = employeeRepository.findById(454).join();
+        Optional<Employee> optionalPerson2 = employeeRepository.findById(list.remove(0)).join();
         assertEquals(4, employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson2.isPresent());
-
-        AssertUtils.assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"));
-        AssertUtils.assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Charles"));
-
     }
 }

@@ -29,22 +29,23 @@ public class DataMapperTests {
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
     private final DataMapper<Book, Long> bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class).getMapper();
     private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
+    private Connection con;
 
     @Before
     public void start() throws SQLException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         SqlSupplier<Connection> connectionSupplier = manager::getConnection;
         UnitOfWork.newCurrent(connectionSupplier.wrap());
-        Connection con = UnitOfWork.getCurrent().getConnection();
+        con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
     }
 
     @After
-    public void finish() {
-        UnitOfWork.getCurrent().rollback();
-        UnitOfWork.getCurrent().closeConnection();
+    public void finish() throws SQLException {
+        con.rollback();
+        con.close();
     }
 
     //-----------------------------------FindWhere-----------------------------------//
@@ -77,13 +78,13 @@ public class DataMapperTests {
     @Test
     public void testNNExternalFindWhere(){
         Book book = bookMapper.findWhere(new Pair<>("name", "1001 noites")).join().get(0);
-        assertSingleRow(book, bookSelectQuery, getBookPSConsumer(book.getName()), AssertUtils::assertBook);
+        assertSingleRow(book, bookSelectQuery, getBookPSConsumer(book.getName()), (book1, rs) -> AssertUtils.assertBook(book1, rs, con), con);
     }
 
     @Test
     public void testParentExternalFindWhere(){
         Employee employee = employeeMapper.findWhere(new Pair<>("name", "Bob")).join().get(0);
-        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Bob"), AssertUtils::assertEmployee);
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Bob"), AssertUtils::assertEmployee, con);
     }
 
     //-----------------------------------FindById-----------------------------------//
@@ -94,7 +95,7 @@ public class DataMapperTests {
                 .findById(nif)
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(nif), AssertUtils::assertPerson);
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(nif), AssertUtils::assertPerson, con);
     }
 
     @Test
@@ -104,7 +105,7 @@ public class DataMapperTests {
                 .findById(new Car.PrimaryPk(owner, plate))
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(owner, plate), AssertUtils::assertCar);
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(owner, plate), AssertUtils::assertCar, con);
     }
 
     @Test
@@ -113,7 +114,7 @@ public class DataMapperTests {
                 .findById(454)
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(454), AssertUtils::assertTopStudent);
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(454), AssertUtils::assertTopStudent, con);
     }
 
     @Test
@@ -124,26 +125,26 @@ public class DataMapperTests {
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
         assertSingleRow(company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
-                getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, UnitOfWork.getCurrent()));
+                getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, con), con);
     }
 
     //-----------------------------------FindAll-----------------------------------//
     @Test
     public void testSimpleFindAll(){
         List<Person> people = personMapper.findAll().join();
-        assertMultipleRows(UnitOfWork.getCurrent(), people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2);
+        assertMultipleRows(con, people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2);
     }
 
     @Test
     public void testEmbeddedIdFindAll(){
         List<Car> cars = carMapper.findAll().join();
-        assertMultipleRows(UnitOfWork.getCurrent(), cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
+        assertMultipleRows(con, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
     }
 
     @Test
     public void testHierarchyFindAll(){
         List<TopStudent> topStudents = topStudentMapper.findAll().join();
-        assertMultipleRows(UnitOfWork.getCurrent(), topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
+        assertMultipleRows(con, topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
     }
 
     //-----------------------------------Create-----------------------------------//
@@ -151,21 +152,21 @@ public class DataMapperTests {
     public void testSimpleCreate(){
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
         assertTrue(personMapper.create(person).join());
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
     }
 
     @Test
     public void testEmbeddedIdCreate(){
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
         assertTrue(carMapper.create(car).join());
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
     }
 
     @Test
     public void testHierarchyCreate(){
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
         assertTrue(topStudentMapper.create(topStudent).join());
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 
     //-----------------------------------Update-----------------------------------//
@@ -176,7 +177,7 @@ public class DataMapperTests {
 
         assertTrue(personMapper.update(person).join());
 
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
     }
 
     @Test
@@ -186,7 +187,7 @@ public class DataMapperTests {
 
         assertTrue(carMapper.update(car).join());
 
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
     }
 
     @Test
@@ -199,26 +200,26 @@ public class DataMapperTests {
 
         assertTrue(topStudentMapper.update(topStudent).join());
 
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testSimpleDeleteById(){
         assertTrue(personMapper.deleteById(321).join());
-        assertNotFound(personSelectQuery, getPersonPSConsumer(321));
+        assertNotFound(personSelectQuery, getPersonPSConsumer(321), con);
     }
 
     @Test
     public void testEmbeddedDeleteById(){
         assertTrue(carMapper.deleteById(new Car.PrimaryPk(2, "23we45")).join());
-        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"));
+        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), con);
     }
 
     @Test
     public void testHierarchyDeleteById(){
         assertTrue(topStudentMapper.deleteById(454).join());
-        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454));
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
     }
 
     //-----------------------------------Delete-----------------------------------//
@@ -226,20 +227,20 @@ public class DataMapperTests {
     public void testSimpleDelete(){
         Person person = new Person(321, null, null, 0);
         assertTrue(personMapper.delete(person).join());
-        assertNotFound(personSelectQuery, getPersonPSConsumer(321));
+        assertNotFound(personSelectQuery, getPersonPSConsumer(321), con);
     }
 
     @Test
     public void testEmbeddedDelete(){
         Car car = new Car(2, "23we45", null, null, 0);
         assertTrue(carMapper.delete(car).join());
-        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"));
+        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), con);
     }
 
     @Test
     public void testHierarchyDelete(){
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
         assertTrue(topStudentMapper.delete(topStudent).join());
-        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454));
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
     }
 }

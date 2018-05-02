@@ -45,4 +45,9 @@ public class Employee implements DomainObject<Integer> {
     public long getVersion() {
         return version;
     }
+
+    @Override
+    public String toString() {
+        return "Employee: {id=" + id + ", name=" + name + ", version=" + version + "}";
+    }
 }

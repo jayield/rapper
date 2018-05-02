@@ -1,9 +1,9 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.lang.reflect.Field;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -63,7 +63,7 @@ public class AssertUtils {
         }
     }
 
-    public static void assertCompany(Company company, ResultSet rs, UnitOfWork current) {
+    public static void assertCompany(Company company, ResultSet rs, Connection con) {
         try {
             assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
             assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
@@ -72,7 +72,7 @@ public class AssertUtils {
             assertNotEquals(0, company.getVersion());
 
             List<Employee> employees = company.getEmployees().join();
-            PreparedStatement ps = current.getConnection()
+            PreparedStatement ps = con
                     .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
             ps.setInt(1, company.getIdentityKey().getId());
             ps.setInt(2, company.getIdentityKey().getCid());
@@ -100,15 +100,14 @@ public class AssertUtils {
         }
     }
 
-    public static void assertBook(Book book, ResultSet rs){
+    public static void assertBook(Book book, ResultSet rs, Connection con){
         try {
             assertEquals((long) book.getIdentityKey(), rs.getLong("id"));
             assertEquals(book.getName(), rs.getString("name"));
             assertEquals(book.getVersion(), rs.getLong("version"));
 
             Author author = book.getAuthors().join().get(0);
-            PreparedStatement ps = UnitOfWork.getCurrent()
-                    .getConnection().prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
+            PreparedStatement ps = con.prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
             ps.setLong(1, author.getIdentityKey());
 
             rs = ps.executeQuery();
@@ -150,9 +149,9 @@ public class AssertUtils {
     }
 
     //---------------------------ResultSets assertions-----------------------------------
-    public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
+    public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer, Connection con) {
         try{
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            PreparedStatement ps = con.prepareStatement(sql);
             prepareStatement.accept(ps);
             ResultSet rs = ps.executeQuery();
 
@@ -165,9 +164,9 @@ public class AssertUtils {
         }
     }
 
-    public static<U> void assertMultipleRows(UnitOfWork current, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
+    public static<U> void assertMultipleRows(Connection connection, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
         try {
-            PreparedStatement ps = current.getConnection().prepareStatement(sql,
+            PreparedStatement ps = connection.prepareStatement(sql,
                     ResultSet.TYPE_SCROLL_INSENSITIVE,
                     ResultSet.CONCUR_READ_ONLY);
             ResultSet rs = ps.executeQuery();
@@ -184,9 +183,9 @@ public class AssertUtils {
         }
     }
 
-    public static void assertNotFound(String sql, Consumer<PreparedStatement> prepareStatement){
+    public static void assertNotFound(String sql, Consumer<PreparedStatement> prepareStatement, Connection con){
         try {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            PreparedStatement ps = con.prepareStatement(sql);
             prepareStatement.accept(ps);
             ResultSet rs = ps.executeQuery();
             assertFalse(rs.next());

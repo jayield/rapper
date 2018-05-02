@@ -4,6 +4,7 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Id;
 
 import java.sql.Date;
+import java.util.Objects;
 
 public class Person implements DomainObject<Integer> {
     @Id
@@ -32,6 +33,7 @@ public class Person implements DomainObject<Integer> {
                 "nif=" + nif +
                 ", name='" + name + '\'' +
                 ", birthday=" + birthday +
+                ", version=" + version +
                 '}';
     }
 

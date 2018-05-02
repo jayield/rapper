@@ -16,7 +16,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
@@ -29,10 +31,12 @@ public class UnitOfWork {
     private Connection connection = null;
     private final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
     private final Supplier<Connection> connectionSupplier;
-    private final List<DomainObject> newObjects = new ArrayList<>();
-    private final List<DomainObject> clonedObjects = new ArrayList<>();
-    private final List<DomainObject> dirtyObjects = new ArrayList<>();
-    private final List<DomainObject> removedObjects = new ArrayList<>();
+
+    //Multiple Threads may be accessing the Queue, so it must be a ConcurrentLinkedQueue
+    private final Queue<DomainObject> newObjects = new ConcurrentLinkedQueue<>();
+    private final Queue<DomainObject> clonedObjects = new ConcurrentLinkedQueue<>();
+    private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
+    private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
 
     private UnitOfWork(Supplier<Connection> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
@@ -112,6 +116,10 @@ public class UnitOfWork {
         current.set(uow);
     }
 
+    public static void removeCurrent(){
+        current.remove();
+    }
+
     public static UnitOfWork getCurrent() {
         UnitOfWork unitOfWork = current.get();
         if(unitOfWork == null)
@@ -139,7 +147,7 @@ public class UnitOfWork {
                 .thenApply(success -> updateIdentityMap(success, insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
     }
 
-    private Boolean updateIdentityMap(Boolean success, List<DataRepository<? extends DomainObject<?>, ?>> insertMappers, List<DataRepository<? extends DomainObject<?>, ?>> updateMappers,
+    private boolean updateIdentityMap(boolean success, List<DataRepository<? extends DomainObject<?>, ?>> insertMappers, List<DataRepository<? extends DomainObject<?>, ?>> updateMappers,
                                       List<DataRepository<? extends DomainObject<?>, ?>> deleteMappers) {
         try {
             if(!success) {
@@ -208,7 +216,7 @@ public class UnitOfWork {
      */
     private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> executeFilteredBiFunctionInList(
             BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
-            List<DomainObject> list,
+            Queue<DomainObject> list,
             Predicate<DomainObject> predicate
     ) {
         List<DataRepository<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();

@@ -53,7 +53,7 @@ public class DataBaseTests {
         }
     }
 
-    @Test
+    /*@Test
     public void test() throws NoSuchFieldException {
         System.out.println(
                 ((ParameterizedType) Employee.class.getDeclaredField("company").getGenericType()).getActualTypeArguments()
@@ -61,5 +61,5 @@ public class DataBaseTests {
 
         //DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
         DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
-    }
+    }*/
 }

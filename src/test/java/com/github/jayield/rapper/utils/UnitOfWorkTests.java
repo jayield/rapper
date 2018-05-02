@@ -2,7 +2,6 @@ package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.TestUtils;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.AssertUtils;
 import org.junit.After;
@@ -15,6 +14,8 @@ import java.lang.reflect.Field;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
@@ -23,18 +24,24 @@ import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
 import static com.github.jayield.rapper.utils.DBsPath.TESTDB;
 import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class UnitOfWorkTests {
 
     private Container container;
     private final Logger logger = LoggerFactory.getLogger(UnitOfWorkTests.class);
-    private List<DomainObject> newObjects;
-    private List<DomainObject> clonedObjects;
-    private List<DomainObject> dirtyObjects;
-    private List<DomainObject> removedObjects;
+    private Queue<DomainObject> newObjects;
+    private Queue<DomainObject> clonedObjects;
+    private Queue<DomainObject> dirtyObjects;
+    private Queue<DomainObject> removedObjects;
+    private Connection con;
+    private Map<Class, DataRepository> repositoryMap;
+
+    public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
+        Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
+        repositoryMapField.setAccessible(true);
+        repositoryMap = (Map<Class, DataRepository>) repositoryMapField.get(null);
+    }
 
     private void setupLists() throws NoSuchFieldException, IllegalAccessException {
         if(newObjects == null || clonedObjects == null || dirtyObjects == null || removedObjects == null) {
@@ -50,19 +57,21 @@ public class UnitOfWorkTests {
             Field removedObjectsField = UnitOfWork.class.getDeclaredField("removedObjects");
             removedObjectsField.setAccessible(true);
 
-            this.newObjects = (List<DomainObject>) newObjectsField.get(UnitOfWork.getCurrent());
-            this.clonedObjects = (List<DomainObject>) clonedObjectsField.get(UnitOfWork.getCurrent());
-            this.dirtyObjects = (List<DomainObject>) dirtyObjectsField.get(UnitOfWork.getCurrent());
-            this.removedObjects = (List<DomainObject>) removedObjectsField.get(UnitOfWork.getCurrent());
+            this.newObjects = (Queue<DomainObject>) newObjectsField.get(UnitOfWork.getCurrent());
+            this.clonedObjects = (Queue<DomainObject>) clonedObjectsField.get(UnitOfWork.getCurrent());
+            this.dirtyObjects = (Queue<DomainObject>) dirtyObjectsField.get(UnitOfWork.getCurrent());
+            this.removedObjects = (Queue<DomainObject>) removedObjectsField.get(UnitOfWork.getCurrent());
         }
     }
 
     @Before
     public void before() throws SQLException, NoSuchFieldException, IllegalAccessException {
+        repositoryMap.clear();
+        UnitOfWork.removeCurrent();
         ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         SqlSupplier<Connection> connectionSupplier = manager::getConnection;
         UnitOfWork.newCurrent(connectionSupplier.wrap());
-        Connection con = UnitOfWork.getCurrent().getConnection();
+        con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB}").execute();
         con.prepareCall("{call populateDB}").execute();
         con.commit();
@@ -77,6 +86,7 @@ public class UnitOfWorkTests {
 
     @After
     public void finish() {
+        UnitOfWork.getCurrent().rollback();
         UnitOfWork.getCurrent().closeConnection();
     }
 
@@ -92,17 +102,19 @@ public class UnitOfWorkTests {
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
         assertTrue(UnitOfWork.getCurrent().commit().join());
+        //Get new connection since the commit will close the current one
+        con = UnitOfWork.getCurrent().getConnection();
 
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
         identityMapField.setAccessible(true);
 
-        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertTrue(identityMap.containsValue(domainObject)));
-        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertTrue(identityMap.containsValue(domainObject)));
-        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertTrue(!identityMap.containsValue(domainObject)));
-
         assertNewObjects(true);
         assertDirtyObjects(true);
         assertRemovedObjects(true);
+
+        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
     }
 
     @Test
@@ -121,18 +133,26 @@ public class UnitOfWorkTests {
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
         assertFalse(UnitOfWork.getCurrent().commit().join());
+        //Get new connection since the commit will close the current one
+        con = UnitOfWork.getCurrent().getConnection();
 
         removedObjects.remove(chat);
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
         identityMapField.setAccessible(true);
 
-        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertTrue(!identityMap.containsValue(domainObject)));
-        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertTrue(!identityMap.containsValue(domainObject)));
-        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertTrue(identityMap.containsValue(domainObject)));
-
         assertNewObjects(false);
         assertDirtyObjects(false);
         assertRemovedObjects(false);
+
+        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
+        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> {
+            CompletableFuture<DomainObject> completableFuture = (CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey());
+            if(completableFuture != null)
+                assertNotEquals(completableFuture.join(), domainObject);
+            else
+                assertNull(identityMap.get(domainObject.getIdentityKey()));
+        });
+        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
     }
 
     private void assertIdentityMaps(Field identityMapField, List<DomainObject> dirtyObjects, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {
@@ -147,10 +167,10 @@ public class UnitOfWorkTests {
         Employee originalEmployee = container.getOriginalEmployee();
 
         if(isCommit) {
-            assertNotFound(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()));
+            assertNotFound(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), con);
         }
         else{
-            assertSingleRow(originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee);
+            assertSingleRow(originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee, con);
         }
     }
 
@@ -169,9 +189,9 @@ public class UnitOfWorkTests {
             topStudent = container.getOriginalTopStudent();
         }
 
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 
     private void assertNewObjects(boolean isCommit) {
@@ -180,14 +200,14 @@ public class UnitOfWorkTests {
         TopStudent topStudent = container.getInsertedTopStudent();
 
         if(isCommit) {
-            assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson);
-            assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar);
-            assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent);
+            assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
+            assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
+            assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
         }
         else {
-            assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()));
-            assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()));
-            assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()));
+            assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()), con);
+            assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), con);
+            assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), con);
         }
     }
 
