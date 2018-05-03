@@ -24,9 +24,11 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     private static final Logger logger = LoggerFactory.getLogger(DataRepository.class);
     private final ConcurrentMap<K, CompletableFuture<T>> identityMap = new ConcurrentHashMap<>();
+    private final Class<T> type;
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
 
-    public DataRepository(Mapper<T, K> mapper) {
+    public DataRepository(Class<T> type, Mapper<T, K> mapper) {
+        this.type = type;
         this.mapper = mapper;
     }
 
@@ -48,15 +50,21 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
         checkUnitOfWork();
-        return mapper.findWhere(values);
+        CompletableFuture<List<T>> where = mapper.findWhere(values);
+        where.thenAccept(ts -> ts.forEach(this::putOrReplace));
+        return where;
     }
 
     @Override
     public CompletableFuture<Optional<T>> findById(K k) {
         checkUnitOfWork();
 
-        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(k, k1 -> mapper.findById(k).thenApply(t -> t.orElseThrow(() ->
-                new DataMapperException("Object was not found"))));
+        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(
+                k,
+                k1 -> mapper
+                        .findById(k)
+                        .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")))
+        );
 
         return completableFuture
                 .thenApply(Optional::of)

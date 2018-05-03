@@ -1,6 +1,7 @@
 package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.ColumnName;
+import com.github.jayield.rapper.DataMapper;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
@@ -10,6 +11,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 public class SqlField {
     public final Field field;
@@ -23,13 +25,14 @@ public class SqlField {
         this.selectQueryValue = selectQueryValue;
     }
 
-    public<T> void setValueInStatement(PreparedStatement stmt, int index, T obj) {
+    public<T> int setValueInStatement(PreparedStatement stmt, int index, T obj) {
         field.setAccessible(true);
         try {
-            stmt.setObject(index, field.get(obj));
+            stmt.setObject(index, obj != null ? field.get(obj) : null);
         } catch (SQLException | IllegalAccessException e) {
             throw new DataMapperException(e);
         }
+        return 0;
     }
 
     public int byUpdate(){
@@ -52,12 +55,14 @@ public class SqlField {
         }
 
         @Override
-        public <T> void setValueInStatement(PreparedStatement stmt, int index, T obj) {
-            Object key;
-            if(DomainObject.class.isAssignableFrom(obj.getClass()))
-                key = ((DomainObject)obj).getIdentityKey();
-            else
-                key = obj;
+        public <T> int setValueInStatement(PreparedStatement stmt, int index, T obj) {
+            Object key = null;
+            if(obj != null) {
+                if (DomainObject.class.isAssignableFrom(obj.getClass()))
+                    key = ((DomainObject) obj).getIdentityKey();
+                else
+                    key = obj;
+            }
 
             //System.out.println("index " + index + ", key " + key);
 
@@ -70,6 +75,7 @@ public class SqlField {
                     throw new DataMapperException(e);
                 }
             }
+            return 0;
         }
 
         @Override
@@ -101,6 +107,7 @@ public class SqlField {
         private final List<Integer> values;
         private Object[] idValues;
 
+        //TODO if name defined check if type == CompletableFuture<DomainObject>, else check type == CompletableFuture<List<DomainObject>>
         public SqlFieldExternal(Field field, String pref) {
             super(field, SQL_FIELD_EXTERNAL, buildSelectQueryValue(field, pref));
             type = field.getType();
@@ -160,6 +167,29 @@ public class SqlField {
                 if(i + 1 != foreignNames.length) sb.append("and ");
             }
             return sb.toString();
+        }
+
+        @Override
+        public <T> int setValueInStatement(PreparedStatement stmt, int index, T obj) {
+            try {
+                field.setAccessible(true);
+                CompletableFuture<? extends DomainObject> cp = (CompletableFuture<? extends DomainObject>) field.get(obj);
+                //TODO remove join
+                //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
+                DomainObject domainObject = cp != null ? cp.join() : null;
+                int[] i = {index};
+                ((DataMapper) MapperRegistry.getRepository(domainObjectType)
+                        .getMapper())
+                        .getMapperSettings()
+                        .getIds()
+                        .forEach(sqlFieldId -> {
+                            sqlFieldId.setValueInStatement(stmt, i[0], domainObject);
+                            i[0]++;
+                        });
+                return i[0] - index - 1;
+            } catch (IllegalAccessException e) {
+                throw new DataMapperException(e);
+            }
         }
 
         public List<Integer> getValues() {

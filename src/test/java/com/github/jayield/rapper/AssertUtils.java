@@ -8,6 +8,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -92,9 +93,16 @@ public class AssertUtils {
             assertEquals(employee.getName(), rs.getString("name"));
             assertEquals(employee.getVersion(), rs.getLong("version"));
 
-            Company company = employee.getCompany().join();
-            assertEquals(company.getIdentityKey().getId(), rs.getInt("companyId"));
-            assertEquals(company.getIdentityKey().getCid(), rs.getInt("companyCid"));
+            CompletableFuture<Company> companyCompletableFuture = employee.getCompany();
+            if(companyCompletableFuture != null){
+                Company company = companyCompletableFuture.join();
+                assertEquals(company.getIdentityKey().getId(), rs.getInt("companyId"));
+                assertEquals(company.getIdentityKey().getCid(), rs.getInt("companyCid"));
+            }
+            else {
+                assertEquals(0, rs.getInt("companyId"));
+                assertEquals(0, rs.getInt("companyCid"));
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

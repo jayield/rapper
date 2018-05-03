@@ -122,10 +122,25 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
         if (!parentSuccess[0]) return CompletableFuture.completedFuture(parentSuccess[0]);
 
-        return SQLUtils.execute(mapperSettings.getInsertQuery(), stmt ->
-                SQLUtils.setValuesInStatement(
-                        Stream.concat(mapperSettings.getIds().stream().filter(sqlFieldId -> !sqlFieldId.identity || sqlFieldId.isFromParent()), mapperSettings.getColumns().stream())
-                                .sorted(Comparator.comparing(SqlField::byInsert)), stmt, obj)
+        return SQLUtils.execute(mapperSettings.getInsertQuery(),
+                stmt -> {
+                    Stream<SqlFieldId> ids = mapperSettings
+                            .getIds()
+                            .stream()
+                            .filter(sqlFieldId -> !sqlFieldId.identity || sqlFieldId.isFromParent());
+                    Stream<SqlField> columns = mapperSettings
+                            .getColumns()
+                            .stream();
+                    Stream<SqlFieldExternal> externals = mapperSettings
+                            .getExternals()
+                            .stream()
+                            .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0);
+
+                    Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
+                            .sorted(Comparator.comparing(SqlField::byInsert));
+
+                    SQLUtils.setValuesInStatement(fields, stmt, obj);
+                }
         )
                 .thenApply(ps -> {
                     try {
@@ -158,19 +173,31 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
         return SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             try {
-                SQLUtils.setValuesInStatement(
-                        Stream.concat(mapperSettings.getIds().stream(), mapperSettings.getColumns().stream())
-                                .sorted(Comparator.comparing(SqlField::byUpdate)),
-                        stmt,
-                        obj
-                );
+                Stream<SqlFieldId> ids = mapperSettings.getIds().stream();
+                Stream<SqlField> columns = mapperSettings.getColumns().stream();
+                Stream<SqlFieldExternal> externals = mapperSettings
+                        .getExternals()
+                        .stream()
+                        .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0);
+
+                Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
+                        .sorted(Comparator.comparing(SqlField::byUpdate));
+
+                SQLUtils.setValuesInStatement(fields, stmt, obj);
 
                 //Since each object has its own version, we want the version from type not from the subClass
                 Field f = type.getDeclaredField("version");
                 f.setAccessible(true);
                 long version = (long) f.get(obj);
 
-                stmt.setLong(mapperSettings.getColumns().size() + mapperSettings.getIds().size() + 1, version);
+                long externalsSize = mapperSettings
+                        .getExternals()
+                        .stream()
+                        .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0)
+                        .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names))
+                        .count();
+
+                stmt.setLong((int) (mapperSettings.getColumns().size() + mapperSettings.getIds().size() + externalsSize + 1), version);
             } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
                 throw new DataMapperException(e);
             }
@@ -393,31 +420,31 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         }
     }
 
-    public String getSelectQuery() {
+    String getSelectQuery() {
         return mapperSettings.getSelectQuery();
     }
 
-    public String getInsertQuery() {
+    String getInsertQuery() {
         return mapperSettings.getInsertQuery();
     }
 
-    public String getUpdateQuery() {
+    String getUpdateQuery() {
         return mapperSettings.getUpdateQuery();
     }
 
-    public String getDeleteQuery() {
+    String getDeleteQuery() {
         return mapperSettings.getDeleteQuery();
     }
 
-    public Constructor<?> getPrimaryKeyConstructor() {
+    Constructor<?> getPrimaryKeyConstructor() {
         return primaryKeyConstructor;
     }
 
-    public Class<?> getPrimaryKeyType() {
+    Class<?> getPrimaryKeyType() {
         return primaryKeyType;
     }
 
-    public Class<T> getType() {
-        return type;
+    public MapperSettings getMapperSettings() {
+        return mapperSettings;
     }
 }

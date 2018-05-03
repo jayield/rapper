@@ -143,10 +143,15 @@ public class MapperSettings {
                 .map(f -> f.name)
                 .collect(Collectors.toList());
 
-        List<String> columnsNames = columns
-                .stream()
-                .map(f -> f.name)
-                .collect(Collectors.toList());
+        List<String> columnsNames = Stream.concat(
+                columns
+                        .stream()
+                        .map(f -> f.name),
+                externals
+                        .stream()
+                        .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0)
+                        .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names))
+                ).collect(Collectors.toList());
 
         columnsNames.remove("Cversion");
         columns.removeIf(f -> f.name.equals("Cversion"));
@@ -164,7 +169,7 @@ public class MapperSettings {
         String idsNames = "";
         if (!collect.equals(", ")) idsNames = collect;
 
-        columnsNames.addAll(externals.stream().flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names)).collect(Collectors.toList()));
+        //columnsNames.addAll(externals.stream().flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names)).collect(Collectors.toList()));
 
         insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .collect(Collectors.joining(", ", "insert into [" + type.getSimpleName() + "] ( ", " ) "))
@@ -183,7 +188,8 @@ public class MapperSettings {
                 .collect(Collectors.joining(" and "))
                 + " and version = ?";
 
-        deleteQuery = idName.stream()
+        deleteQuery = idName
+                .stream()
                 .map(id -> id + " = ?")
                 .collect(Collectors.joining(" and ", "delete from [" + type.getSimpleName() + "] where ", ""));
     }

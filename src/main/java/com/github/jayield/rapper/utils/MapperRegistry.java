@@ -14,6 +14,6 @@ public class MapperRegistry {
     private static Map<Class, DataRepository> repositoryMap = new HashMap<>();
 
     public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> domainObject) {
-        return repositoryMap.computeIfAbsent(domainObject, c -> new DataRepository<>(new DataMapper<>(domainObject)));
+        return repositoryMap.computeIfAbsent(domainObject, c -> new DataRepository<>(domainObject, new DataMapper<>(domainObject)));
     }
 }

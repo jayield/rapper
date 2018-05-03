@@ -60,13 +60,13 @@ public class DataRepositoryTests {
         populateDB(con);*/
 
         topStudentMapperify = new Mapperify<>(topStudentMapper);
-        topStudentRepository = new DataRepository<>(topStudentMapperify);
+        topStudentRepository = new DataRepository<>(TopStudent.class, topStudentMapperify);
 
         personMapperify = new Mapperify<>(personMapper);
-        personRepository = new DataRepository<>(personMapperify);
+        personRepository = new DataRepository<>(Person.class, personMapperify);
 
         employeeMapperify = new Mapperify<>(employeeMapper);
-        employeeRepository = new DataRepository<>(employeeMapperify);
+        employeeRepository = new DataRepository<>(Employee.class, employeeMapperify);
 
         repositoryMap.put(TopStudent.class, topStudentRepository);
         repositoryMap.put(Person.class, personRepository);

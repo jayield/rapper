@@ -1,6 +1,7 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
+import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
 import javafx.util.Pair;
 import org.junit.After;
@@ -169,6 +170,22 @@ public class DataMapperTests {
         assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 
+    @Test
+    public void testSingleExternalCreate(){
+        Employee employee = new Employee(0, "Hugo", 0, companyMapper
+                .findById(new Company.PrimaryKey(1, 1))
+                .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
+        assertTrue(employeeMapper.create(employee).join());
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, con);
+    }
+
+    @Test
+    public void testSingleExternalNullCreate(){
+        Employee employee = new Employee(0, "Hugo", 0, null);
+        assertTrue(employeeMapper.create(employee).join());
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, con);
+    }
+
     //-----------------------------------Update-----------------------------------//
     @Test
     public void testSimpleUpdate() throws SQLException {
@@ -203,6 +220,29 @@ public class DataMapperTests {
         assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 
+    @Test
+    public void testSingleExternalUpdate() throws SQLException {
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"),
+                companyMapper
+                        .findById(new Company.PrimaryKey(1, 2))
+                        .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
+
+        assertTrue(employeeMapper.update(employee).join());
+
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, con);
+    }
+
+    @Test
+    public void testSingleExternalNullUpdate() throws SQLException {
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), null);
+
+        assertTrue(employeeMapper.update(employee).join());
+
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, con);
+    }
+
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testSimpleDeleteById(){
@@ -220,6 +260,13 @@ public class DataMapperTests {
     public void testHierarchyDeleteById(){
         assertTrue(topStudentMapper.deleteById(454).join());
         assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
+    }
+
+    @Test
+    public void testSingleExternalDeleteById() throws SQLException {
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        assertTrue(employeeMapper.deleteById(rs.getInt("id")).join());
+        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
     }
 
     //-----------------------------------Delete-----------------------------------//
@@ -242,5 +289,16 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
         assertTrue(topStudentMapper.delete(topStudent).join());
         assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
+    }
+
+    @Test
+    public void testSingleExternalDelete() throws SQLException {
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        Employee employee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getLong("version"),
+                companyMapper
+                        .findById(new Company.PrimaryKey(1, 2))
+                        .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
+        assertTrue(employeeMapper.delete(employee).join());
+        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
     }
 }

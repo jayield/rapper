@@ -46,7 +46,7 @@ public class CollectionUtils {
         String[] names = {"Sam", "Pamela", "Dave", "Pascal", "Erik"};
 
         System.out.println("Test zipWithIndex");
-        zipWithIndex(Arrays.stream(names)).forEach(System.out::println);
+        zipWithIndex(Arrays.stream(names)).forEach(stringIndexer -> System.out.println(stringIndexer.index + "=" + stringIndexer.item));
 
         System.out.println();
         System.out.println("Test mapWithIndex");

@@ -29,7 +29,7 @@ public class DataBaseTests {
     }
 
     @Test
-    public void crud() throws SQLException {
+    public void connectivity() throws SQLException {
         try (Connection con = connectionManager.getConnection()) {
             PreparedStatement stmt = con.prepareStatement("insert into Person(nif, name, birthday) values (1, 'Test', '1990-05-02')");
             int update = stmt.executeUpdate();
