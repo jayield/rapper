@@ -21,6 +21,9 @@ import static org.junit.Assert.*;
 
 public class DataRepositoryTests {
 
+    private final ExternalsHandler<TopStudent, Integer> topStudentExternal;
+    private final ExternalsHandler<Person, Integer> personExternal;
+    private final ExternalsHandler<Employee, Integer> employeeExternal;
     private DataRepository<TopStudent, Integer> topStudentRepository;
     private DataRepository<Person, Integer> personRepository;
     private DataRepository<Employee, Integer> employeeRepository;
@@ -29,21 +32,32 @@ public class DataRepositoryTests {
     private Mapperify<Person, Integer> personMapperify;
     private Mapperify<Employee, Integer> employeeMapperify;
 
-    private Map<Class, DataRepository> repositoryMap;
+    private Map<Class, MapperRegistry.Container> repositoryMap;
 
     private final DataMapper<TopStudent, Integer> topStudentMapper;
     private final DataMapper<Person, Integer> personMapper;
     private final DataMapper<Employee, Integer> employeeMapper;
     private Connection con;
+    private final MapperSettings topStudentSettings;
+    private final MapperSettings personSettings;
+    private final MapperSettings employeeSettings;
 
     public DataRepositoryTests() throws NoSuchFieldException, IllegalAccessException {
-        topStudentMapper = new DataMapper<>(TopStudent.class);
-        personMapper = new DataMapper<>(Person.class);
-        employeeMapper = new DataMapper<>(Employee.class);
+        topStudentSettings = new MapperSettings(TopStudent.class);
+        personSettings = new MapperSettings(Person.class);
+        employeeSettings = new MapperSettings(Employee.class);
+
+        topStudentExternal = new ExternalsHandler<>(topStudentSettings);
+        personExternal = new ExternalsHandler<>(personSettings);
+        employeeExternal = new ExternalsHandler<>(employeeSettings);
+
+        topStudentMapper = new DataMapper<>(TopStudent.class, topStudentSettings, topStudentExternal);
+        personMapper = new DataMapper<>(Person.class, personSettings, personExternal);
+        employeeMapper = new DataMapper<>(Employee.class, employeeSettings, employeeExternal);
 
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
         repositoryMapField.setAccessible(true);
-        repositoryMap = (Map<Class, DataRepository>) repositoryMapField.get(null);
+        repositoryMap = (Map<Class, MapperRegistry.Container>) repositoryMapField.get(null);
     }
 
     @Before
@@ -60,17 +74,17 @@ public class DataRepositoryTests {
         populateDB(con);*/
 
         topStudentMapperify = new Mapperify<>(topStudentMapper);
-        topStudentRepository = new DataRepository<>(TopStudent.class, topStudentMapperify);
+        topStudentRepository = new DataRepository<>(TopStudent.class, Integer.class, topStudentMapperify);
 
         personMapperify = new Mapperify<>(personMapper);
-        personRepository = new DataRepository<>(Person.class, personMapperify);
+        personRepository = new DataRepository<>(Person.class, Integer.class, personMapperify);
 
         employeeMapperify = new Mapperify<>(employeeMapper);
-        employeeRepository = new DataRepository<>(Employee.class, employeeMapperify);
+        employeeRepository = new DataRepository<>(Employee.class, Integer.class, employeeMapperify);
 
-        repositoryMap.put(TopStudent.class, topStudentRepository);
-        repositoryMap.put(Person.class, personRepository);
-        repositoryMap.put(Employee.class, employeeRepository);
+        repositoryMap.put(TopStudent.class, new MapperRegistry.Container<>(topStudentSettings, topStudentExternal, topStudentRepository, topStudentMapper));
+        repositoryMap.put(Person.class, new MapperRegistry.Container<>(personSettings, personExternal, personRepository, personMapper));
+        repositoryMap.put(Employee.class, new MapperRegistry.Container<>(employeeSettings, employeeExternal, employeeRepository, employeeMapper));
     }
 
     @After

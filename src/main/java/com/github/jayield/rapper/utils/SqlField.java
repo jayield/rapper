@@ -6,6 +6,7 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -41,6 +42,10 @@ public class SqlField {
 
     public int byInsert(){
         return 2;
+    }
+
+    public Field getField() {
+        return field;
     }
 
     public static class SqlFieldId extends SqlField{
@@ -178,8 +183,7 @@ public class SqlField {
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
                 DomainObject domainObject = cp != null ? cp.join() : null;
                 int[] i = {index};
-                ((DataMapper) MapperRegistry.getRepository(domainObjectType)
-                        .getMapper())
+                ((DataMapper) MapperRegistry.getRepository(domainObjectType).getMapper())
                         .getMapperSettings()
                         .getIds()
                         .forEach(sqlFieldId -> {

@@ -44,7 +44,7 @@ public class ConnectionManager {
         dataSource.setDatabaseName(connectionStringParts[1]);
         dataSource.setUser(connectionStringParts[2]);
         dataSource.setPassword(connectionStringParts[3]);
-
+        dataSource.setLockTimeout(1000);
         return dataSource;
     }
 

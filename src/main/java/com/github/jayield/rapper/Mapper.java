@@ -2,6 +2,8 @@ package com.github.jayield.rapper;
 
 import javafx.util.Pair;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;

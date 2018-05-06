@@ -24,29 +24,27 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private static final String QUERY_ERROR = "Couldn't execute query on {}.\nReason: {}";
 
-    private final Logger log = LoggerFactory.getLogger(DataMapper.class);
     private final Class<T> type;
-    private final MapperSettings mapperSettings;
+    private final Class<?> primaryKeyType;
     private final Constructor<T> constructor;
+    private final Constructor<?> primaryKeyConstructor;
     private final ExternalsHandler<T, K> externalHandler;
+    private final Logger log = LoggerFactory.getLogger(DataMapper.class);
+    private final MapperSettings mapperSettings;
 
-    private Class<?> primaryKeyType = null;
-    private Constructor<?> primaryKeyConstructor = null;
-
-    public DataMapper(Class<T> type) {
+    public DataMapper(Class<T> type, MapperSettings mapperSettings, ExternalsHandler<T, K> externalsHandler) {
         this.type = type;
+        this.mapperSettings = mapperSettings;
+        this.externalHandler = externalsHandler;
+
+        primaryKeyType = mapperSettings.getPrimaryKeyType();
+        primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
+
         try {
-            Class<?>[] declaredClasses = type.getDeclaredClasses();
-            if (declaredClasses.length > 0) {
-                primaryKeyType = declaredClasses[0]; //TODO change, don't get it from declaredClasses
-                primaryKeyConstructor = primaryKeyType.getConstructor();
-            }
             constructor = type.getConstructor();
         } catch (NoSuchMethodException e) {
             throw new DataMapperException(e);
         }
-        mapperSettings = new MapperSettings(type);
-        externalHandler = new ExternalsHandler<>(mapperSettings.getIds(), mapperSettings.getExternals(), primaryKeyType, primaryKeyConstructor);
     }
 
     @Override
@@ -56,10 +54,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .map(p -> p.getKey() + " = ? ")
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
 
-        return SQLUtils.execute(query, s -> {
+        return SQLUtils.execute(query, stmt -> {
             try {
                 for (int i = 0; i < values.length; i++) {
-                    s.setObject(i + 1, values[i].getValue());
+                    stmt.setObject(i + 1, values[i].getValue());
                 }
             } catch (SQLException e) {
                 throw new DataMapperException(e);
@@ -81,7 +79,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Optional<T>> findById(K id) {
         UnitOfWork unitOfWork = UnitOfWork.getCurrent();
-        return SQLUtils.execute(mapperSettings.getSelectByIdQuery(), stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
+        String selectByIdQuery = mapperSettings.getSelectByIdQuery();
+        return SQLUtils.execute(selectByIdQuery, stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
                 .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
                     Optional<T> optionalT = getStream(ps).findFirst();
@@ -313,11 +312,18 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                         });
             }
 
+            List<Object> idValues = new ArrayList<>();
+
             mapperSettings
                     .getAllFields()
                     .stream()
                     .filter(field -> mapperSettings.getFieldPredicate().test(field.field))
-                    .forEach(sqlField -> setField(rs, t, primaryKey, sqlField));
+                    .forEach(sqlField -> setField(rs, t, primaryKey, sqlField, idValues));
+
+            if(primaryKey != null) {
+                //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
+                EmbeddedIdClass.objectsField.set(primaryKey, idValues.toArray());
+            }
 
             return t;
         } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
@@ -325,7 +331,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         }
     }
 
-    private void setField(ResultSet rs, T t, Object primaryKey, SqlField sqlField) {
+    private void setField(ResultSet rs, T t, Object primaryKey, SqlField sqlField, List<Object> idValues) {
         Field field = sqlField.field;
         String name = sqlField.name;
         try {
@@ -347,8 +353,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 field.set(t, rs.getObject(name));
         } catch (IllegalArgumentException e) { //If IllegalArgumentException is caught, is because field is from primaryKeyClass
             try {
-                if (primaryKey != null)
-                    field.set(primaryKey, rs.getObject(name));
+                if (primaryKey != null) {
+                    Object object = rs.getObject(name);
+                    idValues.add(object);
+                    field.set(primaryKey, object);
+                }
                 else
                     throw new DataMapperException(e);
             } catch (SQLException | IllegalAccessException e1) {
@@ -418,30 +427,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         } catch (SQLException e) {
             throw new DataMapperException(e);
         }
-    }
-
-    String getSelectQuery() {
-        return mapperSettings.getSelectQuery();
-    }
-
-    String getInsertQuery() {
-        return mapperSettings.getInsertQuery();
-    }
-
-    String getUpdateQuery() {
-        return mapperSettings.getUpdateQuery();
-    }
-
-    String getDeleteQuery() {
-        return mapperSettings.getDeleteQuery();
-    }
-
-    Constructor<?> getPrimaryKeyConstructor() {
-        return primaryKeyConstructor;
-    }
-
-    Class<?> getPrimaryKeyType() {
-        return primaryKeyType;
     }
 
     public MapperSettings getMapperSettings() {

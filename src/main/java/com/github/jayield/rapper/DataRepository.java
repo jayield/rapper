@@ -2,14 +2,13 @@ package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
+import com.github.jayield.rapper.utils.*;
 import javafx.util.Pair;
-import com.github.jayield.rapper.utils.ConnectionManager;
-import com.github.jayield.rapper.utils.DBsPath;
-import com.github.jayield.rapper.utils.SqlSupplier;
-import com.github.jayield.rapper.utils.UnitOfWork;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,10 +24,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     private static final Logger logger = LoggerFactory.getLogger(DataRepository.class);
     private final ConcurrentMap<K, CompletableFuture<T>> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
+    private final Class<K> keyType;
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
 
-    public DataRepository(Class<T> type, Mapper<T, K> mapper) {
+    public DataRepository(Class<T> type, Class<K> keyType, Mapper<T, K> mapper) {
         this.type = type;
+        this.keyType = keyType;
         this.mapper = mapper;
     }
 
@@ -198,24 +199,14 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     public void validate(K identityKey, T t) {
-        identityMap.put(identityKey, CompletableFuture.completedFuture(t));
+        identityMap.compute(identityKey,
+                (k, tCompletableFuture) -> tCompletableFuture == null
+                        ? CompletableFuture.completedFuture(t)
+                        : tCompletableFuture.thenApply(t1 -> t.getVersion() > t1.getVersion() ? t : t1)
+        );
     }
 
-    public boolean tryReplace(T obj) {
-        long target = System.currentTimeMillis() + (long) 2000;
-        long remaining = target - System.currentTimeMillis();
-
-        while (remaining >= 0) {
-            CompletableFuture<T> observedObj = identityMap.putIfAbsent(obj.getIdentityKey(), CompletableFuture.completedFuture(obj));
-            if (observedObj == null) return true;
-            if (observedObj.join().getVersion() < obj.getVersion()) {
-                if (identityMap.replace(obj.getIdentityKey(), observedObj, CompletableFuture.completedFuture(obj)))
-                    return true;
-            } else
-                return true; //TODO should we log a message saying a newer version is already present in the identityMap?
-            remaining = target - System.currentTimeMillis();
-            Thread.yield();
-        }
-        return false;
+    public Class<K> getKeyType() {
+        return keyType;
     }
 }

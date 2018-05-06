@@ -1,5 +1,7 @@
 package com.github.jayield.rapper.utils;
 
+import com.github.jayield.rapper.DomainObject;
+
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -42,6 +44,16 @@ public class ReflectionUtils {
                 return true;
             }
         }, false);
+    }
+
+    public static <T extends DomainObject<K>, K> Class<K> getKeyType(Class<T> aClass) {
+        Type[] genericInterfaces = aClass.getGenericInterfaces();
+
+        if(genericInterfaces.length == 0)
+            return getKeyType((Class<T>) aClass.getSuperclass());
+
+        return (Class<K>) ((ParameterizedType) genericInterfaces[0])
+                .getActualTypeArguments()[0];
     }
 
 //    public static void queryBuilder(Field[] fieds, Consumer<Field> first, Consumer<Field> second, Consumer<Field> third){

@@ -2,6 +2,7 @@ package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
+import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 public class Car implements DomainObject<Car.PrimaryPk> {
     @EmbeddedId
@@ -42,16 +43,18 @@ public class Car implements DomainObject<Car.PrimaryPk> {
         return version;
     }
 
-    public static class PrimaryPk{
+    public static class PrimaryPk extends EmbeddedIdClass {
         private final int owner;
         private final String plate;
 
         public PrimaryPk(int owner, String plate) {
+            super(owner, plate);
             this.owner = owner;
             this.plate = plate;
         }
 
         public PrimaryPk() {
+            super();
             owner = 1;
             plate = null;
         }

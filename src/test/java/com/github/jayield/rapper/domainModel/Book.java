@@ -17,6 +17,16 @@ public class Book implements DomainObject<Long> {
     @ColumnName(foreignName = "bookId", table = "BookAuthor", externalName = "authorId")
     private CompletableFuture<List<Author>> authors;
 
+    public Book(long id, String name, long version, CompletableFuture<List<Author>> authors) {
+        this.id = id;
+        this.name = name;
+        this.version = version;
+        this.authors = authors;
+    }
+
+    public Book() {
+    }
+
     public String getName() {
         return name;
     }

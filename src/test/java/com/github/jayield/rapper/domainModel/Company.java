@@ -3,6 +3,7 @@ package com.github.jayield.rapper.domainModel;
 import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
+import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -47,16 +48,18 @@ public class Company implements DomainObject<Company.PrimaryKey> {
         return version;
     }
 
-    public static class PrimaryKey {
+    public static class PrimaryKey extends EmbeddedIdClass {
         private final int id;
         private final int cid;
 
         public PrimaryKey(int id, int cid) {
+            super(id, cid);
             this.id = id;
             this.cid = cid;
         }
 
         public PrimaryKey() {
+            super();
             id = 0;
             cid = 0;
         }

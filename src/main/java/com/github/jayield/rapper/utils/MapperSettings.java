@@ -5,8 +5,9 @@ import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
 import com.github.jayield.rapper.Id;
+import com.github.jayield.rapper.exceptions.DataMapperException;
 
-import java.io.Serializable;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -33,6 +34,8 @@ public class MapperSettings {
     private String updateQuery;
     private String deleteQuery;
     private String selectByIdQuery;
+    private Class<?> primaryKeyType = null;
+    private Constructor<?> primaryKeyConstructor;
 
     private final Predicate<Field> fieldPredicate = field ->
             field.getType().isPrimitive()
@@ -43,6 +46,8 @@ public class MapperSettings {
 
     public MapperSettings(Class<?> type) {
         this.type = type;
+
+        operations = initOperations(type);
 
         Map<Class, List<SqlField>> fieldMap = Arrays.stream(type.getDeclaredFields())
                 .flatMap(field -> toSqlField(field, "C."))
@@ -204,20 +209,35 @@ public class MapperSettings {
         }
     }
 
-    private final FieldOperations[] operations = {
-            new FieldOperations(f -> f.isAnnotationPresent(EmbeddedId.class), (f, pref) -> Arrays.stream(f.getType().getDeclaredFields())
-                    .filter(fieldPredicate)
-                    .map(fi -> new SqlFieldId(fi, getName(fi, pref), getQueryValue(fi, pref), false, true))),
+    private final FieldOperations[] operations;
 
-            new FieldOperations(f -> f.isAnnotationPresent(Id.class),
-                    (f, pref) -> Stream.of(new SqlFieldId(f, getName(f, pref), getQueryValue(f, pref), f.getAnnotation(Id.class).isIdentity(), false))),
+    private FieldOperations[] initOperations(Class<?> type) {
+        return new FieldOperations[]{
+                new FieldOperations(f -> f.isAnnotationPresent(EmbeddedId.class), (f, pref) -> {
+                    primaryKeyType = f.getType();
+                    if (!EmbeddedIdClass.class.isAssignableFrom(primaryKeyType))
+                        throw new DataMapperException("The field " + f.getName() + " on " + type.getSimpleName() + " annotated with @EmbeddedId should extend EmbeddedIdClass!");
+                    try {
+                        primaryKeyConstructor = primaryKeyType.getConstructor();
+                    } catch (NoSuchMethodException e) {
+                        throw new DataMapperException(e);
+                    }
 
-            new FieldOperations(f -> f.isAnnotationPresent(ColumnName.class),
-                    (f, pref) -> Stream.of(new SqlFieldExternal(f, pref))),
+                    return Arrays.stream(f.getType().getDeclaredFields())
+                            .filter(fieldPredicate)
+                            .map(fi -> new SqlFieldId(fi, getName(fi, pref), getQueryValue(fi, pref), false, true));
+                }),
 
-            new FieldOperations(fieldPredicate,
-                    (f, pref) -> Stream.of(new SqlField(f, getName(f, pref), getQueryValue(f, pref))))
-    };
+                new FieldOperations(f -> f.isAnnotationPresent(Id.class),
+                        (f, pref) -> Stream.of(new SqlFieldId(f, getName(f, pref), getQueryValue(f, pref), f.getAnnotation(Id.class).isIdentity(), false))),
+
+                new FieldOperations(f -> f.isAnnotationPresent(ColumnName.class),
+                        (f, pref) -> Stream.of(new SqlFieldExternal(f, pref))),
+
+                new FieldOperations(fieldPredicate,
+                        (f, pref) -> Stream.of(new SqlField(f, getName(f, pref), getQueryValue(f, pref))))
+        };
+    }
 
     private String getName(Field f, String pref) {
         if (f.getName().equals("version")) return pref.substring(0, pref.length() - 1) + f.getName();
@@ -280,5 +300,13 @@ public class MapperSettings {
 
     public Predicate<Field> getFieldPredicate() {
         return fieldPredicate;
+    }
+
+    public Class<?> getPrimaryKeyType() {
+        return primaryKeyType;
+    }
+
+    public Constructor<?> getPrimaryKeyConstructor() {
+        return primaryKeyConstructor;
     }
 }

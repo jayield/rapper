@@ -74,6 +74,8 @@ servername;database;user;password
 `isIdentity()` must return true. If it is a composed key it is needed to create a class that contains the keys and respective 
 names, the domain object must have field of that class and mark it with the annotation <code>@EmbeddedId</code>.
 
+- The class that contains the keys, must extend from `EmbeddedIdClass` and call its super on the contructor, passing the values of the ids
+
 - A `DomainObject` and the field annotated with <code>@EmbeddedId</code> must have a 0 arguments constructor.
 
 - Each `DomainObject` must have a `version` field. This will be used to successful synchronise the in-memory data and DB as it will only allow

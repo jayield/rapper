@@ -10,9 +10,13 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
@@ -67,7 +71,7 @@ public class DataMapperTests {
     public void testEmbeddedIdFindWhere() throws SQLException {
         List<Car> cars = carMapper.findWhere(new Pair<>("brand", "Mitsubishi")).join();
 
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
+        PreparedStatement ps = con.prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
         ps.setString(1, "Mitsubishi");
         ResultSet rs = ps.executeQuery();
 
@@ -172,9 +176,11 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalCreate(){
-        Employee employee = new Employee(0, "Hugo", 0, companyMapper
+        CompletableFuture<Company> companyCompletableFuture = companyMapper
                 .findById(new Company.PrimaryKey(1, 1))
-                .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
+                .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
+
+        Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
         assertTrue(employeeMapper.create(employee).join());
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, con);
     }
@@ -301,4 +307,96 @@ public class DataMapperTests {
         assertTrue(employeeMapper.delete(employee).join());
         assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
     }
+
+    /*@Test
+    public void test() throws NoSuchFieldException, IllegalAccessException {
+        DataRepository<Company, Company.PrimaryKey> repository = MapperRegistry.getRepository(Company.class);
+
+        Field identityMapField = repository.getClass().getDeclaredField("identityMap");
+        identityMapField.setAccessible(true);
+        ConcurrentMap<Company.PrimaryKey, CompletableFuture<Company>> identityMap = (ConcurrentMap<Company.PrimaryKey, CompletableFuture<Company>>) identityMapField.get(repository);
+        DataRepository<Employee, Integer> repository1 = MapperRegistry.getRepository(Employee.class);
+
+        Company.PrimaryKey k = new Company.PrimaryKey(1, 1);
+        CompletableFuture<Company> companyCompletableFuture = repository.findById(k).thenApply(Optional::get);
+        *//*companyCompletableFuture.join();
+
+        companyCompletableFuture
+                .thenAccept(company -> company
+                        .getEmployees()
+                        .join()
+                        .forEach(System.out::println)
+                ).join();
+        System.out.println();*//*
+
+        Employee employee = new Employee(0, "Hugo", 0, companyMapper
+                .findById(k)
+                .thenApply(company1 -> company1.orElseThrow(() -> new DataMapperException(("Company not found")))));
+        assertTrue(repository1.create(employee).join());
+
+        //Insert in IdentityMap
+        identityMap
+                .get(k)
+                .thenCompose(company -> company.getEmployees()
+                        .thenApply(employees -> employees.add(employee))
+                ).join();
+
+        companyCompletableFuture
+                .thenAccept(company -> company
+                        .getEmployees()
+                        .join()
+                        .forEach(System.out::println)
+                ).join();
+
+        System.out.println();
+
+        identityMap
+                .get(k)
+                .thenAccept(company -> company
+                        .getEmployees()
+                        .join()
+                        .forEach(System.out::println)
+                ).join();
+        System.out.println();
+    }*/
+
+    /*@Test
+    public void test2(){
+        for (int i = 0; i < 50; i++) {
+            CompletableFuture<ConcurrentLinkedQueue<Integer>> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    System.out.println("I was interrupted");
+                }
+
+                ConcurrentLinkedQueue<Integer> integers = new ConcurrentLinkedQueue<>();
+                integers.add(1);
+                return integers;
+            });
+
+            CompletableFuture<Void> future1 = future.thenAcceptAsync(integer -> integer.add(2));
+            CompletableFuture<Void> future2 = future.thenAcceptAsync(integer -> integer.add(3));
+            CompletableFuture<Void> future3 = future.thenAcceptAsync(integer -> integer.add(4));
+            CompletableFuture<Void> future4 = future.thenAcceptAsync(integer -> integer.add(5));
+            CompletableFuture<Void> future5 = future.thenAcceptAsync(integer -> integer.add(6));
+            CompletableFuture<Void> future6 = future.thenAcceptAsync(integer -> integer.add(7));
+
+            List<CompletableFuture<Void>> list = new ArrayList<>();
+            list.add(future1);
+            list.add(future2);
+            list.add(future3);
+            list.add(future4);
+            list.add(future5);
+            list.add(future6);
+            CompletableFuture.allOf(list.toArray(new CompletableFuture[list.size()])).join();
+
+            *//*System.out.println("Future1 result = " + future1.join());
+            System.out.println("Future2 result = " + future2.join());*//*
+            StringBuilder print = new StringBuilder("[" + i + "] Future = ");
+            future.join().forEach(print::append);
+            logger.info(print.toString());
+            assertEquals(7, future.join().size());
+        }
+    }*/
 }

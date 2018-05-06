@@ -3,11 +3,10 @@ package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.exceptions.ConcurrencyException;
+import com.github.jayield.rapper.Mapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import javafx.util.Pair;
-import com.github.jayield.rapper.Mapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -23,6 +22,9 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+
+import static com.github.jayield.rapper.utils.MapperRegistry.getExternal;
+import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 
 public class UnitOfWork {
     /**
@@ -147,42 +149,42 @@ public class UnitOfWork {
                 .thenApply(success -> updateIdentityMap(success, insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
     }
 
-    private boolean updateIdentityMap(boolean success, List<DataRepository<? extends DomainObject<?>, ?>> insertMappers, List<DataRepository<? extends DomainObject<?>, ?>> updateMappers,
-                                      List<DataRepository<? extends DomainObject<?>, ?>> deleteMappers) {
+    private boolean updateIdentityMap(boolean success, List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
+                                      List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
         try {
             if(!success) {
                 rollback();
                 return false;
             }
 
-            //The different iterators will have the same size (eg. insertMapperIter.size() == insertObjIter.size()
-            Iterator<DataRepository<? extends DomainObject<?>, ?>> insertMapperIter = insertMappers.iterator(),
-                    updateMapperIter = updateMappers.iterator(),
-                    deleteMapperIter = deleteMappers.iterator();
-            Iterator<DomainObject> insertObjIter = newObjects.iterator(),
-                    updateObjIter = dirtyObjects.iterator(),
-                    deleteObjIter = removedObjects.iterator();
+            //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
+            Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator(),
+                    updatedReposIterator = updateRepos.iterator(),
+                    deletedReposIterator = deleteRepos.iterator();
+            Iterator<DomainObject> insertedObjectsIterator = newObjects.iterator(),
+                    updatedObjectsIterator = dirtyObjects.iterator(),
+                    deletedObjectsIterator = removedObjects.iterator();
 
             //Will iterate through insert, update and delete iterators at the same time
-            while (insertMapperIter.hasNext() || updateMapperIter.hasNext() || deleteMapperIter.hasNext()){
-                iterate(insertMapperIter, insertObjIter, (mapper, domainObject) -> {
-                    if (!mapper.tryReplace(domainObject)) {
-                        throw new ConcurrencyException("Couldn't update IdentityMap");
-                    }
+            while (insertedReposIterator.hasNext() || updatedReposIterator.hasNext() || deletedReposIterator.hasNext()) {
+                iterate(insertedReposIterator, insertedObjectsIterator, (repo, domainObject) -> {
+                    repo.validate(domainObject.getIdentityKey(), domainObject);
+                    getExternal(domainObject.getClass()).updateReferences(domainObject);
                 });
-                iterate(updateMapperIter, updateObjIter, (mapper, domainObject) -> {
-                    if (!mapper.tryReplace(domainObject)) {
-                        throw new ConcurrencyException("Couldn't update IdentityMap");
-                    }
+                iterate(updatedReposIterator, updatedObjectsIterator, (repo, domainObject) -> {
+                    repo.validate(domainObject.getIdentityKey(), domainObject);
+                    getExternal(domainObject.getClass()).updateReferences(domainObject);
                 });
-                iterate(deleteMapperIter, deleteObjIter, (mapper, domainObject) -> mapper.invalidate(domainObject.getIdentityKey()));
+                iterate(deletedReposIterator, deletedObjectsIterator, (repo, domainObject) -> {
+                    repo.invalidate(domainObject.getIdentityKey());
+                    getExternal(domainObject.getClass()).removeReferences(domainObject);
+                });
             }
 
             connection.commit();
             return true;
-        }
-        catch (ConcurrencyException | SQLException e) {
-            logger.info("Commit wasn't successful, here's the error message:\n" +  e.getMessage());
+        } catch (SQLException e) {
+            logger.info("Commit wasn't successful, here's the error message:\n" + e.getMessage());
             rollback();
             return false;
         } finally {
@@ -194,12 +196,12 @@ public class UnitOfWork {
         }
     }
 
-    private<V> void iterate(Iterator<DataRepository<? extends DomainObject<?>, ?>> mapperIterator, Iterator<DomainObject> domainObjectIterator,
-                            BiConsumer<DataRepository<DomainObject<V>, V>, DomainObject<V>> biConsumer) {
-        if(mapperIterator.hasNext()) {
-            DataRepository<DomainObject<V>, V> mapper = (DataRepository<DomainObject<V>, V>) mapperIterator.next();
+    private <V> void iterate(Iterator<DataRepository<? extends DomainObject<?>, ?>> repoIterator, Iterator<DomainObject> domainObjectIterator,
+                             BiConsumer<DataRepository<DomainObject<V>, V>, DomainObject<V>> biConsumer) {
+        if (repoIterator.hasNext()) {
+            DataRepository<DomainObject<V>, V> repo = (DataRepository<DomainObject<V>, V>) repoIterator.next();
             DomainObject<V> domainObject = domainObjectIterator.next();
-            biConsumer.accept(mapper, domainObject);
+            biConsumer.accept(repo, domainObject);
         }
     }
 
@@ -225,7 +227,7 @@ public class UnitOfWork {
                 .stream()
                 .filter(predicate)
                 .forEach(domainObject -> {
-                    DataRepository repository = MapperRegistry.getRepository(domainObject.getClass());
+                    DataRepository repository = getRepository(domainObject.getClass());
                     completableFutures.add(biFunction.apply(repository.getMapper(), domainObject));
                     mappers.add(repository);
                 });
@@ -242,7 +244,7 @@ public class UnitOfWork {
         try {
             connection.rollback();
 
-            newObjects.forEach(domainObject -> MapperRegistry.getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
+            newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
 
             for (DomainObject obj : dirtyObjects) {
                 clonedObjects
@@ -250,14 +252,14 @@ public class UnitOfWork {
                         .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                         .findFirst()
                         .ifPresent(
-                                clone -> MapperRegistry.getRepository(obj.getClass()).validate(clone.getIdentityKey(), clone)
+                                clone -> getRepository(obj.getClass()).validate(clone.getIdentityKey(), clone)
                         );
             }
 
             removedObjects
                     .stream()
                     .filter(obj -> !dirtyObjects.contains(obj))
-                    .forEach(obj -> MapperRegistry.getRepository(obj.getClass()).validate(obj.getIdentityKey(), obj));
+                    .forEach(obj -> getRepository(obj.getClass()).validate(obj.getIdentityKey(), obj));
         } catch (SQLException e) {
             throw new DataMapperException(e);
         }

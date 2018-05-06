@@ -13,6 +13,7 @@ public class SQLUtils {
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
     public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement) {
+        logger.info(sqlQuery);
         Connection con = UnitOfWork.getCurrent().getConnection();
         try {
             PreparedStatement preparedStatement = con.prepareStatement(sqlQuery, Statement.RETURN_GENERATED_KEYS);
