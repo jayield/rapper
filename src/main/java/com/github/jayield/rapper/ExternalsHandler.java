@@ -82,13 +82,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 });
     }
 
-    /*private void populateExternal(T t, SqlFieldExternal sqlFieldExternal) {
-        BiConsumer<T, SqlFieldExternal> biConsumer = map.get(sqlFieldExternal.getValues());
-        if(biConsumer == null)
-            throw new DataMapperException("The annotation ColumnName didn't follow the rules");
-        biConsumer.accept(t, sqlFieldExternal);
-    }*/
-
     /**
      * This method will populate the CompletableFuture<DomainObject> belonging to T. This shall be called only when T has a single reference to the external.
      * This method will call th external's mapper findById. The id value(s) will be given by when making a query on T, when converting it to in-memory object (mapper method in DataMapper), it will
@@ -118,7 +111,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                     declaredFields[i].set(id, idValues1[i]);
                 }
                 //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDEDIDCLASS !!
-                EmbeddedIdClass.objectsField.set(id, idValues1);
+                EmbeddedIdClass.getObjectsField().set(id, idValues1);
             } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
                 throw new DataMapperException(e);
             }
@@ -260,7 +253,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                     primaryKeyDeclaredFields[i].set(newInstance, object);
                 }
                 //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
-                EmbeddedIdClass.objectsField.set(newInstance, idValues.toArray());
+                EmbeddedIdClass.getObjectsField().set(newInstance, idValues.toArray());
                 list.add((V) newInstance);
             };
 
@@ -297,7 +290,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param fieldType
      * @throws DataMapperException
      */
-    private <N extends DomainObject> void setExternal(T t, Object domainObjects, Field field, Class<?> fieldType) {
+    private void setExternal(T t, Object domainObjects, Field field, Class<?> fieldType) {
         try {
             if (fieldType.isAssignableFrom(CompletableFuture.class)) {
                 field.setAccessible(true);

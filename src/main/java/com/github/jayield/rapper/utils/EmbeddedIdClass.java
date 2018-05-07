@@ -7,7 +7,7 @@ import java.util.Objects;
 
 public abstract class EmbeddedIdClass {
 
-    public static Field objectsField;
+    private static final Field objectsField;
 
     static {
         try {
@@ -26,6 +26,10 @@ public abstract class EmbeddedIdClass {
 
     protected EmbeddedIdClass(Object... objects) {
         this.objects = objects;
+    }
+
+    public static Field getObjectsField() {
+        return objectsField;
     }
 
     @Override

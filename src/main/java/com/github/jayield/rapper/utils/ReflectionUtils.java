@@ -55,17 +55,4 @@ public class ReflectionUtils {
         return (Class<K>) ((ParameterizedType) genericInterfaces[0])
                 .getActualTypeArguments()[0];
     }
-
-//    public static void queryBuilder(Field[] fieds, Consumer<Field> first, Consumer<Field> second, Consumer<Field> third){
-//        for(Field f : fieds){
-//            if(f.isAnnotationPresent(ID.class)){
-//                if(!f.getAnnotation(ID.class).isIdentity()) {
-//                    first.accept(f);
-//                }
-//                second.accept(f);
-//            }
-//            else
-//                third.accept(f);
-//        }
-//    }
 }

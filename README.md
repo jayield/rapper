@@ -42,14 +42,14 @@ creation of multiple connections.
 - The **Identity Map** implements a LRU cache. They have a limit of what they can hold in memory, and when it reaches the limit, 
 they will delete the least-read elements.
  
-- A `DomainObject` may contain a `CompletableFuture<List<DomainObject>>` as a reference to another table. The field holding it, must be annotated with 
+- A `DomainObject` may contain `CompletableFuture<DomainObject>` as a reference to another table. The field holding it, must be annotated with 
+<code>@ColumnName</code>, in which is passed `name` as the name of the column(s) in the representing table where the ID of the external `DomainObject` 
+takes place.
+
+- A `DomainObject` may also contain a `CompletableFuture<List<DomainObject>>` as a reference to another table. The field holding it, must be annotated with 
 <code>@ColumnName</code>, in which is passed `foreignName` as the name of the column(s) in the referenced table where the ID of the `DomainObject` 
 takes place, the `table` in case of N-N relation and the `externalName` which is the name of the column(s) in the referenced table 
-where the ID of the external `DomainObject` takes place. `externalName` is only needed when `table` is given.
-
-- As an alternative a `DomainObject` may contain a `CompletableFuture<DomainObject>` as a reference to another table. The field holding it, must be annotated with 
-<code>@ColumnName</code>, in which is passed `name` as the name of the column(s) in the table where the ID of the external `DomainObject` 
-takes place.
+where the ID of the external `DomainObject` takes place. `externalName` is only needed when `table` is given. 
  
 ### Rules
 - You must create an environment variable to connect to the DB. The environment variable must have the following format:
@@ -80,3 +80,56 @@ names, the domain object must have field of that class and mark it with the anno
 
 - Each `DomainObject` must have a `version` field. This will be used to successful synchronise the in-memory data and DB as it will only allow
 writes in the DB, if the `DomainObject`'s `version` that is being written exists on it.
+
+### Examples
+
+An example illustrating the correct use of DomainObject interface and the annotations.
+
+```java
+public class Book implements DomainObject<Long> {
+
+    @Id(isIdentity = true)
+    private long id;
+    private String name;
+    private long version;
+
+    @ColumnName(foreignName = "bookId", table = "BookAuthor", externalName = "authorId")
+    private CompletableFuture<List<Author>> authors;
+
+    public Book(long id, String name, long version, CompletableFuture<List<Author>> authors) {
+        this.id = id;
+        this.name = name;
+        this.version = version;
+        this.authors = authors;
+    }
+
+    public Book() { }
+
+    public String getName() {
+        return name;
+    }
+
+    public CompletableFuture<List<Author>> getAuthors() {
+        return authors;
+    }
+
+    @Override
+    public Long getIdentityKey() {
+        return id;
+    }
+
+    @Override
+    public long getVersion() {
+        return version;
+    }
+}
+```
+
+The table `Book` has an N-N relation with table `Author`, being `BookAuthor` the table that holds both table's primary keys.
+This table has 2 columns, being `bookId` the id of the `Book` and `authorId` the id of the `Author`. As such `Book` class 
+has a `CompletableFuture<List<Author>>` with the references to the book's 
+authors. \
+The primary key of the table `Book` is an auto incremented value, so we mark it with the annotation `@Id` and say it's an identity value
+
+#### Disclaimer
+Although the API is asynchronous, JDBC driver is blocking and thus this internal implementation is blocking too.

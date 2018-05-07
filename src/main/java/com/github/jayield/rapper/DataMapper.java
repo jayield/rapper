@@ -322,7 +322,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             if(primaryKey != null) {
                 //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
-                EmbeddedIdClass.objectsField.set(primaryKey, idValues.toArray());
+                EmbeddedIdClass.getObjectsField().set(primaryKey, idValues.toArray());
             }
 
             return t;
