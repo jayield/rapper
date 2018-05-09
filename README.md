@@ -78,8 +78,10 @@ names, the domain object must have field of that class and mark it with the anno
 
 - A `DomainObject` and the field annotated with <code>@EmbeddedId</code> must have a 0 arguments constructor.
 
-- Each `DomainObject` must have a `version` field. This will be used to successful synchronise the in-memory data and DB as it will only allow
-writes in the DB, if the `DomainObject`'s `version` that is being written exists on it.
+- Each `DomainObject` may have a version field (an auto incremented field on insertions and updates). This field must 
+be annotated with `@Version` and it will be used to successful 
+synchronise the in-memory data and DB as it will only allow writes in the DB, if the `DomainObject`'s `version` that is being 
+written exists on it.
 
 ### Examples
 

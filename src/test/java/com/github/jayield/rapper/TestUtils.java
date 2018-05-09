@@ -25,6 +25,7 @@ public class TestUtils {
     public static final String topStudentSelectQuery = "select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year,\n" +
             "  CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = ?";
     public static final String companySelectQuery = "select C.id, C.cid, C.motto, CAST(C.version as bigint) Cversion from [Company] C where id = ? and cid = ?";
+    public static final String dogSelectQuery = "select name, race, age from Dog where name = ? and race = ?";
 
     public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
         try {
@@ -70,6 +71,15 @@ public class TestUtils {
     public static Consumer<PreparedStatement> getBookPSConsumer(String name){
         SqlConsumer<PreparedStatement> consumer = ps -> {
             ps.setString(1, name);
+        };
+
+        return consumer.wrap();
+    }
+
+    public static Consumer<PreparedStatement> getDogPSConsumer(String name, String race){
+        SqlConsumer<PreparedStatement> consumer = ps -> {
+            ps.setString(1, name);
+            ps.setString(2, race);
         };
 
         return consumer.wrap();

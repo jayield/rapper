@@ -46,6 +46,14 @@ public class ReflectionUtils {
         }, false);
     }
 
+    /**
+     * Gets the DomainObject's keyType
+     *
+     * @param aClass the type of the DomainObject
+     * @param <T>
+     * @param <K>
+     * @return
+     */
     public static <T extends DomainObject<K>, K> Class<K> getKeyType(Class<T> aClass) {
         Type[] genericInterfaces = aClass.getGenericInterfaces();
 

@@ -3,6 +3,7 @@ package com.github.jayield.rapper.domainModel;
 import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Id;
+import com.github.jayield.rapper.Version;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -10,6 +11,7 @@ public class Employee implements DomainObject<Integer> {
     @Id(isIdentity = true)
     private final int id;
     private final String name;
+    @Version
     private final long version;
     @ColumnName(name = {"companyId", "companyCid"})
     private final CompletableFuture<Company> company;

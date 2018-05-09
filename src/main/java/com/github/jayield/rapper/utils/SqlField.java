@@ -102,6 +102,13 @@ public class SqlField {
         }
     }
 
+    public static class SqlFieldVersion extends SqlField {
+
+        public SqlFieldVersion(Field field, String name, String selectQueryValue) {
+            super(field, name, selectQueryValue);
+        }
+    }
+
     public static class SqlFieldExternal extends SqlField{
         public final Class<?> type;                                         //Type of the field that holds the collection
         public final Class<? extends DomainObject> domainObjectType;        //Type of the elements in the collection

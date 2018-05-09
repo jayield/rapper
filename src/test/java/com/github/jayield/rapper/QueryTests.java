@@ -56,4 +56,14 @@ public class QueryTests {
         assertEquals("insert into [Student] ( nif, studentNumber ) output CAST(INSERTED.version as bigint) version values ( ?, ? )", studentMapper.getInsertQuery());
         assertEquals("update [Student] set studentNumber = ? output CAST(INSERTED.version as bigint) version where nif = ? and version = ?", studentMapper.getUpdateQuery());
     }
+
+    @Test
+    public void shouldObtainQueriesForEntitiesWithoutVersion(){
+        MapperSettings dogSettings = new MapperSettings(Dog.class);
+
+        assertEquals("select C.name, C.race, C.age from [Dog] C ", dogSettings.getSelectQuery());
+        assertEquals("delete from [Dog] where name = ? and race = ?", dogSettings.getDeleteQuery());
+        assertEquals("insert into [Dog] ( name, race, age ) values ( ?, ?, ? )", dogSettings.getInsertQuery());
+        assertEquals("update [Dog] set age = ? where name = ? and race = ?", dogSettings.getUpdateQuery());
+    }
 }

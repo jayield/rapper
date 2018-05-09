@@ -118,4 +118,14 @@ create table BookAuthor (
 )
 go
 
-rollback
+if OBJECT_ID('Dog') is not null
+  drop table Dog
+go
+create table Dog (
+  name nvarchar(40),
+  race nvarchar(20),
+  age int,
+
+  PRIMARY KEY (name, race)
+)
+go

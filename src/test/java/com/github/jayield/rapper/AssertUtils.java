@@ -156,6 +156,16 @@ public class AssertUtils {
         }
     }
 
+    public static void assertDog(Dog dog, ResultSet rs){
+        try{
+            assertEquals(dog.getIdentityKey().getName(), rs.getString("name"));
+            assertEquals(dog.getIdentityKey().getRace(), rs.getString("race"));
+            assertEquals(dog.getAge(), rs.getInt("age"));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     //---------------------------ResultSets assertions-----------------------------------
     public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer, Connection con) {
         try{

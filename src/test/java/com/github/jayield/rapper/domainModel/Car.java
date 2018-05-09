@@ -2,6 +2,7 @@ package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
+import com.github.jayield.rapper.Version;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 public class Car implements DomainObject<Car.PrimaryPk> {
@@ -9,6 +10,7 @@ public class Car implements DomainObject<Car.PrimaryPk> {
     private final PrimaryPk pk;
     private final String brand;
     private final String model;
+    @Version
     private final long version;
 
     public Car(int owner, String plate, String brand, String model, long version) {
@@ -55,7 +57,7 @@ public class Car implements DomainObject<Car.PrimaryPk> {
 
         public PrimaryPk() {
             super();
-            owner = 1;
+            owner = 0;
             plate = null;
         }
 

@@ -144,8 +144,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(ps -> {
                     try {
                         ResultSet rs = ps.getResultSet();
-                        setVersion(obj, rs);
-                        setGeneratedKeys(obj, rs);
+                        if(rs != null) {
+                            setVersion(obj, rs);
+                            setGeneratedKeys(obj, rs);
+                        }
                         return true;
                     } catch (SQLException e) {
                         throw new DataMapperException(e);
@@ -153,6 +155,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    throwable.printStackTrace();
                     return false;
                 });
     }
@@ -185,25 +188,29 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 SQLUtils.setValuesInStatement(fields, stmt, obj);
 
                 //Since each object has its own version, we want the version from type not from the subClass
-                Field f = type.getDeclaredField("version");
-                f.setAccessible(true);
-                long version = (long) f.get(obj);
+                SqlFieldVersion versionField = mapperSettings.getVersionField();
+                if(versionField != null) {
+                    Field f = versionField.field;
+                    f.setAccessible(true);
+                    long version = (long) f.get(obj);
 
-                long externalsSize = mapperSettings
-                        .getExternals()
-                        .stream()
-                        .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0)
-                        .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names))
-                        .count();
+                    long externalsSize = mapperSettings
+                            .getExternals()
+                            .stream()
+                            .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0)
+                            .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names))
+                            .count();
 
-                stmt.setLong((int) (mapperSettings.getColumns().size() + mapperSettings.getIds().size() + externalsSize + 1), version);
-            } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
+                    stmt.setLong((int) (mapperSettings.getColumns().size() + mapperSettings.getIds().size() + externalsSize + 1), version);
+                }
+            } catch (SQLException | IllegalAccessException e) {
                 throw new DataMapperException(e);
             }
         })
                 .thenApply(ps -> {
                     try {
-                        setVersion(obj, ps.getResultSet());
+                        ResultSet rs = ps.getResultSet();
+                        if(rs != null) setVersion(obj, rs);
                         return true;
                     } catch (SQLException e) {
                         throw new DataMapperException(e);
@@ -406,15 +413,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private void setVersion(T obj, ResultSet rs) {
         try {
-            if (rs.next()) {
-                Field version;
+            SqlFieldVersion version = mapperSettings.getVersionField();
+            if (rs.next() && version != null) {
+                String columnLabel = version.name.substring(1, version.name.length()); //Remove the prefix by doing the subString));
 
-                version = type.getDeclaredField("version");
-                version.setAccessible(true);
-                version.set(obj, rs.getLong("version"));
-
+                Field versionField = version.field;
+                versionField.setAccessible(true);
+                versionField.set(obj, rs.getLong(columnLabel));
             } else throw new DataMapperException("Couldn't get version.");
-        } catch (NoSuchFieldException | IllegalAccessException ignored) {
+        } catch (IllegalAccessException ignored) {
             log.info("Version field not found on {}.", type.getSimpleName());
         } catch (SQLException e) {
             log.info("Couldn't set version on {}.\nReason: {}", type.getSimpleName(), e.getMessage());

@@ -28,6 +28,8 @@ AS
   select @bookId = id from Book where name = '1001 noites'
 
   insert into BookAuthor(bookId, authorId) values (@bookId, @authorId)
+
+  insert into Dog(name, race, age) values ('Doggy', 'Bulldog', 5)
 GO
 
 if OBJECT_ID('deleteDB') is not null

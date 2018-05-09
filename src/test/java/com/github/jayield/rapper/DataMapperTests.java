@@ -34,6 +34,7 @@ public class DataMapperTests {
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
     private final DataMapper<Book, Long> bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class).getMapper();
     private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
+    private final DataMapper<Dog, Dog.DogPK> dogMapper = (DataMapper<Dog, Dog.DogPK>) MapperRegistry.getRepository(Dog.class).getMapper();
     private Connection con;
 
     @Before
@@ -192,6 +193,13 @@ public class DataMapperTests {
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, con);
     }
 
+    @Test
+    public void testNoVersionCreate(){
+        Dog dog = new Dog(new Dog.DogPK("Bobby", "Pitbull"), 5);
+        assertTrue(dogMapper.create(dog).join());
+        assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Bobby", "Pitbull"), AssertUtils::assertDog, con);
+    }
+
     //-----------------------------------Update-----------------------------------//
     @Test
     public void testSimpleUpdate() throws SQLException {
@@ -247,6 +255,14 @@ public class DataMapperTests {
         assertTrue(employeeMapper.update(employee).join());
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, con);
+    }
+
+    @Test
+    public void testNoVersionUpdate() throws SQLException {
+        ResultSet rs = executeQuery(dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"));
+        Dog dog = new Dog(new Dog.DogPK(rs.getString("name"), rs.getString("race")), 6);
+        assertTrue(dogMapper.update(dog).join());
+        assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), AssertUtils::assertDog, con);
     }
 
     //-----------------------------------DeleteById-----------------------------------//

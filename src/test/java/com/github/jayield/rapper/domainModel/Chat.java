@@ -2,12 +2,14 @@ package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Id;
+import com.github.jayield.rapper.Version;
 
 public class Chat implements DomainObject<Long> {
     @Id(isIdentity = true)
     private long chadId;
     private final long accountIdFirst;
     private final long accountIdSecond;
+    @Version
     private final long version;
 
     public Chat(long chatId, long accountIdFirst, long accountIdSecond, long version) {
