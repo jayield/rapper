@@ -17,9 +17,16 @@ repositories {
 
 dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
-    compile group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: '6.3.6.jre8-preview'
+    // https://mvnrepository.com/artifact/org.apache.commons/commons-dbcp2
+    compile group: 'org.apache.commons', name: 'commons-dbcp2', version: '2.2.0'
+
+
+    // https://mvnrepository.com/artifact/org.hsqldb/hsqldb
+    testCompile group: 'org.hsqldb', name: 'hsqldb', version: '2.3.2'
     testCompile group: 'junit', name: 'junit', version: '4.12'
     testCompile group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.25'
+    // https://mvnrepository.com/artifact/org.hsqldb/sqltool
+    testCompile group: 'org.hsqldb', name: 'sqltool', version: '2.4.0'
 }
 
 task sourceJar(type: Jar) {
@@ -83,10 +90,10 @@ publishing {
     repositories {
         maven {
             url "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-            credentials {
-                username sonatypeUsername
-                password sonatypePassword
-            }
+//            credentials {
+//                username sonatypeUsername
+//                password sonatypePassword
+//            }
         }
     }
 }

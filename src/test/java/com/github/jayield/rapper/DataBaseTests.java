@@ -9,6 +9,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.ParameterizedType;
+import java.net.URLDecoder;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -23,7 +24,9 @@ public class DataBaseTests {
 
     @Before
     public void before() throws SQLException {
-        connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
+        connectionManager = ConnectionManager.getConnectionManager(
+                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
+                "SA", "");
         Connection con = connectionManager.getConnection();
         //DBStatements.createTables(con);
     }

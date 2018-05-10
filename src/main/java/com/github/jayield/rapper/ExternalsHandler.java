@@ -172,7 +172,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 })
                 .exceptionally(throwable -> {
                     logger.info("Couldn't populate externals of {}. \nReason: {}", t.getClass().getSimpleName(), throwable.getMessage());
-                    return Collections.emptyList();
+                    throw new DataMapperException(throwable);
                 });
 
         setExternal(t, completableFuture, sqlFieldExternal.field, sqlFieldExternal.type);
