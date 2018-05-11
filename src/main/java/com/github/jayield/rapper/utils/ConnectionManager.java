@@ -1,5 +1,6 @@
 package com.github.jayield.rapper.utils;
 
+import com.github.jayield.rapper.exceptions.DataMapperException;
 import org.apache.commons.dbcp2.cpdsadapter.DriverAdapterCPDS;
 import org.apache.commons.dbcp2.datasources.SharedPoolDataSource;
 import org.slf4j.Logger;
@@ -24,10 +25,10 @@ public class ConnectionManager {
      * @param envVar
      * @return
      */
-    public static ConnectionManager getConnectionManager(DBsPath envVar){
+    public static ConnectionManager getConnectionManager(DBsPath envVar) {
         String[] connectionStringParts = new String[3];
         if (connectionManager == null)
-                connectionStringParts = separateComponents(envVar);
+            connectionStringParts = separateComponents(envVar);
         return getConnectionManager(
                 connectionStringParts[0],
                 connectionStringParts[1],
@@ -43,9 +44,9 @@ public class ConnectionManager {
     }
 
     private static String[] separateComponents(DBsPath envVar){
-        //CONNECTION STRING FORMAT: Driver;url;USER;PASSWORD
+        //CONNECTION STRING FORMAT: URL%;USER%;PASSWORD
         String connectionString = System.getenv(envVar.toString());
-        return connectionString.split(";");
+        return connectionString.split("%;");
     }
 
     private static DataSource getDataSource(String url, String user, String password){

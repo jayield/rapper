@@ -59,10 +59,10 @@ public class DataBaseTests {
         }
     }
 
-    @Test
+    /*@Test
     public void test() throws SQLException {
         ResultSet rs = executeQuery(bookSelectQuery, getBookPSConsumer("1001 noites"), con);
 
         Object o = rs.getObject("id", Long.class);
-    }
+    }*/
 }

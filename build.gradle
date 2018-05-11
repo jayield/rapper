@@ -19,7 +19,8 @@ dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
     // https://mvnrepository.com/artifact/org.apache.commons/commons-dbcp2
     compile group: 'org.apache.commons', name: 'commons-dbcp2', version: '2.2.0'
-
+    // https://mvnrepository.com/artifact/com.microsoft.sqlserver/mssql-jdbc
+    runtime group: 'com.microsoft.sqlserver', name: 'mssql-jdbc', version: '6.5.2.jre8-preview'
 
     // https://mvnrepository.com/artifact/org.hsqldb/hsqldb
     testCompile group: 'org.hsqldb', name: 'hsqldb', version: '2.3.2'

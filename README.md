@@ -68,7 +68,7 @@ DB_CONNECTION_STRING
 Value:
 
 ```sh
-servername;database;user;password
+jdbcURL%;user%;password
 ```
 
 - All domain objects must implement interface <code>DomainObject</code>.
