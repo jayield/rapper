@@ -114,9 +114,9 @@ end;
 create procedure deleteDB()
 MODIFIES SQL DATA
 begin atomic
+  delete from BookAuthor;
   delete from Author;
   delete from Book;
-  delete from BookAuthor;
   delete from Employee;
   delete from TopStudent;
   delete from Student;
