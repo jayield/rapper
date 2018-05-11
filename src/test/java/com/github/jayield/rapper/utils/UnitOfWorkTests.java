@@ -14,7 +14,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.sql.*;
-import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
@@ -123,9 +122,10 @@ public class UnitOfWorkTests {
 
         MapperSettings mapperSettings = new MapperSettings(Employee.class);
         ExternalsHandler<Employee, Integer> externalHandler = new ExternalsHandler<>(mapperSettings);
-        DataMapper<Employee, Integer> dataMapper = new DataMapper<>(Employee.class, mapperSettings, externalHandler);
+        DataMapper<Employee, Integer> dataMapper = new DataMapper<>(Employee.class, mapperSettings);
         Mapperify<Employee, Integer> mapperify = new Mapperify<>(dataMapper);
-        DataRepository<Employee, Integer> employeeRepo = new DataRepository<>(Employee.class, Integer.class, mapperify);
+        Comparator<Employee> comparator = new DomainObjectComparator<>(mapperSettings);
+        DataRepository<Employee, Integer> employeeRepo = new DataRepository<>(Employee.class, Integer.class, mapperify, externalHandler, comparator);
 
         MapperRegistry.Container<Employee, Integer> container = new MapperRegistry.Container<>(mapperSettings, externalHandler, employeeRepo, mapperify);
 
@@ -255,7 +255,7 @@ public class UnitOfWorkTests {
             assertNotFound(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), con);
         }
         else{
-            assertSingleRow(originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployee, con);
+            assertSingleRow(originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployeeWithExternals, con);
         }
     }
 
@@ -312,7 +312,9 @@ public class UnitOfWorkTests {
 
     //Original car shall be in the identityMap
     private void addDirtyAndClonedObjects() {
+        clonedObjects.add(objectsContainer.getOriginalPerson());
         clonedObjects.add(objectsContainer.getOriginalCar());
+        clonedObjects.add(objectsContainer.getOriginalTopStudent());
 
         dirtyObjects.add(objectsContainer.getUpdatedPerson());
         dirtyObjects.add(objectsContainer.getUpdatedCar());
@@ -328,10 +330,11 @@ public class UnitOfWorkTests {
     private <R extends DomainObject<P>, P> MapperRegistry.Container<R, P> getContainer(Class<R> rClass) {
         MapperSettings mapperSettings = new MapperSettings(rClass);
         ExternalsHandler<R, P> externalHandler = new ExternalsHandler<>(mapperSettings);
-        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, mapperSettings, externalHandler);
+        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, mapperSettings);
         Mapperify<R, P> mapperify = new Mapperify<>(dataMapper);
         Type type1 = ((ParameterizedType) rClass.getGenericInterfaces()[0]).getActualTypeArguments()[0];
-        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, (Class<P>) type1, mapperify);
+        Comparator<R> comparator = new DomainObjectComparator<>(mapperSettings);
+        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, (Class<P>) type1, mapperify, externalHandler, comparator);
 
         return new MapperRegistry.Container<>(mapperSettings, externalHandler, employeeRepo, mapperify);
     }

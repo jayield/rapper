@@ -64,7 +64,7 @@ public class AssertUtils {
         }
     }
 
-    public static void assertCompany(Company company, ResultSet rs, Connection con) {
+    public static void assertCompanyWithExternal(Company company, ResultSet rs, Connection con) {
         try {
             assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
             assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
@@ -72,22 +72,45 @@ public class AssertUtils {
             assertEquals(company.getVersion(), rs.getLong("version"));
             assertNotEquals(0, company.getVersion());
 
-            List<Employee> employees = company.getEmployees().join();
-            PreparedStatement ps = con
-                    .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
-            ps.setInt(1, company.getIdentityKey().getId());
-            ps.setInt(2, company.getIdentityKey().getCid());
-            rs = ps.executeQuery();
+            CompletableFuture<List<Employee>> completableFuture = company.getEmployees();
+            if(completableFuture != null) {
+                List<Employee> employees = completableFuture.join();
+                PreparedStatement ps = con
+                        .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
+                ps.setInt(1, company.getIdentityKey().getId());
+                ps.setInt(2, company.getIdentityKey().getCid());
+                rs = ps.executeQuery();
 
-            while (rs.next()) {
-                assertEmployee(employees.remove(0), rs);
+                while (rs.next()) {
+                    assertEmployeeWithExternals(employees.remove(0), rs);
+                }
+            }
+            else {
+                PreparedStatement ps = con.prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
+                ps.setInt(1, company.getIdentityKey().getId());
+                ps.setInt(2, company.getIdentityKey().getCid());
+                rs = ps.executeQuery();
+
+                assertFalse(rs.next());
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static void assertEmployee(Employee employee, ResultSet rs) {
+    public static void assertCompany(Company company, ResultSet rs, Connection con) {
+        try {
+            assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
+            assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
+            assertEquals(company.getMotto(), rs.getString("motto"));
+            assertEquals(company.getVersion(), rs.getLong("version"));
+            assertNotEquals(0, company.getVersion());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void assertEmployeeWithExternals(Employee employee, ResultSet rs) {
         try {
             assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
             assertEquals(employee.getName(), rs.getString("name"));
@@ -108,21 +131,33 @@ public class AssertUtils {
         }
     }
 
+    public static void assertEmployee(Employee employee, ResultSet rs) {
+        try {
+            assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
+            assertEquals(employee.getName(), rs.getString("name"));
+            assertEquals(employee.getVersion(), rs.getLong("version"));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public static void assertBook(Book book, ResultSet rs, Connection con){
         try {
             assertEquals((long) book.getIdentityKey(), rs.getLong("id"));
             assertEquals(book.getName(), rs.getString("name"));
             assertEquals(book.getVersion(), rs.getLong("version"));
 
-            Author author = book.getAuthors().join().get(0);
-            PreparedStatement ps = con.prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
-            ps.setLong(1, author.getIdentityKey());
+            CompletableFuture<List<Author>> authors = book.getAuthors();
+            if(authors != null) {
+                Author author = authors.join().get(0);
+                PreparedStatement ps = con.prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
+                ps.setLong(1, author.getIdentityKey());
 
-            rs = ps.executeQuery();
+                rs = ps.executeQuery();
 
-            while (rs.next())
-                assertAuthor(author, rs);
-
+                while (rs.next())
+                    assertAuthor(author, rs);
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }

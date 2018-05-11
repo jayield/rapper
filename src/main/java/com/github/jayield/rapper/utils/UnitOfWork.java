@@ -169,11 +169,16 @@ public class UnitOfWork {
             while (insertedReposIterator.hasNext() || updatedReposIterator.hasNext() || deletedReposIterator.hasNext()) {
                 iterate(insertedReposIterator, insertedObjectsIterator, (repo, domainObject) -> {
                     repo.validate(domainObject.getIdentityKey(), domainObject);
-                    getExternal(domainObject.getClass()).updateReferences(domainObject);
+                    getExternal(domainObject.getClass()).insertReferences(domainObject);
                 });
                 iterate(updatedReposIterator, updatedObjectsIterator, (repo, domainObject) -> {
                     repo.validate(domainObject.getIdentityKey(), domainObject);
-                    getExternal(domainObject.getClass()).updateReferences(domainObject);
+                    DomainObject prevDomainObj = clonedObjects
+                            .stream()
+                            .filter(domainObject1 -> domainObject1.getIdentityKey().equals(domainObject.getIdentityKey()))
+                            .findFirst()
+                            .orElseThrow(() -> new DataMapperException("Previous state of the updated domainObject not found"));
+                    getExternal(domainObject.getClass()).updateReferences(prevDomainObj, domainObject);
                 });
                 iterate(deletedReposIterator, deletedObjectsIterator, (repo, domainObject) -> {
                     repo.invalidate(domainObject.getIdentityKey());
