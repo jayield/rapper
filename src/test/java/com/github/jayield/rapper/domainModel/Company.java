@@ -51,8 +51,8 @@ public class Company implements DomainObject<Company.PrimaryKey> {
     }
 
     public static class PrimaryKey extends EmbeddedIdClass {
-        private final int id;
-        private final int cid;
+        private final Integer id;
+        private final Integer cid;
 
         public PrimaryKey(int id, int cid) {
             super(id, cid);

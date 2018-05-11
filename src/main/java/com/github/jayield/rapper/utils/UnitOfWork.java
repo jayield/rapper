@@ -130,14 +130,16 @@ public class UnitOfWork {
     }
 
     public CompletableFuture<Boolean> commit() {
-        Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                List<CompletableFuture<Boolean>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
 
-        Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                List<CompletableFuture<Boolean>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+        try {
+            Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
+                    List<CompletableFuture<Boolean>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
 
-        Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                List<CompletableFuture<Boolean>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
+            Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
+                    List<CompletableFuture<Boolean>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+
+            Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
+                    List<CompletableFuture<Boolean>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
 
         List<CompletableFuture<Boolean>> completableFutures = insertPair.getValue();
         completableFutures.addAll(updatePair.getValue());
@@ -147,6 +149,11 @@ public class UnitOfWork {
                 .stream()
                 .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2))
                 .thenApply(success -> updateIdentityMap(success, insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
+
+        } catch (DataMapperException e){
+            rollback();
+            return CompletableFuture.completedFuture(false);
+        }
     }
 
     private boolean updateIdentityMap(boolean success, List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,

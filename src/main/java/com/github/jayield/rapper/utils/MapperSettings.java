@@ -39,7 +39,11 @@ public class MapperSettings {
             || field.getType().isAssignableFrom(String.class)
             || field.getType().isAssignableFrom(Timestamp.class)
             || field.getType().isAssignableFrom(Date.class)
-            || field.getType().isAssignableFrom(CompletableFuture.class);
+            || field.getType().isAssignableFrom(CompletableFuture.class)
+            || field.getType().isAssignableFrom(Integer.class)
+            || field.getType().isAssignableFrom(Double.class)
+            || field.getType().isAssignableFrom(Long.class)
+            || field.getType().isAssignableFrom(Boolean.class);
 
     public MapperSettings(Class<?> type) {
         this.type = type;
@@ -120,11 +124,11 @@ public class MapperSettings {
                 .collect(Collectors.toList());
 
         StringBuilder suffix = new StringBuilder();
-        suffix.append(" from [").append(type.getSimpleName()).append("] C ");
+        suffix.append(" from ").append(type.getSimpleName()).append(" C ");
 
         int[] i = {1};
         for (Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass(), i[0]++) {
-            suffix.append("inner join [").append(clazz.getSimpleName()).append(String.format("] P%d ", i[0])).append("on ");
+            suffix.append("inner join ").append(clazz.getSimpleName()).append(String.format(" P%d ", i[0])).append("on ");
 
             //Set the comparisons
             for (int j = 0; j < idName.size(); j++) {
@@ -187,8 +191,8 @@ public class MapperSettings {
         }
 
         insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
-                .collect(Collectors.joining(", ", "insert into [" + type.getSimpleName() + "] ( ", " ) "))
-                + insertOutputClause
+                .collect(Collectors.joining(", ", "insert into " + type.getSimpleName() + " ( ", " ) "))
+                //+ "output " + idsNames + "CAST(INSERTED.version as bigint) version "
                 + (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .map(c -> "?")
                 .collect(Collectors.joining(", ", "values ( ", " )"));
@@ -196,8 +200,7 @@ public class MapperSettings {
         updateQuery = columnsNames
                 .stream()
                 .map(c -> c + " = ?")
-                .collect(Collectors.joining(", ", "update [" + type.getSimpleName() + "] set ", updateOutputClause))
-                + "where "
+                .collect(Collectors.joining(", ", "update " + type.getSimpleName() + " set ", " where ")) //output CAST(INSERTED.version as bigint) version
                 + idName
                 .stream()
                 .map(id -> id + " = ?")
@@ -207,7 +210,7 @@ public class MapperSettings {
         deleteQuery = idName
                 .stream()
                 .map(id -> id + " = ?")
-                .collect(Collectors.joining(" and ", "delete from [" + type.getSimpleName() + "] where ", ""));
+                .collect(Collectors.joining(" and ", "delete from " + type.getSimpleName() + " where ", ""));
     }
 
     class FieldOperations {

@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.net.URLDecoder;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -67,18 +68,20 @@ public class UnitOfWorkTests {
     public void before() throws SQLException, NoSuchFieldException, IllegalAccessException {
         repositoryMap.clear();
         UnitOfWork.removeCurrent();
-        ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
+        ConnectionManager manager = ConnectionManager.getConnectionManager(
+                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
+                "SA", "");
         SqlSupplier<Connection> connectionSupplier = manager::getConnection;
         UnitOfWork.newCurrent(connectionSupplier.wrap());
         con = UnitOfWork.getCurrent().getConnection();
-        con.prepareCall("{call deleteDB}").execute();
-        con.prepareCall("{call populateDB}").execute();
+        con.prepareCall("{call deleteDB()}").execute();
+        con.prepareCall("{call populateDB()}").execute();
         con.commit();
         /*createTables(con);
         deleteDB(con);
         populateDB(con);*/
 
-        objectsContainer = new ObjectsContainer();
+        objectsContainer = new ObjectsContainer(con);
 
         setupLists();
     }

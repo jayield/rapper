@@ -11,6 +11,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
+import java.net.URLDecoder;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Comparator;
@@ -23,7 +24,7 @@ public class DomainObjectComparatorTests {
 
     private final Comparator<Book> bookComparator;
     private final Comparator<Car> carComparator;
-    private final DomainObjectComparator<Object> employeeComparator;
+    private final DomainObjectComparator<Employee> employeeComparator;
     private final Map<Class, MapperRegistry.Container> repositoryMap;
 
     public DomainObjectComparatorTests() throws NoSuchFieldException, IllegalAccessException {
@@ -44,7 +45,9 @@ public class DomainObjectComparatorTests {
     @Before
     public void start() throws SQLException {
         repositoryMap.clear();
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
+        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(
+                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
+                "SA", "");
         UnitOfWork.newCurrent(() -> {
             try {
                 return connectionManager.getConnection();
@@ -52,10 +55,9 @@ public class DomainObjectComparatorTests {
                 throw new DataMapperException(e);
             }
         });
-        Connection con;
-        con = UnitOfWork.getCurrent().getConnection();
-        con.prepareCall("{call deleteDB}").execute();
-        con.prepareCall("{call populateDB}").execute();
+        Connection con = connectionManager.getConnection();
+        con.prepareCall("{call deleteDB()}").execute();
+        con.prepareCall("{call populateDB()}").execute();
         con.commit();
     }
 

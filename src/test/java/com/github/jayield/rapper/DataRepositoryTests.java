@@ -9,6 +9,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
+import java.net.URLDecoder;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
@@ -46,10 +47,12 @@ public class DataRepositoryTests {
     public void before() throws SQLException {
         UnitOfWork.removeCurrent();
         repositoryMap.clear();
-        ConnectionManager manager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
+        ConnectionManager manager = ConnectionManager.getConnectionManager(
+                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
+                "SA", "");
         con = manager.getConnection();
-        con.prepareCall("{call deleteDB}").execute();
-        con.prepareCall("{call populateDB}").execute();
+        con.prepareCall("{call deleteDB()}").execute();
+        con.prepareCall("{call populateDB()}").execute();
         con.commit();
 
         MapperSettings topStudentSettings = new MapperSettings(TopStudent.class);
@@ -175,7 +178,7 @@ public class DataRepositoryTests {
     public void testupdate() throws SQLException {
         ResultSet rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454));
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454), con);
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
@@ -194,10 +197,10 @@ public class DataRepositoryTests {
     @Test
     public void testupdateAll() throws SQLException {
         List<Person> list = new ArrayList<>(2);
-        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321));
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321), con);
         list.add(new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1)));
 
-        rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(454));
+        rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(454), con);
         list.add(new Person(454, "Ze Miguens", new Date(1080, 2, 4), rs.getLong(1)));
 
         boolean success = personRepo.updateAll(list).join();
@@ -215,7 +218,7 @@ public class DataRepositoryTests {
 
     @Test
     public void testSameReferenceUpdate() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
 
         CompletableFuture<Company> companyRepoById = companyRepo.findById(new Company.PrimaryKey(rs.getInt("companyId"), rs.getInt("companyCid")))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException("Company not found")));
@@ -237,7 +240,7 @@ public class DataRepositoryTests {
 
     @Test
     public void testRemoveReferenceUpdate() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), null);
 
         Company company = companyRepo.findById(new Company.PrimaryKey(1, 1)).join().orElseThrow(() -> new DataMapperException("Company not found"));
@@ -256,7 +259,7 @@ public class DataRepositoryTests {
 
     @Test
     public void testRemoveNNReferenceUpdate() throws SQLException {
-        ResultSet rs = executeQuery(bookSelectQuery, getBookPSConsumer("1001 noites"));
+        ResultSet rs = executeQuery(bookSelectQuery, getBookPSConsumer("1001 noites"), con);
 
         Author author = authorRepo.findWhere(new Pair<>("name", "Ze")).join().get(0);
 
@@ -286,7 +289,7 @@ public class DataRepositoryTests {
 
     @Test
     public void testUpdateReferenceUpdate() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"));
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
 
         Company company = companyRepo.findById(new Company.PrimaryKey(1, 1))
                 .join()
@@ -348,10 +351,10 @@ public class DataRepositoryTests {
     @Test
     public void testdeleteAll() throws SQLException {
         List<Integer> list = new ArrayList<>(2);
-        ResultSet rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Bob"));
+        ResultSet rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Bob"), con);
         list.add(rs.getInt("id"));
 
-        rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Charles"));
+        rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Charles"), con);
         list.add(rs.getInt("id"));
 
         boolean success = employeeRepo.deleteAll(list).join();

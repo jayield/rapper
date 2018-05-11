@@ -171,7 +171,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 })
                 .exceptionally(throwable -> {
                     logger.info("Couldn't populate externals of {}. \nReason: {}", t.getClass().getSimpleName(), throwable.getMessage());
-                    return Collections.emptyList();
+                    throw new DataMapperException(throwable);
                 });
 
         setExternal(t, completableFuture, sqlFieldExternal.field, sqlFieldExternal.type);
@@ -241,7 +241,10 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             SqlConsumer<List<V>> consumer;
             if (primaryKeyConstructor == null)
                 consumer = list1 -> {
-                    for (String foreignName : foreignNames) list1.add(rs.getObject(foreignName, type));
+                    for (String foreignName : foreignNames) {
+                        V v = rs.getObject(foreignName, type);
+                        list1.add(v);
+                    }
                 };
             else consumer = list -> {
                 List<Object> idValues = new ArrayList<>();

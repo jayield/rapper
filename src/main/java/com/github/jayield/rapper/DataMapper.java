@@ -65,8 +65,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(s -> s.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
-                    //throwable.printStackTrace();
-                    return Collections.emptyList();
+//                    //throwable.printStackTrace();
+//                    return Collections.emptyList();
+                    throw new DataMapperException(throwable);
                 });
     }
 
@@ -81,8 +82,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
-                    //throwable.printStackTrace();
-                    return Optional.empty();
+//                    //throwable.printStackTrace();
+//                    return Optional.empty();
+                    throw new DataMapperException(throwable);
                 });
     }
 
@@ -109,6 +111,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
         if (!parentSuccess[0]) return CompletableFuture.completedFuture(parentSuccess[0]);
 
+        UnitOfWork current = UnitOfWork.getCurrent();
+
         return SQLUtils.execute(mapperSettings.getInsertQuery(),
                 stmt -> {
                     Stream<SqlFieldId> ids = mapperSettings
@@ -129,22 +133,23 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     SQLUtils.setValuesInStatement(fields, stmt, obj);
                 }
         )
-                .thenApply(ps -> {
+                .thenCompose(ps -> {
                     try {
-                        ResultSet rs = ps.getResultSet();
-                        if(rs != null) {
-                            setVersion(obj, rs);
-                            setGeneratedKeys(obj, rs);
-                        }
-                        return true;
+                        UnitOfWork.setCurrent(current);
+                        ResultSet rs = ps.getGeneratedKeys();
+                        setGeneratedKeys(obj, rs);
+                        return this.findById(obj.getIdentityKey());
                     } catch (SQLException e) {
                         throw new DataMapperException(e);
                     }
                 })
+                .thenApply(result -> {
+                    result.ifPresent(item -> setVersion(obj, item.getVersion()));
+                    return true;
+                })
                 .exceptionally(throwable -> {
                     log.info("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
-                    throwable.printStackTrace();
-                    return false;
+                    throw new DataMapperException(throwable);
                 });
     }
 
@@ -160,7 +165,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         getParentMapper().ifPresent(objectDataMapper -> parentSuccess[0] = objectDataMapper.update(obj).join());
 
         if (!parentSuccess[0]) return CompletableFuture.completedFuture(parentSuccess[0]);
-
+        UnitOfWork current = UnitOfWork.getCurrent();
         return SQLUtils.execute(mapperSettings.getUpdateQuery(), stmt -> {
             try {
                 Stream<SqlFieldId> ids = mapperSettings.getIds().stream();
@@ -195,18 +200,17 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 throw new DataMapperException(e);
             }
         })
-                .thenApply(ps -> {
-                    try {
-                        ResultSet rs = ps.getResultSet();
-                        if(rs != null) setVersion(obj, rs);
-                        return true;
-                    } catch (SQLException e) {
-                        throw new DataMapperException(e);
-                    }
+                .thenCompose(ps -> {
+                    UnitOfWork.setCurrent(current);
+                    return this.findById(obj.getIdentityKey());
+                })
+                .thenApply(result -> {
+                    result.ifPresent(item -> setVersion(obj, item.getVersion()));
+                    return true;
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
-                    return false;
+                    throw new DataMapperException(throwable);
                 });
     }
 
@@ -229,7 +233,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't deleteById {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
-                    return false;
+                    throw new DataMapperException(throwable);
                 });
     }
 
@@ -247,6 +251,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .exceptionally(throwable -> {
                     log.info("Couldn't delete {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    //throw new DataMapperException(throwable);
                     return false;
                 });
     }
@@ -391,6 +396,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .filter(f -> f.identity && !f.isFromParent())
                 .forEach(field -> {
                     try {
+                        rs.next();
                         field.field.setAccessible(true);
                         field.field.set(obj, rs.getObject(field.name));
                     } catch (IllegalAccessException | SQLException e) {
@@ -399,20 +405,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 });
     }
 
-    private void setVersion(T obj, ResultSet rs) {
+    private void setVersion(T obj, long newValue) {
         try {
-            SqlFieldVersion version = mapperSettings.getVersionField();
-            if (rs.next() && version != null) {
-                String columnLabel = version.name.substring(1, version.name.length()); //Remove the prefix by doing the subString));
 
-                Field versionField = version.field;
-                versionField.setAccessible(true);
-                versionField.set(obj, rs.getLong(columnLabel));
-            } else throw new DataMapperException("Couldn't get version.");
-        } catch (IllegalAccessException ignored) {
+                Field version = type.getDeclaredField("version"); //TODO
+                version.setAccessible(true);
+                version.set(obj, newValue);
+        } catch (NoSuchFieldException | IllegalAccessException ignored) {
             log.info("Version field not found on {}.", type.getSimpleName());
-        } catch (SQLException e) {
-            log.info("Couldn't set version on {}.\nReason: {}", type.getSimpleName(), e.getMessage());
         }
     }
 

@@ -1,9 +1,13 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.utils.ConnectionManager;
 import com.github.jayield.rapper.utils.DBsPath;
 import com.github.jayield.rapper.utils.SqlConsumer;
 import com.github.jayield.rapper.utils.UnitOfWork;
+import org.hsqldb.cmdline.SqlFile;
+import org.hsqldb.cmdline.SqlToolError;
 
+import java.io.*;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -24,12 +28,13 @@ public class TestUtils {
             "  from Student C inner join Person P1 on C.nif = P1.nif where C.nif = ?";
     public static final String topStudentSelectQuery = "select P1.studentNumber, CAST(P1.version as bigint) P1version, P2.name, P2.birthday, CAST(P2.version as bigint) P2version, P2.nif, C.topGrade, C.year,\n" +
             "  CAST(C.version as bigint) Cversion from TopStudent C inner join Student P1 on C.nif = P1.nif inner join Person P2 on P1.nif = P2.nif where C.nif = ?";
-    public static final String companySelectQuery = "select C.id, C.cid, C.motto, CAST(C.version as bigint) Cversion from [Company] C where id = ? and cid = ?";
+    public static final String companySelectQuery = "select C.id, C.cid, C.motto, CAST(C.version as bigint) Cversion from Company C where id = ? and cid = ?";
     public static final String dogSelectQuery = "select name, race, age from Dog where name = ? and race = ?";
 
-    public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer){
+    public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer, Connection con){
         try {
-            PreparedStatement ps = getConnectionManager(DBsPath.TESTDB).getConnection().prepareStatement(sql);
+
+            PreparedStatement ps = con.prepareStatement(sql);
             preparedStatementConsumer.accept(ps);
             ResultSet rs = ps.executeQuery();
             rs.next();
@@ -83,5 +88,22 @@ public class TestUtils {
         };
 
         return consumer.wrap();
+    }
+
+    public static void runScript(String path, Connection con){
+        try(InputStream inputStream = TestUtils.class.getResourceAsStream(path)) {
+            SqlFile sqlFile = new SqlFile(
+                    new InputStreamReader(
+                            inputStream),
+                    "init",
+                    System.out,
+                    "UTF-8",
+                    false,
+                    new File("."));
+            sqlFile.setConnection(con);
+            sqlFile.execute();
+        } catch (SqlToolError | IOException | SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
