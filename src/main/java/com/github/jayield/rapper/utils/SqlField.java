@@ -190,8 +190,7 @@ public class SqlField {
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
                 DomainObject domainObject = cp != null ? cp.join() : null;
                 int[] i = {index};
-                ((DataMapper) MapperRegistry.getRepository(domainObjectType).getMapper())
-                        .getMapperSettings()
+                MapperRegistry.getMapperSettings(domainObjectType)
                         .getIds()
                         .forEach(sqlFieldId -> {
                             sqlFieldId.setValueInStatement(stmt, i[0], domainObject);

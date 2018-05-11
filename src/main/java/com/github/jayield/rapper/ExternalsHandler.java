@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Type;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
@@ -165,7 +164,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                     try {
                         UnitOfWork.setCurrent(current);
                         return getExternalObjects(repo, sqlFieldExternal.externalNames, preparedStatement.getResultSet())
-                                .collect(Collectors.collectingAndThen(Collectors.toList(), this::listToCP));
+                                .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture));
                     } catch (SQLException e) {
                         throw new DataMapperException(e);
                     }
@@ -242,7 +241,10 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             SqlConsumer<List<V>> consumer;
             if (primaryKeyConstructor == null)
                 consumer = list1 -> {
-                    for (String foreignName : foreignNames) list1.add(rs.getObject(foreignName, type));
+                    for (String foreignName : foreignNames) {
+                        V v = rs.getObject(foreignName, type);
+                        list1.add(v);
+                    }
                 };
             else consumer = list -> {
                 List<Object> idValues = new ArrayList<>();
@@ -264,20 +266,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         } catch (SQLException e) {
             throw new DataMapperException(e);
         }
-    }
-
-    /**
-     * Converts a List<CompletableFuture<L>> into a CompletableFuture<List<L>>
-     *
-     * @param futureList
-     * @return
-     */
-    private <L> CompletableFuture<List<L>> listToCP(List<CompletableFuture<L>> futureList) {
-        return CompletableFuture.allOf(futureList.toArray(new CompletableFuture[futureList.size()]))
-                .thenApply(v -> futureList
-                        .stream()
-                        .map(CompletableFuture::join)
-                        .collect(Collectors.toList()));
     }
 
     /**
@@ -304,34 +292,72 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
     // Go to externals check if they have a SingleExternalReference,
     // if they do, go to that reference, check if they have the same reference in opposite way
     // and if they do, add on that list the object
-    public void updateReferences(T obj) {
+    public void insertReferences(T obj) {
         changeReferences(obj, true);
     }
 
-    public void removeReferences(T obj) {
-        changeReferences(obj, false);
-    }
-
-    private void changeReferences(T obj, boolean isToReplace) {
+    public void updateReferences(T prevDomainObj, T obj) {
         if (externals == null) return;
 
         externals.forEach(sqlFieldExternal -> {
             if (!sqlFieldExternal.getValues().equals(Arrays.asList(1, 0, 0, 0)) && !sqlFieldExternal.getValues().equals(Arrays.asList(0, 1, 1, 1))) return;
             try {
                 sqlFieldExternal.field.setAccessible(true);
-                CompletableFuture externalCP = (CompletableFuture) sqlFieldExternal.field.get(obj);
+                CompletableFuture prevExternalCF = (CompletableFuture) sqlFieldExternal.field.get(prevDomainObj);
+                CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
 
-                //Alternative: getExternals through Mapper.
-                //MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals().stream();
-                Stream<Field> domainObjectFields = Arrays.stream(sqlFieldExternal.domainObjectType.getDeclaredFields());
+                List<SqlFieldExternal> externals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
 
                 //external might be a list, in case of externalTable or a DomainObject in case a singleReference
-                externalCP.thenAccept(external -> {
-                    if(List.class.isAssignableFrom(external.getClass()))
-                        ((List<Object>) external).forEach(e -> modifyList(obj, isToReplace, e, domainObjectFields));
-                    else
-                        modifyList(obj, isToReplace, external, domainObjectFields);
-                });
+
+                /*
+                 * Cases:
+                 * 1º New Reference - prevExternalCF = null && externalCF = newValue
+                 * 2º Update Reference - prevExternalCF = value && externalCF = newValue
+                 * 3º Remove Reference - prevExternalCF = value && externalCF = null
+                 * 4º Do nothing - prevExternalCF = null && externalCF = null
+                 */
+
+                if(prevExternalCF == null && externalCF != null){
+                    changeCFReferences(obj, externalCF, externals, true);
+                } else if (prevExternalCF != null && externalCF != null) {
+                    changeCFReferences(obj, prevExternalCF, externals, false);
+                    changeCFReferences(obj, externalCF, externals, true);
+                } else if (prevExternalCF != null && externalCF == null) {
+                    changeCFReferences(obj, prevExternalCF, externals, false);
+                }
+            } catch (IllegalAccessException e) {
+                throw new DataMapperException(e);
+            }
+        });
+    }
+
+    public void removeReferences(T obj) {
+        changeReferences(obj, false);
+    }
+
+    private void changeCFReferences(T obj, CompletableFuture externalCF, List<SqlFieldExternal> externals, boolean isToStore) {
+        externalCF.thenAccept(external -> {
+            if (List.class.isAssignableFrom(external.getClass()))
+                ((List<Object>) external).forEach(e -> modifyList(obj, isToStore, e, externals));
+            else
+                modifyList(obj, isToStore, external, externals);
+        });
+    }
+
+    private void changeReferences(T obj, boolean isToStore) {
+        if (externals == null) return;
+
+        externals.forEach(sqlFieldExternal -> {
+            if (!sqlFieldExternal.getValues().equals(Arrays.asList(1, 0, 0, 0)) && !sqlFieldExternal.getValues().equals(Arrays.asList(0, 1, 1, 1))) return;
+            try {
+                sqlFieldExternal.field.setAccessible(true);
+                CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
+
+                List<SqlFieldExternal> externals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
+
+                //external might be a list, in case of externalTable or a DomainObject in case a singleReference
+                if (externalCF != null) changeCFReferences(obj, externalCF, externals, isToStore);
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }
@@ -339,25 +365,25 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
     }
 
     /**
-     *
      * @param obj The object to add or remove from the list
-     * @param isToReplace flag to indicate if it's remove
+     * @param isToStore flag to indicate if it should add new object
      * @param external the external object to obtain the value of the completablefuture
-     * @param fieldStream A stream with fields of external
+     * @param externalExternals A list with fields of external from the External object
      */
-    private void modifyList(T obj, boolean isToReplace, Object external, Stream<Field> fieldStream) {
-        //WARNING!!!!! FIELDS MIGHT NOT HAVE A SINGLE COMPLETABLE FUTURE!!!! CHECK IF IT'S THE ONE WE WANT
-        Optional<Field> optionalFutureField = fieldStream
-                .filter(field -> field.getType() == CompletableFuture.class)
+    private void modifyList(T obj, boolean isToStore, Object external, List<SqlFieldExternal> externalExternals) {
+        Optional<SqlFieldExternal> optionalFutureField = externalExternals
+                .stream()
+                .filter(sqlFieldExternal -> sqlFieldExternal.domainObjectType == obj.getClass())
                 .findFirst();
 
-        optionalFutureField.ifPresent(field -> {
+        optionalFutureField.ifPresent(sqlFieldExternal -> {
             try {
+                Field field = sqlFieldExternal.field;
                 field.setAccessible(true);
                 CompletableFuture<? extends List> listCP = (CompletableFuture<? extends List>) field.get(external);
                 listCP.thenAccept(list -> {
                     list.removeIf(t -> ((T) t).getIdentityKey().equals(obj.getIdentityKey()));
-                    if (isToReplace) list.add(obj);
+                    if (isToStore) list.add(obj);
                 });
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);

@@ -1,6 +1,5 @@
 package com.github.jayield.rapper.utils;
 
-
 import com.github.jayield.rapper.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
@@ -181,7 +180,6 @@ public class MapperSettings {
                 .map(f -> "INSERTED." + f.name)
                 .collect(Collectors.joining(", ", "", ", "));
 
-        // "output " + (idsNames.equals(", ") ? "" : idsNames) +
         String insertOutputClause = idsNames.equals(", ") ? "" : "output " + idsNames;
         String updateOutputClause = " ";
         String updateWhereVersion = "";
@@ -213,10 +211,6 @@ public class MapperSettings {
                 .stream()
                 .map(id -> id + " = ?")
                 .collect(Collectors.joining(" and ", "delete from " + type.getSimpleName() + " where ", ""));
-    }
-
-    public SqlFieldVersion getVersionField() {
-        return versionField;
     }
 
     class FieldOperations {
@@ -267,27 +261,12 @@ public class MapperSettings {
         };
     }
 
-    private String getName(Field f, String pref) {
-        if (f.getName().equals("version")) return pref.substring(0, pref.length() - 1) + f.getName();
-        else return f.getName();
-    }
-
-    private String getQueryValue(Field f, String pref) {
-        if (f.getName().equals("version"))
-            return String.format("CAST(%sversion as bigint) %sversion", pref, pref.substring(0, pref.length() - 1));
-        else return pref + f.getName();
-    }
-
     private Stream<SqlField> toSqlField(Field f, String queryPrefix) {
         for (FieldOperations op : operations) {
             if (op.predicate.test(f))
                 return op.function.apply(f, queryPrefix);
         }
         return Stream.empty();
-    }
-
-    public Class<?> getType() {
-        return type;
     }
 
     public String getSelectQuery() {
@@ -336,5 +315,9 @@ public class MapperSettings {
 
     public Constructor<?> getPrimaryKeyConstructor() {
         return primaryKeyConstructor;
+    }
+
+    public SqlFieldVersion getVersionField() {
+        return versionField;
     }
 }

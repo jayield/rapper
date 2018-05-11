@@ -7,15 +7,13 @@ import javafx.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.sql.Connection;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.github.jayield.rapper.utils.ConnectionManager.*;
 
@@ -26,11 +24,15 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     private final Class<T> type;
     private final Class<K> keyType;
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
+    private final ExternalsHandler<T, K> externalsHandler;
+    private final Comparator<T> comparator;
 
-    public DataRepository(Class<T> type, Class<K> keyType, Mapper<T, K> mapper) {
+    public DataRepository(Class<T> type, Class<K> keyType, Mapper<T, K> mapper, ExternalsHandler<T, K> externalsHandler, Comparator<T> comparator) {
         this.type = type;
         this.keyType = keyType;
         this.mapper = mapper;
+        this.externalsHandler = externalsHandler;
+        this.comparator = comparator;
     }
 
     public Mapper<T, K> getMapper() {
@@ -50,22 +52,29 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        checkUnitOfWork();
-        CompletableFuture<List<T>> where = mapper.findWhere(values);
-        where.thenAccept(ts -> ts.forEach(this::putOrReplace));
-        return where;
+        UnitOfWork current = checkUnitOfWork();
+        return mapper.findWhere(values)
+                .thenApply(Collection::stream)
+                .thenApply(tStream -> processNewObjects(current, tStream))
+                .thenApply(completableFutureStream -> completableFutureStream.collect(Collectors.toList()))
+                .thenCompose(CollectionUtils::listToCompletableFuture);
     }
 
     @Override
     public CompletableFuture<Optional<T>> findById(K k) {
-        checkUnitOfWork();
+        UnitOfWork current = checkUnitOfWork();
 
+        boolean[] wasComputed = {false};
         CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(
                 k,
-                k1 -> mapper
-                        .findById(k)
-                        .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")))
+                k1 -> {
+                    wasComputed[0] = true;
+                    return mapper
+                            .findById(k)
+                            .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")));
+                }
         );
+        if(wasComputed[0]) populateExternals(current, completableFuture);
 
         return completableFuture
                 .thenApply(Optional::of)
@@ -78,10 +87,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<List<T>> findAll() {
-        checkUnitOfWork();
-        CompletableFuture<List<T>> completableFuture = mapper.findAll();
-        completableFuture.thenAccept(list -> list.forEach(this::putOrReplace));
-        return completableFuture;
+        UnitOfWork current = checkUnitOfWork();
+        return mapper.findAll()
+                .thenApply(Collection::stream)
+                .thenApply(tStream -> processNewObjects(current, tStream))
+                .thenApply(tStream -> tStream.collect(Collectors.toList()))
+                .thenCompose(CollectionUtils::listToCompletableFuture);
     }
 
     @Override
@@ -114,8 +125,13 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                 return unitOfWork.commit();
             });
         else {
-            t.markDirty();
-            return unitOfWork.commit();
+            return findById(t.getIdentityKey())
+                    .thenApply(t1 -> t1.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
+                    .thenCompose(t1 -> {
+                        t1.markToBeDirty();
+                        t.markDirty();
+                        return unitOfWork.commit();
+                    });
         }
     }
 
@@ -132,6 +148,15 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
             if (future != null)
                 completableFutures.add(future);
+            else {
+                CompletableFuture<T> objectCompletableFuture = findById(t1.getIdentityKey())
+                        .thenApply(t2 -> t2.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
+                        .thenApply(t2 -> {
+                            t2.markToBeDirty();
+                            return t2;
+                        });
+                completableFutures.add(objectCompletableFuture);
+            }
             t1.markDirty();
         });
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
@@ -204,6 +229,38 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                         ? CompletableFuture.completedFuture(t)
                         : tCompletableFuture.thenApply(t1 -> t.getVersion() > t1.getVersion() ? t : t1)
         );
+    }
+
+    private Stream<CompletableFuture<T>> processNewObjects(UnitOfWork current, Stream<T> tStream) {
+        return tStream.map(t -> {
+            boolean[] wasComputed = {false};
+            CompletableFuture<T> future = identityMap.compute(t.getIdentityKey(), (k, tCompletableFuture) -> computeNewValue(wasComputed, t, tCompletableFuture));
+            if(wasComputed[0]) populateExternals(current, future);
+            return future;
+        });
+    }
+
+    private void populateExternals(UnitOfWork current, CompletableFuture<T> future) {
+        future.thenApply(t1 -> {
+            UnitOfWork.setCurrent(current);
+            externalsHandler.populateExternals(t1);
+            return t1;
+        });
+    }
+
+    private CompletableFuture<T> computeNewValue(boolean[] wasComputed, T newT, CompletableFuture<T> actualFuture) {
+        CompletableFuture<T> newFuture = CompletableFuture.completedFuture(newT);
+
+        if (actualFuture == null) {
+            wasComputed[0] = true;
+            return newFuture;
+        }
+        T actualT = actualFuture.join();
+        if (comparator.compare(actualT, newT) < 0) {
+            wasComputed[0] = true;
+            return newFuture;
+        }
+        return actualFuture;
     }
 
     public Class<K> getKeyType() {

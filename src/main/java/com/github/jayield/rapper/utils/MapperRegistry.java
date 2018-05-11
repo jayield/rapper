@@ -4,6 +4,7 @@ import com.github.jayield.rapper.*;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,32 +14,35 @@ public class MapperRegistry {
 
     private static Map<Class, Container> repositoryMap = new HashMap<>();
 
-    public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> type) {
-        Container container = repositoryMap.computeIfAbsent(type, aClass -> {
+    private static<T extends DomainObject<K>, K> Container<T, K> getContainer(Class<T> type) {
+        return repositoryMap.computeIfAbsent(type, aClass -> {
             MapperSettings mapperSettings = new MapperSettings(aClass);
             ExternalsHandler<T, K> externalHandler = new ExternalsHandler<>(mapperSettings);
-            DataMapper<T, K> dataMapper = new DataMapper<T, K>(aClass, mapperSettings, externalHandler);
+            DataMapper<T, K> dataMapper = new DataMapper<T, K>(aClass, mapperSettings);
 
+            Comparator<T> comparator = new DomainObjectComparator<>(mapperSettings);
             Class<K> keyType = ReflectionUtils.<T, K>getKeyType(aClass);
 
-            DataRepository<T, K> repository = new DataRepository<T, K>(aClass, keyType, dataMapper);
+            DataRepository<T, K> repository = new DataRepository<T, K>(aClass, keyType, dataMapper, externalHandler, comparator);
 
             return new Container<>(mapperSettings, externalHandler, repository, dataMapper);
         });
-
-        return container.getDataRepository();
     }
 
-    static <T extends DomainObject<K>, K> ExternalsHandler<T, K> getExternal(Class<T> type){
-        return repositoryMap.get(type).getExternalsHandler();
+    public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> type) {
+        return getContainer(type).getDataRepository();
     }
 
-    public static MapperSettings getMapperSettings(Class<?> type){
-        return repositoryMap.get(type).getMapperSettings();
+    public static <T extends DomainObject<K>, K> ExternalsHandler<T, K> getExternal(Class<T> type){
+        return getContainer(type).getExternalsHandler();
+    }
+
+    public static <T extends DomainObject<K>, K> MapperSettings getMapperSettings(Class<T> type){
+        return getContainer(type).getMapperSettings();
     }
 
     public static <T extends DomainObject<K>, K> Mapper<T, K> getMapper(Class<T> type){
-        return repositoryMap.get(type).getMapper();
+        return getContainer(type).getMapper();
     }
 
     public static class Container<T extends DomainObject<K>, K>{

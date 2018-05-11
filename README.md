@@ -49,7 +49,12 @@ takes place.
 - A `DomainObject` may also contain a `CompletableFuture<List<DomainObject>>` as a reference to another table. The field holding it, must be annotated with 
 <code>@ColumnName</code>, in which is passed `foreignName` as the name of the column(s) in the referenced table where the ID of the `DomainObject` 
 takes place, the `table` in case of N-N relation and the `externalName` which is the name of the column(s) in the referenced table 
-where the ID of the external `DomainObject` takes place. `externalName` is only needed when `table` is given. 
+where the ID of the external `DomainObject` takes place. `externalName` is only needed when `table` is given.
+
+- Each `DomainObject` may have a version field (an auto incremented field on insertions and updates). This field must 
+be annotated with `@Version` and it will be used to successful 
+synchronise the in-memory data and DB as it will only allow writes in the DB, if the `DomainObject`'s `version` that is being 
+written exists on it. 
  
 ### Rules
 - You must create an environment variable to connect to the DB. The environment variable must have the following format:
@@ -77,11 +82,6 @@ names, the domain object must have field of that class and mark it with the anno
 - The class that contains the keys, must extend from `EmbeddedIdClass` and call its super on the contructor, passing the values of the ids
 
 - A `DomainObject` and the field annotated with <code>@EmbeddedId</code> must have a 0 arguments constructor.
-
-- Each `DomainObject` may have a version field (an auto incremented field on insertions and updates). This field must 
-be annotated with `@Version` and it will be used to successful 
-synchronise the in-memory data and DB as it will only allow writes in the DB, if the `DomainObject`'s `version` that is being 
-written exists on it.
 
 ### Examples
 

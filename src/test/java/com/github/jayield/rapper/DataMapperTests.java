@@ -10,7 +10,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Field;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLDecoder;
@@ -21,8 +20,6 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
@@ -35,7 +32,7 @@ public class DataMapperTests {
     private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
 
     private final DataMapper<Person, Integer> personMapper = (DataMapper<Person, Integer>) MapperRegistry.getRepository(Person.class).getMapper();
-    private final DataMapper<Car, Car.PrimaryPk> carMapper = (DataMapper<Car, Car.PrimaryPk>) MapperRegistry.getRepository(Car.class).getMapper();
+    private final DataMapper<Car, CarKey> carMapper = (DataMapper<Car, CarKey>) MapperRegistry.getRepository(Car.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
     private final DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
     private final DataMapper<Book, Long> bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class).getMapper();
@@ -120,7 +117,7 @@ public class DataMapperTests {
     public void testEmbeddedIdFindById(){
         int owner = 2; String plate = "23we45";
         Car car = carMapper
-                .findById(new Car.PrimaryPk(owner, plate))
+                .findById(new CarKey(owner, plate))
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
         assertSingleRow(car, carSelectQuery, getCarPSConsumer(owner, plate), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
@@ -292,7 +289,7 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedDeleteById(){
-        assertTrue(carMapper.deleteById(new Car.PrimaryPk(2, "23we45")).join());
+        assertTrue(carMapper.deleteById(new CarKey(2, "23we45")).join());
         assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
     }
 

@@ -1,8 +1,10 @@
 package com.github.jayield.rapper.utils;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -29,6 +31,20 @@ public class CollectionUtils {
      */
     public static <T, R> Stream<R> mapWithIndex(Stream<? extends T> stream, BiFunction<Integer, ? super T, ? extends R> mapper) {
         return zipWithIndex(stream).map(entry -> mapper.apply(entry.index, entry.item));
+    }
+
+    /**
+     * Converts a List<CompletableFuture<L>> into a CompletableFuture<List<L>>
+     *
+     * @param futureList
+     * @return
+     */
+    public static <L> CompletableFuture<List<L>> listToCompletableFuture(List<CompletableFuture<L>> futureList) {
+        return CompletableFuture.allOf(futureList.toArray(new CompletableFuture[futureList.size()]))
+                .thenApply(v -> futureList
+                        .stream()
+                        .map(CompletableFuture::join)
+                        .collect(Collectors.toList()));
     }
 
     public static class Indexer<T> {

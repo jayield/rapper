@@ -28,14 +28,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final Class<?> primaryKeyType;
     private final Constructor<T> constructor;
     private final Constructor<?> primaryKeyConstructor;
-    private final ExternalsHandler<T, K> externalHandler;
     private final Logger log = LoggerFactory.getLogger(DataMapper.class);
     private final MapperSettings mapperSettings;
 
-    public DataMapper(Class<T> type, MapperSettings mapperSettings, ExternalsHandler<T, K> externalsHandler) {
+    public DataMapper(Class<T> type, MapperSettings mapperSettings) {
         this.type = type;
         this.mapperSettings = mapperSettings;
-        this.externalHandler = externalsHandler;
 
         primaryKeyType = mapperSettings.getPrimaryKeyType();
         primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
@@ -64,10 +62,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             }
         })
                 .thenApply(this::getStream)
-                .thenApply(tStream -> {
-                    UnitOfWork.setCurrent(current);
-                    return tStream.peek(externalHandler::populateExternals);
-                })
                 .thenApply(s -> s.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
@@ -84,9 +78,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SQLUtils.execute(selectByIdQuery, stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
                 .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
-                    Optional<T> optionalT = getStream(ps).findFirst();
-                    optionalT.ifPresent(externalHandler::populateExternals);
-                    return optionalT;
+                    return getStream(ps).findFirst();
                 })
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
@@ -102,10 +94,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s -> {
         })
                 .thenApply(this::getStream)
-                .thenApply(tStream -> {
-                    UnitOfWork.setCurrent(current);
-                    return tStream.peek(externalHandler::populateExternals);
-                })
                 .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
@@ -147,10 +135,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         )
                 .thenCompose(ps -> {
                     try {
-                    UnitOfWork.setCurrent(current);
-                    ResultSet rs = ps.getGeneratedKeys();
-                    setGeneratedKeys(obj, rs);
-                    return this.findById(obj.getIdentityKey());
+                        UnitOfWork.setCurrent(current);
+                        ResultSet rs = ps.getGeneratedKeys();
+                        setGeneratedKeys(obj, rs);
+                        return this.findById(obj.getIdentityKey());
                     } catch (SQLException e) {
                         throw new DataMapperException(e);
                     }
