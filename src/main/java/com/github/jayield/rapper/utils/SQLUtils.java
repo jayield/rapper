@@ -10,6 +10,10 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 public class SQLUtils {
+
+    private SQLUtils() {
+    }
+
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
     public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement) {

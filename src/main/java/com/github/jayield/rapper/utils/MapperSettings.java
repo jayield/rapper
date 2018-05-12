@@ -103,9 +103,12 @@ public class MapperSettings {
                     .peek(SqlFieldId::setFromParent)
                     .collect(Collectors.toList());
 
-            allFields.addAll(parentFieldMap.get(SqlField.class));
-            allFields.addAll(parentFieldMap.get(SqlFieldVersion.class));
             ids.addAll(sqlFieldIds);
+
+            allFields.addAll(parentFieldMap.get(SqlField.class));
+
+            List<SqlField> sqlFieldVersions = parentFieldMap.get(SqlFieldVersion.class);
+            if (sqlFieldVersions != null) allFields.addAll(sqlFieldVersions);
         }
     }
 
@@ -174,19 +177,9 @@ public class MapperSettings {
                 .stream()
                 .anyMatch(f -> f.identity && !f.isFromParent());
 
-        String idsNames = ids
-                .stream()
-                .filter(f -> f.identity && !f.isFromParent())
-                .map(f -> "INSERTED." + f.name)
-                .collect(Collectors.joining(", ", "", ", "));
-
-        String insertOutputClause = idsNames.equals(", ") ? "" : "output " + idsNames;
-        String updateOutputClause = " ";
         String updateWhereVersion = "";
         if(versionField != null) {
             String versionColumnName = versionField.name.substring(1, versionField.name.length()); //Remove the prefix by doing the subString
-            insertOutputClause = String.format((insertOutputClause.equals("") ? "output " : insertOutputClause) + "CAST(INSERTED.%s as bigint) %s ", versionColumnName, versionColumnName);
-            updateOutputClause = String.format(" output CAST(INSERTED.%s as bigint) %s ", versionColumnName, versionColumnName);
             updateWhereVersion = String.format(" and %s = ?", versionColumnName);
         }
 
@@ -313,7 +306,7 @@ public class MapperSettings {
         return primaryKeyType;
     }
 
-    public Constructor<?> getPrimaryKeyConstructor() {
+    public Constructor getPrimaryKeyConstructor() {
         return primaryKeyConstructor;
     }
 

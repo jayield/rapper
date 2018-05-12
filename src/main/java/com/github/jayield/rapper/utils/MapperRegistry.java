@@ -2,8 +2,6 @@ package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.*;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
@@ -18,12 +16,12 @@ public class MapperRegistry {
         return repositoryMap.computeIfAbsent(type, aClass -> {
             MapperSettings mapperSettings = new MapperSettings(aClass);
             ExternalsHandler<T, K> externalHandler = new ExternalsHandler<>(mapperSettings);
-            DataMapper<T, K> dataMapper = new DataMapper<T, K>(aClass, mapperSettings);
+            DataMapper<T, K> dataMapper = new DataMapper<>(aClass, mapperSettings);
 
             Comparator<T> comparator = new DomainObjectComparator<>(mapperSettings);
             Class<K> keyType = ReflectionUtils.<T, K>getKeyType(aClass);
 
-            DataRepository<T, K> repository = new DataRepository<T, K>(aClass, keyType, dataMapper, externalHandler, comparator);
+            DataRepository<T, K> repository = new DataRepository<>(aClass, keyType, dataMapper, externalHandler, comparator);
 
             return new Container<>(mapperSettings, externalHandler, repository, dataMapper);
         });

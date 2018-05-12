@@ -47,7 +47,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        UnitOfWork current = UnitOfWork.getCurrent();
         String query = Arrays.stream(values)
                 .map(p -> p.getKey() + " = ? ")
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
@@ -90,7 +89,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<List<T>> findAll() {
-        UnitOfWork current = UnitOfWork.getCurrent();
         return SQLUtils.execute(mapperSettings.getSelectQuery(), s -> {
         })
                 .thenApply(this::getStream)
@@ -407,11 +405,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private void setVersion(T obj, long newValue) {
         try {
-
-                Field version = type.getDeclaredField("version"); //TODO
+            SqlFieldVersion versionField = mapperSettings.getVersionField();
+            if(versionField != null) {
+                Field version = versionField.field;
                 version.setAccessible(true);
                 version.set(obj, newValue);
-        } catch (NoSuchFieldException | IllegalAccessException ignored) {
+            }
+        } catch (IllegalAccessException ignored) {
             log.info("Version field not found on {}.", type.getSimpleName());
         }
     }
@@ -422,9 +422,5 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         } catch (SQLException e) {
             throw new DataMapperException(e);
         }
-    }
-
-    public MapperSettings getMapperSettings() {
-        return mapperSettings;
     }
 }

@@ -7,7 +7,6 @@ import com.github.jayield.rapper.utils.SqlField;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class DomainObjectComparator<T extends DomainObject> implements Comparator<T> {
 
@@ -25,17 +24,6 @@ public class DomainObjectComparator<T extends DomainObject> implements Comparato
     //o1 should be the object in IdentityMap and o2 the new object to compare
     @Override
     public int compare(T o1, T o2) {
-        /*if(versionField != null){
-            try {
-                versionField.field.setAccessible(true);
-                Object o1Version = versionField.field.get(o1);
-                Object o2Version = versionField.field.get(o2);
-                return o1Version.equals(o2Version) ? 0 : -1;
-            } catch (IllegalAccessException e) {
-                throw new DataMapperException(e);
-            }
-        }*/
-
         boolean anyDifference = allFields.stream().anyMatch(sqlField -> {
             try {
                 sqlField.field.setAccessible(true);

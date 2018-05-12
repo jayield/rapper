@@ -214,11 +214,6 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                 .thenCompose(aVoid -> unitOfWork.commit());
     }
 
-    private void putOrReplace(T item) {
-        K key = item.getIdentityKey();
-        identityMap.compute(key, (k, v) -> CompletableFuture.completedFuture(item));
-    }
-
     public void invalidate(K identityKey) {
         identityMap.remove(identityKey);
     }
@@ -227,8 +222,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         identityMap.compute(identityKey,
                 (k, tCompletableFuture) -> tCompletableFuture == null
                         ? CompletableFuture.completedFuture(t)
-                        : tCompletableFuture.thenApply(t1 -> t.getVersion() > t1.getVersion() ? t : t1)
+                        : tCompletableFuture.thenApply(t1 -> getHighestVersionT(t, t1))
         );
+    }
+
+    private T getHighestVersionT(T t, T t1) {
+        return t.getVersion() > t1.getVersion() ? t : t1;
     }
 
     private Stream<CompletableFuture<T>> processNewObjects(UnitOfWork current, Stream<T> tStream) {
@@ -263,7 +262,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         return actualFuture;
     }
 
-    public Class<K> getKeyType() {
+    Class<K> getKeyType() {
         return keyType;
     }
 }

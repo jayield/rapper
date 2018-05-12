@@ -306,7 +306,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 CompletableFuture prevExternalCF = (CompletableFuture) sqlFieldExternal.field.get(prevDomainObj);
                 CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
 
-                List<SqlFieldExternal> externals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
+                List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
 
                 //external might be a list, in case of externalTable or a DomainObject in case a singleReference
 
@@ -319,12 +319,12 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                  */
 
                 if(prevExternalCF == null && externalCF != null){
-                    changeCFReferences(obj, externalCF, externals, true);
+                    changeCFReferences(obj, externalCF, domainObjectExternals, true);
                 } else if (prevExternalCF != null && externalCF != null) {
-                    changeCFReferences(obj, prevExternalCF, externals, false);
-                    changeCFReferences(obj, externalCF, externals, true);
+                    changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
+                    changeCFReferences(obj, externalCF, domainObjectExternals, true);
                 } else if (prevExternalCF != null && externalCF == null) {
-                    changeCFReferences(obj, prevExternalCF, externals, false);
+                    changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
                 }
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
@@ -354,10 +354,10 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 sqlFieldExternal.field.setAccessible(true);
                 CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
 
-                List<SqlFieldExternal> externals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
+                List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
 
                 //external might be a list, in case of externalTable or a DomainObject in case a singleReference
-                if (externalCF != null) changeCFReferences(obj, externalCF, externals, isToStore);
+                if (externalCF != null) changeCFReferences(obj, externalCF, domainObjectExternals, isToStore);
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }

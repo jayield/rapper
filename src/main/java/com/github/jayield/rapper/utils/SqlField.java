@@ -1,12 +1,10 @@
 package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.ColumnName;
-import com.github.jayield.rapper.DataMapper;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -68,8 +66,6 @@ public class SqlField {
                 else
                     key = obj;
             }
-
-            //System.out.println("index " + index + ", key " + key);
 
             if(embeddedId)
                 super.setValueInStatement(stmt, index, key);

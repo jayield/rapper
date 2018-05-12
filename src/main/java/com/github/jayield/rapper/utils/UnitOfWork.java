@@ -54,7 +54,7 @@ public class UnitOfWork {
         try {
             connection.close();
         } catch (SQLException e) {
-            logger.info("Error closing connection\nError Message: " + e.getMessage());
+            logger.info("Error closing connection\nError Message: {}", e.getMessage());
         }
         connection = null;
     }
@@ -64,10 +64,10 @@ public class UnitOfWork {
      * @param obj
      */
     public void registerNew(DomainObject obj) {
-        assert obj.getIdentityKey() != null;
-        assert !dirtyObjects.contains(obj);
-        assert !removedObjects.contains(obj);
-        assert !newObjects.contains(obj);
+        if (obj.getIdentityKey() == null) throw new AssertionError();
+        if (dirtyObjects.contains(obj)) throw new AssertionError();
+        if (removedObjects.contains(obj)) throw new AssertionError();
+        if (newObjects.contains(obj)) throw new AssertionError();
         newObjects.add(obj);
     }
 
@@ -76,8 +76,8 @@ public class UnitOfWork {
      * @param obj DomainObject to be cloned
      */
     public void registerClone(DomainObject obj) {
-        assert obj.getIdentityKey()!= null;
-        assert !removedObjects.contains(obj);
+        if (obj.getIdentityKey() == null) throw new AssertionError();
+        if (removedObjects.contains(obj)) throw new AssertionError();
         if(!clonedObjects.contains(obj) && !newObjects.contains(obj))
             clonedObjects.add(obj);
     }
@@ -87,8 +87,8 @@ public class UnitOfWork {
      * @param obj
      */
     public void registerDirty(DomainObject obj){
-        assert obj.getIdentityKey()!= null;
-        assert !removedObjects.contains(obj);
+        if (obj.getIdentityKey() == null) throw new AssertionError();
+        if (removedObjects.contains(obj)) throw new AssertionError();
         if(!dirtyObjects.contains(obj) && !newObjects.contains(obj))
             dirtyObjects.add(obj);
     }
@@ -98,7 +98,7 @@ public class UnitOfWork {
      * @param obj
      */
     public void registerRemoved(DomainObject obj){
-        assert obj.getIdentityKey()!= null;
+        if (obj.getIdentityKey() == null) throw new AssertionError();
         if(newObjects.remove(obj)) return;
         dirtyObjects.remove(obj);
         if(!removedObjects.contains(obj))
@@ -165,12 +165,12 @@ public class UnitOfWork {
             }
 
             //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
-            Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator(),
-                    updatedReposIterator = updateRepos.iterator(),
-                    deletedReposIterator = deleteRepos.iterator();
-            Iterator<DomainObject> insertedObjectsIterator = newObjects.iterator(),
-                    updatedObjectsIterator = dirtyObjects.iterator(),
-                    deletedObjectsIterator = removedObjects.iterator();
+            Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator();
+            Iterator<DataRepository<? extends DomainObject<?>, ?>> updatedReposIterator = updateRepos.iterator();
+            Iterator<DataRepository<? extends DomainObject<?>, ?>> deletedReposIterator = deleteRepos.iterator();
+            Iterator<DomainObject> insertedObjectsIterator = newObjects.iterator();
+            Iterator<DomainObject> updatedObjectsIterator = dirtyObjects.iterator();
+            Iterator<DomainObject> deletedObjectsIterator = removedObjects.iterator();
 
             //Will iterate through insert, update and delete iterators at the same time
             while (insertedReposIterator.hasNext() || updatedReposIterator.hasNext() || deletedReposIterator.hasNext()) {
@@ -196,7 +196,7 @@ public class UnitOfWork {
             connection.commit();
             return true;
         } catch (SQLException e) {
-            logger.info("Commit wasn't successful, here's the error message:\n" + e.getMessage());
+            logger.info("Commit wasn't successful, here's the error message:\n{}", e.getMessage());
             rollback();
             return false;
         } finally {

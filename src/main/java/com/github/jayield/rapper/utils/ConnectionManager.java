@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sql.ConnectionPoolDataSource;
-import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -38,7 +37,7 @@ public class ConnectionManager {
 
     public static ConnectionManager getConnectionManager(String url, String user, String password){
         if(connectionManager == null) {
-            staticLogger.info("Creating new ConnectionManager for {}",url+";"+user+";"+password  );
+            staticLogger.info("Creating new ConnectionManager for {};{};{}", url, user, password);
             connectionManager = new ConnectionManager(url, user, password);
         }
         return connectionManager;

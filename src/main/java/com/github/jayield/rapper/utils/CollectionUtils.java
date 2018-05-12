@@ -10,6 +10,9 @@ import java.util.stream.StreamSupport;
 
 public class CollectionUtils {
 
+    private CollectionUtils() {
+    }
+
     /**
      * Zips the specified stream with its indices.
      */
@@ -55,17 +58,5 @@ public class CollectionUtils {
             this.item = item;
             this.index = index;
         }
-    }
-
-
-    public static void main(String[] args) {
-        String[] names = {"Sam", "Pamela", "Dave", "Pascal", "Erik"};
-
-        System.out.println("Test zipWithIndex");
-        zipWithIndex(Arrays.stream(names)).forEach(stringIndexer -> System.out.println(stringIndexer.index + "=" + stringIndexer.item));
-
-        System.out.println();
-        System.out.println("Test mapWithIndex");
-        mapWithIndex(Arrays.stream(names), (Integer index, String name) -> index + "=" + name).forEach(System.out::println);
     }
 }
