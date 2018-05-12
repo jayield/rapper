@@ -6,6 +6,7 @@ import org.apache.commons.dbcp2.datasources.SharedPoolDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sql.ConnectionPoolDataSource;
 import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -14,7 +15,7 @@ public class ConnectionManager {
     private static final Logger staticLogger = LoggerFactory.getLogger(ConnectionManager.class);
     private static ConnectionManager connectionManager = null;
 
-    private final DataSource poolDataSource;
+    private final ConnectionPoolDataSource poolDataSource;
 
     private ConnectionManager(String url, String user, String password){
         poolDataSource = getDataSource( url, user, password);
@@ -49,20 +50,24 @@ public class ConnectionManager {
         return connectionString.split("%;");
     }
 
-    private static DataSource getDataSource(String url, String user, String password){
+    private static ConnectionPoolDataSource getDataSource(String url, String user, String password){
         DriverAdapterCPDS cpds = new DriverAdapterCPDS();
 
         cpds.setUrl(url);
         cpds.setUser(user);
         cpds.setPassword(password);
 
-        SharedPoolDataSource tds = new SharedPoolDataSource();
-        tds.setConnectionPoolDataSource(cpds);
-        return tds;
+        try (SharedPoolDataSource tds = new SharedPoolDataSource()) {
+            tds.setConnectionPoolDataSource(cpds);
+
+            return tds.getConnectionPoolDataSource();
+        } catch (Exception e) {
+            throw new DataMapperException(e);
+        }
     }
 
     public Connection getConnection() throws SQLException {
-        Connection connection = poolDataSource.getConnection();
+        Connection connection = poolDataSource.getPooledConnection().getConnection();
         connection.setAutoCommit(false);
 
         return connection;
