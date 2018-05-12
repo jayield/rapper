@@ -1,10 +1,13 @@
 package com.github.jayield.rapper.utils;
 
-import com.microsoft.sqlserver.jdbc.SQLServerConnectionPoolDataSource;
+import com.github.jayield.rapper.exceptions.DataMapperException;
+import org.apache.commons.dbcp2.cpdsadapter.DriverAdapterCPDS;
+import org.apache.commons.dbcp2.datasources.SharedPoolDataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sql.ConnectionPoolDataSource;
+import javax.sql.DataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -14,8 +17,8 @@ public class ConnectionManager {
 
     private final ConnectionPoolDataSource poolDataSource;
 
-    private ConnectionManager(DBsPath envVarName){
-        poolDataSource = getDataSource(envVarName);
+    private ConnectionManager(String url, String user, String password){
+        poolDataSource = getDataSource( url, user, password);
     }
 
     /**
@@ -23,29 +26,44 @@ public class ConnectionManager {
      * @param envVar
      * @return
      */
-    public static ConnectionManager getConnectionManager(DBsPath envVar){
+    public static ConnectionManager getConnectionManager(DBsPath envVar) {
+        String[] connectionStringParts = new String[3];
+        if (connectionManager == null)
+            connectionStringParts = separateComponents(envVar);
+        return getConnectionManager(
+                connectionStringParts[0],
+                connectionStringParts[1],
+                connectionStringParts[2]);
+    }
+
+    public static ConnectionManager getConnectionManager(String url, String user, String password){
         if(connectionManager == null) {
-            staticLogger.info("Creating new ConnectionManager for " +  envVar.name());
-            connectionManager = new ConnectionManager(envVar);
+            staticLogger.info("Creating new ConnectionManager for {}",url+";"+user+";"+password  );
+            connectionManager = new ConnectionManager(url, user, password);
         }
         return connectionManager;
     }
 
-    private static ConnectionPoolDataSource getDataSource(DBsPath envVar){
-        //CONNECTION STRING FORMAT: SERVERNAME;DATABASE;USER;PASSWORD
+    private static String[] separateComponents(DBsPath envVar){
+        //CONNECTION STRING FORMAT: URL%;USER%;PASSWORD
         String connectionString = System.getenv(envVar.toString());
-        String[] connectionStringParts = connectionString.split(";");
+        return connectionString.split("%;");
+    }
 
-        staticLogger.info("The connection string retrieved was " + connectionString + "\nTaken from " + envVar + " environment variable");
+    private static ConnectionPoolDataSource getDataSource(String url, String user, String password){
+        DriverAdapterCPDS cpds = new DriverAdapterCPDS();
 
-        SQLServerConnectionPoolDataSource dataSource = new SQLServerConnectionPoolDataSource();
+        cpds.setUrl(url);
+        cpds.setUser(user);
+        cpds.setPassword(password);
 
-        dataSource.setServerName(connectionStringParts[0]);
-        dataSource.setDatabaseName(connectionStringParts[1]);
-        dataSource.setUser(connectionStringParts[2]);
-        dataSource.setPassword(connectionStringParts[3]);
+        try (SharedPoolDataSource tds = new SharedPoolDataSource()) {
+            tds.setConnectionPoolDataSource(cpds);
 
-        return dataSource;
+            return tds.getConnectionPoolDataSource();
+        } catch (Exception e) {
+            throw new DataMapperException(e);
+        }
     }
 
     public Connection getConnection() throws SQLException {

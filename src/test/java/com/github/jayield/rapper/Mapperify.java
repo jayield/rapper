@@ -11,17 +11,19 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final Mapper<T, K> other;
     private final ICounter<Void, CompletableFuture<List<T>>> ifindAll;
     private final ICounter<K, CompletableFuture<Optional<T>>> ifindById;
+    private final ICounter<Pair<String, Object>[], CompletableFuture<List<T>>> ifindWhere;
 
     public Mapperify(Mapper<T, K> other){
 
         this.other = other;
         ifindById = Countify.of(other::findById);
         ifindAll = Countify.of(i -> other.findAll());
+        ifindWhere = Countify.<Pair<String, Object>[], CompletableFuture<List<T>>>of(values -> other.findWhere(values));
     }
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        return other.findWhere(values);
+        return ifindWhere.apply((Pair<String, Object>[]) values);
     }
 
     @Override
@@ -75,5 +77,9 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     public ICounter<K, CompletableFuture<Optional<T>>> getIfindById() {
         return ifindById;
+    }
+
+    public ICounter<Pair<String, Object>[], CompletableFuture<List<T>>> getIfindWhere() {
+        return ifindWhere;
     }
 }

@@ -1,13 +1,14 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.lang.reflect.Field;
+import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -63,7 +64,7 @@ public class AssertUtils {
         }
     }
 
-    public static void assertCompany(Company company, ResultSet rs, UnitOfWork current) {
+    public static void assertCompanyWithExternal(Company company, ResultSet rs, Connection con) {
         try {
             assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
             assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
@@ -71,15 +72,59 @@ public class AssertUtils {
             assertEquals(company.getVersion(), rs.getLong("version"));
             assertNotEquals(0, company.getVersion());
 
-            List<Employee> employees = company.getEmployees().join();
-            PreparedStatement ps = current.getConnection()
-                    .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
-            ps.setInt(1, company.getIdentityKey().getId());
-            ps.setInt(2, company.getIdentityKey().getCid());
-            rs = ps.executeQuery();
+            CompletableFuture<List<Employee>> completableFuture = company.getEmployees();
+            if(completableFuture != null) {
+                List<Employee> employees = completableFuture.join();
+                PreparedStatement ps = con
+                        .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
+                ps.setInt(1, company.getIdentityKey().getId());
+                ps.setInt(2, company.getIdentityKey().getCid());
+                rs = ps.executeQuery();
 
-            while (rs.next()) {
-                assertEmployee(employees.remove(0), rs);
+                while (rs.next()) {
+                    assertEmployeeWithExternals(employees.remove(0), rs);
+                }
+            }
+            else {
+                PreparedStatement ps = con.prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
+                ps.setInt(1, company.getIdentityKey().getId());
+                ps.setInt(2, company.getIdentityKey().getCid());
+                rs = ps.executeQuery();
+
+                assertFalse(rs.next());
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void assertCompany(Company company, ResultSet rs, Connection con) {
+        try {
+            assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
+            assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
+            assertEquals(company.getMotto(), rs.getString("motto"));
+            assertEquals(company.getVersion(), rs.getLong("version"));
+            assertNotEquals(0, company.getVersion());
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void assertEmployeeWithExternals(Employee employee, ResultSet rs) {
+        try {
+            assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
+            assertEquals(employee.getName(), rs.getString("name"));
+            assertEquals(employee.getVersion(), rs.getLong("version"));
+
+            CompletableFuture<Company> companyCompletableFuture = employee.getCompany();
+            if(companyCompletableFuture != null){
+                Company company = companyCompletableFuture.join();
+                assertEquals(company.getIdentityKey().getId(), rs.getInt("companyId"));
+                assertEquals(company.getIdentityKey().getCid(), rs.getInt("companyCid"));
+            }
+            else {
+                assertEquals(0, rs.getInt("companyId"));
+                assertEquals(0, rs.getInt("companyCid"));
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -91,31 +136,28 @@ public class AssertUtils {
             assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
             assertEquals(employee.getName(), rs.getString("name"));
             assertEquals(employee.getVersion(), rs.getLong("version"));
-
-            Company company = employee.getCompany().join();
-            assertEquals(company.getIdentityKey().getId(), rs.getInt("companyId"));
-            assertEquals(company.getIdentityKey().getCid(), rs.getInt("companyCid"));
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static void assertBook(Book book, ResultSet rs){
+    public static void assertBook(Book book, ResultSet rs, Connection con){
         try {
             assertEquals((long) book.getIdentityKey(), rs.getLong("id"));
             assertEquals(book.getName(), rs.getString("name"));
             assertEquals(book.getVersion(), rs.getLong("version"));
 
-            Author author = book.getAuthors().join().get(0);
-            PreparedStatement ps = UnitOfWork.getCurrent()
-                    .getConnection().prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
-            ps.setLong(1, author.getIdentityKey());
+            CompletableFuture<List<Author>> authors = book.getAuthors();
+            if(authors != null) {
+                Author author = authors.join().get(0);
+                PreparedStatement ps = con.prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
+                ps.setLong(1, author.getIdentityKey());
 
-            rs = ps.executeQuery();
+                rs = ps.executeQuery();
 
-            while (rs.next())
-                assertAuthor(author, rs);
-
+                while (rs.next())
+                    assertAuthor(author, rs);
+            }
         } catch (SQLException e) {
             throw new RuntimeException(e);
         }
@@ -149,10 +191,20 @@ public class AssertUtils {
         }
     }
 
-    //---------------------------ResultSets assertions-----------------------------------
-    public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer) {
+    public static void assertDog(Dog dog, ResultSet rs){
         try{
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            assertEquals(dog.getIdentityKey().getName(), rs.getString("name"));
+            assertEquals(dog.getIdentityKey().getRace(), rs.getString("race"));
+            assertEquals(dog.getAge(), rs.getInt("age"));
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    //---------------------------ResultSets assertions-----------------------------------
+    public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer, Connection con) {
+        try{
+            PreparedStatement ps = con.prepareStatement(sql);
             prepareStatement.accept(ps);
             ResultSet rs = ps.executeQuery();
 
@@ -165,9 +217,9 @@ public class AssertUtils {
         }
     }
 
-    public static<U> void assertMultipleRows(UnitOfWork current, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
+    public static<U> void assertMultipleRows(Connection connection, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
         try {
-            PreparedStatement ps = current.getConnection().prepareStatement(sql,
+            PreparedStatement ps = connection.prepareStatement(sql,
                     ResultSet.TYPE_SCROLL_INSENSITIVE,
                     ResultSet.CONCUR_READ_ONLY);
             ResultSet rs = ps.executeQuery();
@@ -184,9 +236,9 @@ public class AssertUtils {
         }
     }
 
-    public static void assertNotFound(String sql, Consumer<PreparedStatement> prepareStatement){
+    public static void assertNotFound(String sql, Consumer<PreparedStatement> prepareStatement, Connection con){
         try {
-            PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement(sql);
+            PreparedStatement ps = con.prepareStatement(sql);
             prepareStatement.accept(ps);
             ResultSet rs = ps.executeQuery();
             assertFalse(rs.next());

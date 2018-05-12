@@ -3,6 +3,8 @@ package com.github.jayield.rapper.domainModel;
 import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
+import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -13,6 +15,7 @@ public class Company implements DomainObject<Company.PrimaryKey> {
     private final String motto;
     @ColumnName(foreignName = {"companyId", "companyCid"})
     private final CompletableFuture<List<Employee>> employees;
+    @Version
     private final long version;
 
     public Company(PrimaryKey primaryKey, String motto, CompletableFuture<List<Employee>> employees, long version) {
@@ -47,16 +50,18 @@ public class Company implements DomainObject<Company.PrimaryKey> {
         return version;
     }
 
-    public static class PrimaryKey {
-        private final int id;
-        private final int cid;
+    public static class PrimaryKey extends EmbeddedIdClass {
+        private final Integer id;
+        private final Integer cid;
 
         public PrimaryKey(int id, int cid) {
+            super(id, cid);
             this.id = id;
             this.cid = cid;
         }
 
         public PrimaryKey() {
+            super();
             id = 0;
             cid = 0;
         }

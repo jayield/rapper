@@ -9,27 +9,33 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.ParameterizedType;
+import java.net.URLDecoder;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 
+import static com.github.jayield.rapper.TestUtils.bookSelectQuery;
+import static com.github.jayield.rapper.TestUtils.executeQuery;
+import static com.github.jayield.rapper.TestUtils.getBookPSConsumer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class DataBaseTests {
 
     private ConnectionManager connectionManager;
+    private Connection con;
 
     @Before
     public void before() throws SQLException {
-        connectionManager = ConnectionManager.getConnectionManager(DBsPath.TESTDB);
-        Connection con = connectionManager.getConnection();
-        //DBStatements.createTables(con);
+        connectionManager = ConnectionManager.getConnectionManager(
+                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
+                "SA", "");
+        con = connectionManager.getConnection();
     }
 
     @Test
-    public void crud() throws SQLException {
+    public void connectivity() throws SQLException {
         try (Connection con = connectionManager.getConnection()) {
             PreparedStatement stmt = con.prepareStatement("insert into Person(nif, name, birthday) values (1, 'Test', '1990-05-02')");
             int update = stmt.executeUpdate();
@@ -53,13 +59,10 @@ public class DataBaseTests {
         }
     }
 
-    @Test
-    public void test() throws NoSuchFieldException {
-        System.out.println(
-                ((ParameterizedType) Employee.class.getDeclaredField("company").getGenericType()).getActualTypeArguments()
-        );
+    /*@Test
+    public void test() throws SQLException {
+        ResultSet rs = executeQuery(bookSelectQuery, getBookPSConsumer("1001 noites"), con);
 
-        //DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
-        DataMapper<Company, Company.PrimaryKey> companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class).getMapper();
-    }
+        Object o = rs.getObject("id", Long.class);
+    }*/
 }

@@ -14,6 +14,7 @@ AS
   insert into TopStudent (nif, topGrade, year) values (454, 20, 2017)
 
   insert into Company (id, cid, motto) values (1, 1, 'Living la vida loca')
+  insert into Company (id, cid, motto) values (1, 2, 'Living vida loca')
 
   insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1)
   insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1)
@@ -27,6 +28,8 @@ AS
   select @bookId = id from Book where name = '1001 noites'
 
   insert into BookAuthor(bookId, authorId) values (@bookId, @authorId)
+
+  insert into Dog(name, race, age) values ('Doggy', 'Bulldog', 5)
 GO
 
 if OBJECT_ID('deleteDB') is not null

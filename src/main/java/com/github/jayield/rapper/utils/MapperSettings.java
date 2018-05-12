@@ -1,12 +1,9 @@
 package com.github.jayield.rapper.utils;
 
+import com.github.jayield.rapper.*;
+import com.github.jayield.rapper.exceptions.DataMapperException;
 
-import com.github.jayield.rapper.ColumnName;
-import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.EmbeddedId;
-import com.github.jayield.rapper.Id;
-
-import java.io.Serializable;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
@@ -23,8 +20,9 @@ public class MapperSettings {
 
     private final Class<?> type;
 
-    private List<SqlField> columns = new ArrayList<>();
     private List<SqlFieldId> ids = new ArrayList<>();
+    private List<SqlField> columns = new ArrayList<>();
+    private SqlFieldVersion versionField;
     private List<SqlFieldExternal> externals = new ArrayList<>();
     private List<SqlField> allFields = new ArrayList<>();
 
@@ -33,16 +31,24 @@ public class MapperSettings {
     private String updateQuery;
     private String deleteQuery;
     private String selectByIdQuery;
+    private Class<?> primaryKeyType = null;
+    private Constructor<?> primaryKeyConstructor;
 
     private final Predicate<Field> fieldPredicate = field ->
             field.getType().isPrimitive()
             || field.getType().isAssignableFrom(String.class)
             || field.getType().isAssignableFrom(Timestamp.class)
             || field.getType().isAssignableFrom(Date.class)
-            || field.getType().isAssignableFrom(CompletableFuture.class);
+            || field.getType().isAssignableFrom(CompletableFuture.class)
+            || field.getType().isAssignableFrom(Integer.class)
+            || field.getType().isAssignableFrom(Double.class)
+            || field.getType().isAssignableFrom(Long.class)
+            || field.getType().isAssignableFrom(Boolean.class);
 
     public MapperSettings(Class<?> type) {
         this.type = type;
+
+        operations = initOperations(type);
 
         Map<Class, List<SqlField>> fieldMap = Arrays.stream(type.getDeclaredFields())
                 .flatMap(field -> toSqlField(field, "C."))
@@ -60,7 +66,14 @@ public class MapperSettings {
                         )
                 );
 
-        Optional.ofNullable(fieldMap.get(SqlField.class)).ifPresent(sqlFields -> columns.addAll(sqlFields));
+        Optional.ofNullable(fieldMap.get(SqlField.class))
+                .ifPresent(sqlFields -> columns.addAll(sqlFields));
+
+        Optional.ofNullable(fieldMap.get(SqlFieldVersion.class))
+                .ifPresent(sqlFields -> {
+                    versionField = (SqlFieldVersion) sqlFields.get(0);
+                    columns.addAll(sqlFields);
+                });
 
         Optional.ofNullable(fieldMap.get(SqlFieldExternal.class))
                 .ifPresent(sqlFields -> externals = sqlFields.stream().map(f -> (SqlFieldExternal) f).collect(Collectors.toList()));
@@ -87,10 +100,11 @@ public class MapperSettings {
             List<SqlFieldId> sqlFieldIds = parentFieldMap.getOrDefault(SqlFieldId.class, new ArrayList<>())
                     .stream()
                     .map(f -> ((SqlFieldId) f))
-                    .peek(sqlFieldId -> sqlFieldId.setFromParent())
+                    .peek(SqlFieldId::setFromParent)
                     .collect(Collectors.toList());
 
             allFields.addAll(parentFieldMap.get(SqlField.class));
+            allFields.addAll(parentFieldMap.get(SqlFieldVersion.class));
             ids.addAll(sqlFieldIds);
         }
     }
@@ -110,13 +124,13 @@ public class MapperSettings {
                 .collect(Collectors.toList());
 
         StringBuilder suffix = new StringBuilder();
-        suffix.append(" from [").append(type.getSimpleName()).append("] C ");
+        suffix.append(" from ").append(type.getSimpleName()).append(" C ");
 
         int[] i = {1};
         for (Class<?> clazz = type.getSuperclass(); clazz != Object.class && DomainObject.class.isAssignableFrom(clazz); clazz = clazz.getSuperclass(), i[0]++) {
-            suffix.append("inner join [").append(clazz.getSimpleName()).append(String.format("] P%d ", i[0])).append("on ");
+            suffix.append("inner join ").append(clazz.getSimpleName()).append(String.format(" P%d ", i[0])).append("on ");
 
-            //Set the comparisions
+            //Set the comparisons
             for (int j = 0; j < idName.size(); j++) {
                 String version = idName.get(j).split("\\.")[1];
 
@@ -143,10 +157,15 @@ public class MapperSettings {
                 .map(f -> f.name)
                 .collect(Collectors.toList());
 
-        List<String> columnsNames = columns
-                .stream()
-                .map(f -> f.name)
-                .collect(Collectors.toList());
+        List<String> columnsNames = Stream.concat(
+                columns
+                        .stream()
+                        .map(f -> f.name),
+                externals
+                        .stream()
+                        .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0)
+                        .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names))
+                ).collect(Collectors.toList());
 
         columnsNames.remove("Cversion");
         columns.removeIf(f -> f.name.equals("Cversion"));
@@ -155,20 +174,25 @@ public class MapperSettings {
                 .stream()
                 .anyMatch(f -> f.identity && !f.isFromParent());
 
-        //TODO clean
-        String collect = ids
+        String idsNames = ids
                 .stream()
                 .filter(f -> f.identity && !f.isFromParent())
                 .map(f -> "INSERTED." + f.name)
                 .collect(Collectors.joining(", ", "", ", "));
-        String idsNames = "";
-        if (!collect.equals(", ")) idsNames = collect;
 
-        columnsNames.addAll(externals.stream().flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names)).collect(Collectors.toList()));
+        String insertOutputClause = idsNames.equals(", ") ? "" : "output " + idsNames;
+        String updateOutputClause = " ";
+        String updateWhereVersion = "";
+        if(versionField != null) {
+            String versionColumnName = versionField.name.substring(1, versionField.name.length()); //Remove the prefix by doing the subString
+            insertOutputClause = String.format((insertOutputClause.equals("") ? "output " : insertOutputClause) + "CAST(INSERTED.%s as bigint) %s ", versionColumnName, versionColumnName);
+            updateOutputClause = String.format(" output CAST(INSERTED.%s as bigint) %s ", versionColumnName, versionColumnName);
+            updateWhereVersion = String.format(" and %s = ?", versionColumnName);
+        }
 
         insertQuery = (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
-                .collect(Collectors.joining(", ", "insert into [" + type.getSimpleName() + "] ( ", " ) "))
-                + "output " + idsNames + "CAST(INSERTED.version as bigint) version "
+                .collect(Collectors.joining(", ", "insert into " + type.getSimpleName() + " ( ", " ) "))
+                //+ "output " + idsNames + "CAST(INSERTED.version as bigint) version "
                 + (identity ? columnsNames.stream() : Stream.concat(idName.stream(), columnsNames.stream()))
                 .map(c -> "?")
                 .collect(Collectors.joining(", ", "values ( ", " )"));
@@ -176,16 +200,17 @@ public class MapperSettings {
         updateQuery = columnsNames
                 .stream()
                 .map(c -> c + " = ?")
-                .collect(Collectors.joining(", ", "update [" + type.getSimpleName() + "] set ", " output CAST(INSERTED.version as bigint) version where "))
+                .collect(Collectors.joining(", ", "update " + type.getSimpleName() + " set ", " where ")) //output CAST(INSERTED.version as bigint) version
                 + idName
                 .stream()
                 .map(id -> id + " = ?")
                 .collect(Collectors.joining(" and "))
-                + " and version = ?";
+                + updateWhereVersion;
 
-        deleteQuery = idName.stream()
+        deleteQuery = idName
+                .stream()
                 .map(id -> id + " = ?")
-                .collect(Collectors.joining(" and ", "delete from [" + type.getSimpleName() + "] where ", ""));
+                .collect(Collectors.joining(" and ", "delete from " + type.getSimpleName() + " where ", ""));
     }
 
     class FieldOperations {
@@ -198,30 +223,42 @@ public class MapperSettings {
         }
     }
 
-    private final FieldOperations[] operations = {
-            new FieldOperations(f -> f.isAnnotationPresent(EmbeddedId.class), (f, pref) -> Arrays.stream(f.getType().getDeclaredFields())
-                    .filter(fieldPredicate)
-                    .map(fi -> new SqlFieldId(fi, getName(fi, pref), getQueryValue(fi, pref), false, true))),
+    private final FieldOperations[] operations;
 
-            new FieldOperations(f -> f.isAnnotationPresent(Id.class),
-                    (f, pref) -> Stream.of(new SqlFieldId(f, getName(f, pref), getQueryValue(f, pref), f.getAnnotation(Id.class).isIdentity(), false))),
+    private FieldOperations[] initOperations(Class<?> type) {
+        return new FieldOperations[]{
+                new FieldOperations(f -> f.isAnnotationPresent(EmbeddedId.class), (f, pref) -> {
+                    primaryKeyType = f.getType();
+                    if (!EmbeddedIdClass.class.isAssignableFrom(primaryKeyType))
+                        throw new DataMapperException("The field " + f.getName() + " on " + type.getSimpleName() + " annotated with @EmbeddedId should extend EmbeddedIdClass!");
 
-            new FieldOperations(f -> f.isAnnotationPresent(ColumnName.class),
-                    (f, pref) -> Stream.of(new SqlFieldExternal(f, pref))),
+                    try {
+                        primaryKeyConstructor = primaryKeyType.getConstructor();
+                    } catch (NoSuchMethodException e) {
+                        throw new DataMapperException(e);
+                    }
 
-            new FieldOperations(fieldPredicate,
-                    (f, pref) -> Stream.of(new SqlField(f, getName(f, pref), getQueryValue(f, pref))))
-    };
+                    return Arrays.stream(f.getType().getDeclaredFields())
+                            .filter(fieldPredicate)
+                            .map(fi -> new SqlFieldId(fi, fi.getName(), pref + fi.getName(), false, true));
+                }),
 
-    private String getName(Field f, String pref) {
-        if (f.getName().equals("version")) return pref.substring(0, pref.length() - 1) + f.getName();
-        else return f.getName();
-    }
+                new FieldOperations(f -> f.isAnnotationPresent(Id.class),
+                        (f, pref) -> Stream.of(new SqlFieldId(f, f.getName(), pref + f.getName(), f.getAnnotation(Id.class).isIdentity(), false))),
 
-    private String getQueryValue(Field f, String pref) {
-        if (f.getName().equals("version"))
-            return String.format("CAST(%sversion as bigint) %sversion", pref, pref.substring(0, pref.length() - 1));
-        else return pref + f.getName();
+                new FieldOperations(f -> f.isAnnotationPresent(ColumnName.class),
+                        (f, pref) -> Stream.of(new SqlFieldExternal(f, pref))),
+
+                new FieldOperations(f -> f.isAnnotationPresent(Version.class),
+                        (f, pref) -> Stream.of(new SqlFieldVersion(
+                                f,
+                                pref.substring(0, pref.length() - 1) + f.getName(),
+                                String.format("CAST(%s%s as bigint) %s%s", pref, f.getName(), pref.substring(0, pref.length() - 1), f.getName())
+                        ))),
+
+                new FieldOperations(fieldPredicate,
+                        (f, pref) -> Stream.of(new SqlField(f, f.getName(), pref + f.getName())))
+        };
     }
 
     private Stream<SqlField> toSqlField(Field f, String queryPrefix) {
@@ -230,10 +267,6 @@ public class MapperSettings {
                 return op.function.apply(f, queryPrefix);
         }
         return Stream.empty();
-    }
-
-    public Class<?> getType() {
-        return type;
     }
 
     public String getSelectQuery() {
@@ -274,5 +307,17 @@ public class MapperSettings {
 
     public Predicate<Field> getFieldPredicate() {
         return fieldPredicate;
+    }
+
+    public Class<?> getPrimaryKeyType() {
+        return primaryKeyType;
+    }
+
+    public Constructor<?> getPrimaryKeyConstructor() {
+        return primaryKeyConstructor;
+    }
+
+    public SqlFieldVersion getVersionField() {
+        return versionField;
     }
 }

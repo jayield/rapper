@@ -1,10 +1,13 @@
 package com.github.jayield.rapper.domainModel;
 
+import com.github.jayield.rapper.Version;
+
 import java.sql.Date;
 
 public class Student extends Person {
 
     private final int studentNumber;
+    @Version
     private final long version;
 
     public Student(int nif, String name, Date birthday, long personVersion, int studentNumber, long version) {

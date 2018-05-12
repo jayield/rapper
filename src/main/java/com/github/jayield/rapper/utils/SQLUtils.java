@@ -13,6 +13,7 @@ public class SQLUtils {
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
     public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement) {
+        //logger.info(sqlQuery);
         Connection con = UnitOfWork.getCurrent().getConnection();
         try {
             PreparedStatement preparedStatement = con.prepareStatement(sqlQuery, Statement.RETURN_GENERATED_KEYS);
@@ -31,7 +32,9 @@ public class SQLUtils {
     }
 
     public static void setValuesInStatement(Stream<? extends SqlField> fields, PreparedStatement stmt, Object obj) {
+        //offset is used when a single setValueInStatement sets multiple values (for example in setValueInStatement of SqlFieldExternal)
+        int[] offset = {0};
         CollectionUtils.zipWithIndex(fields)
-                .forEach(entry -> entry.item.setValueInStatement(stmt, entry.index + 1, obj));
+                .forEach(entry -> offset[0] = entry.item.setValueInStatement(stmt, entry.index + 1 + offset[0], obj));
     }
 }
