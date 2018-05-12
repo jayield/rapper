@@ -119,12 +119,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                     return t2;
                 }));
 
-        if (future != null)
+        if (future != null) {
             return future.thenCompose(t1 -> {
                 t.markDirty();
                 return unitOfWork.commit();
             });
-        else {
+        } else {
             return findById(t.getIdentityKey())
                     .thenApply(t1 -> t1.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
                     .thenCompose(t1 -> {

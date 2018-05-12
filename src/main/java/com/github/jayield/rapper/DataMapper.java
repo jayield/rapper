@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigDecimal;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -396,7 +397,18 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     try {
                         rs.next();
                         field.field.setAccessible(true);
-                        field.field.set(obj, rs.getObject(field.name));
+                        String url = ConnectionManager.getConnectionManager().getUrl();
+                        if (url.toLowerCase().contains("sqlserver")) {
+                            BigDecimal bigDecimal = rs.getBigDecimal(1);
+                            Object key;
+
+                            if (field.field.getType() == Integer.class)
+                                key = bigDecimal.intValue();
+                            else key = bigDecimal.longValue();
+
+                            field.field.set(obj, key);
+                        } else
+                            field.field.set(obj, rs.getObject(1, field.field.getType()));   //Doesn't work on sqlServer, the type of GeneratedKey is bigDecimal always
                     } catch (IllegalAccessException | SQLException e) {
                         throw new DataMapperException(e);
                     }

@@ -25,18 +25,18 @@ public class QueryTests {
 
     @Test
     public void shouldObtainQueriesForEntitiesWithMultiPK(){
-        MapperSettings dataMapper = new MapperSettings(Car.class);
-        MapperSettings companyMapper = new MapperSettings(Company.class);
+        MapperSettings carSettings = new MapperSettings(Car.class);
+        MapperSettings companySettings = new MapperSettings(Company.class);
 
-        assertEquals("select C.owner, C.plate, C.brand, C.model, CAST(C.version as bigint) Cversion from Car C ", dataMapper.getSelectQuery());
-        assertEquals("delete from Car where owner = ? and plate = ?", dataMapper.getDeleteQuery());
-        assertEquals("insert into Car ( owner, plate, brand, model ) values ( ?, ?, ?, ? )", dataMapper.getInsertQuery());
-        assertEquals("update Car set brand = ?, model = ? where owner = ? and plate = ? and version = ?", dataMapper.getUpdateQuery());
+        assertEquals("select C.owner, C.plate, C.brand, C.model, CAST(C.version as bigint) Cversion from Car C ", carSettings.getSelectQuery());
+        assertEquals("delete from Car where owner = ? and plate = ?", carSettings.getDeleteQuery());
+        assertEquals("insert into Car ( owner, plate, brand, model ) values ( ?, ?, ?, ? )", carSettings.getInsertQuery());
+        assertEquals("update Car set brand = ?, model = ? where owner = ? and plate = ? and version = ?", carSettings.getUpdateQuery());
 
-        assertEquals("select C.id, C.cid, C.motto, CAST(C.version as bigint) Cversion from Company C ", companyMapper.getSelectQuery());
-        assertEquals("delete from Company where id = ? and cid = ?", companyMapper.getDeleteQuery());
-        assertEquals("insert into Company ( id, cid, motto ) values ( ?, ?, ? )", companyMapper.getInsertQuery());
-        assertEquals("update Company set motto = ? where id = ? and cid = ? and version = ?", companyMapper.getUpdateQuery());
+        assertEquals("select C.id, C.cid, C.motto, CAST(C.version as bigint) Cversion from Company C ", companySettings.getSelectQuery());
+        assertEquals("delete from Company where id = ? and cid = ?", companySettings.getDeleteQuery());
+        assertEquals("insert into Company ( id, cid, motto ) values ( ?, ?, ? )", companySettings.getInsertQuery());
+        assertEquals("update Company set motto = ? where id = ? and cid = ? and version = ?", companySettings.getUpdateQuery());
     }
 
     @Test

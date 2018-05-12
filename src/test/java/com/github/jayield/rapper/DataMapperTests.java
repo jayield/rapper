@@ -201,7 +201,6 @@ public class DataMapperTests {
             Employee employee = new Employee(0, "Hugo", 0, null);
             assertTrue(employeeMapper.create(employee).join());
             assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
-
     }
 
     @Test

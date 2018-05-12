@@ -36,6 +36,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         primaryKeyDeclaredFields = primaryKey != null ? primaryKey.getDeclaredFields() : null;
 
         map = new HashMap<>();
+        // NAME, foreignName=default, table=default, externalName=default
         map.put(Arrays.asList(1, 0, 0, 0), (t, sqlFieldExternal) -> {
             DataRepository<? extends DomainObject, Object> externalRepo = MapperRegistry.getRepository(sqlFieldExternal.domainObjectType);
             MapperSettings externalMapperSettings = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType);
@@ -45,6 +46,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             populateSingleReference(t, sqlFieldExternal, externalMapperSettings, externalRepo, idValues.iterator());
         });
 
+        // name=default, FOREIGNNAME, table=default, externalName=default
         map.put(Arrays.asList(0, 1, 0, 0), (t, sqlFieldExternal) -> {
             DataRepository<? extends DomainObject, ?> externalRepo = MapperRegistry.getRepository(sqlFieldExternal.domainObjectType);
 
@@ -55,6 +57,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             populateMultipleReferences(t, sqlFieldExternal, externalRepo, idValues.iterator());
         });
 
+        // name=default, FOREIGNNAME, TABLE, EXTERNALNAME
         map.put(Arrays.asList(0, 1, 1, 1), (t, sqlFieldExternal) -> {
             DataRepository<? extends DomainObject, ?> externalRepo = MapperRegistry.getRepository(sqlFieldExternal.domainObjectType);
 

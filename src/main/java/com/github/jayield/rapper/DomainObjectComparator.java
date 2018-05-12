@@ -29,6 +29,8 @@ public class DomainObjectComparator<T extends DomainObject> implements Comparato
                 sqlField.field.setAccessible(true);
                 Object o1Value = sqlField.field.get(o1);
                 Object o2Value = sqlField.field.get(o2);
+                if(o1Value == null && o2Value == null) return false;
+                if (o1Value == null || o2Value == null) return true;
                 return !o1Value.equals(o2Value);
             } catch (IllegalAccessException | IllegalArgumentException e) {
                 try {

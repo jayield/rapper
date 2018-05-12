@@ -15,9 +15,11 @@ public class ConnectionManager {
     private static ConnectionManager connectionManager = null;
 
     private final ConnectionPoolDataSource poolDataSource;
+    private final String url;
 
     private ConnectionManager(String url, String user, String password){
-        poolDataSource = getDataSource( url, user, password);
+        this.url = url;
+        poolDataSource = getDataSource(url, user, password);
     }
 
     /**
@@ -40,6 +42,10 @@ public class ConnectionManager {
             staticLogger.info("Creating new ConnectionManager for {};{};{}", url, user, password);
             connectionManager = new ConnectionManager(url, user, password);
         }
+        return connectionManager;
+    }
+
+    public static ConnectionManager getConnectionManager(){
         return connectionManager;
     }
 
@@ -70,5 +76,9 @@ public class ConnectionManager {
         connection.setAutoCommit(false);
 
         return connection;
+    }
+
+    public String getUrl() {
+        return url;
     }
 }
