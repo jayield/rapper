@@ -3,7 +3,7 @@ plugins {
 }
 
 group 'com.github.jayield'
-version '1.0.2'
+version '1.0.3'
 
 apply plugin: 'maven-publish'
 apply plugin: 'java'
@@ -52,7 +52,7 @@ publishing {
             customizePom(pom)
             groupId 'com.github.jayield'
             artifactId 'rapper'
-            version '1.0.2'
+            version '1.0.3'
 
             from components.java
 
@@ -91,10 +91,10 @@ publishing {
     repositories {
         maven {
             url "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-//            credentials {
-//                username sonatypeUsername
-//                password sonatypePassword
-//            }
+            /*credentials {
+                username sonatypeUsername
+                password sonatypePassword
+            }*/
         }
     }
 }
@@ -160,6 +160,12 @@ model {
     tasks.publishMavenJavaPublicationToMavenRepository {
         dependsOn project.tasks.signArchives
     }
+}
+
+tasks.withType(Javadoc) {
+    options.addStringOption('Xdoclint:none', '-quiet')
+    options.addStringOption('encoding', 'UTF-8')
+    options.addStringOption('charSet', 'UTF-8')
 }
 
 signing {
