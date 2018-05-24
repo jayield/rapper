@@ -382,12 +382,13 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         optionalFutureField.ifPresent(sqlFieldExternal -> {
             try {
                 Field field = sqlFieldExternal.field;
-                field.setAccessible(true);
-                CompletableFuture<? extends List> listCP = (CompletableFuture<? extends List>) field.get(external);
-                listCP.thenAccept(list -> {
+                field.setAccessible(true); // TODO not thread safe I think, maybe it needs a lock or the version of the obj must be dependent of the lists
+                CompletableFuture<? extends List> listCP = (CompletableFuture<? extends List>) field.get(external); // reference of the list is maintained, but the reference of CF is altered in order to see the modifications in the list
+                field.set(external, listCP.thenApply(list -> {
                     list.removeIf(t -> ((T) t).getIdentityKey().equals(obj.getIdentityKey()));
                     if (isToStore) list.add(obj);
-                });
+                    return list;
+                }));
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }

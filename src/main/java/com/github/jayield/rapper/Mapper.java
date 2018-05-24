@@ -2,8 +2,6 @@ package com.github.jayield.rapper;
 
 import javafx.util.Pair;
 
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -19,6 +17,15 @@ public interface Mapper<T extends DomainObject<K>, K> {
     <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values);
 
     /**
+     * It will try to locate T with the given properties passed in values
+     * @param page page to locate the T's
+     * @param values a pair containing the properties to search T, the key must be the name of the column and the value the expected value of the column
+     * @param <R> The type of the column
+     * @return a list of T's which match with the properties passed
+     */
+    <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values);
+
+    /**
      * Tries to locate T with the given key K
      * @param k key of T
      * @return Optional of T
@@ -30,6 +37,13 @@ public interface Mapper<T extends DomainObject<K>, K> {
      * @return List of all T present in the database
      */
     CompletableFuture<List<T>> findAll();
+
+    /**
+     * Returns all T present in from the correspondent page passed
+     * @param page page to locate the T's
+     * @return List of T's
+     */
+    CompletableFuture<List<T>> findAll(int page);
 
     /**
      * It will insert t into the database
