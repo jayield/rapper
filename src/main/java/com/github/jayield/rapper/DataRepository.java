@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -52,12 +53,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        UnitOfWork current = checkUnitOfWork();
-        return mapper.findWhere(values)
-                .thenApply(Collection::stream)
-                .thenApply(tStream -> processNewObjects(current, tStream))
-                .thenApply(completableFutureStream -> completableFutureStream.collect(Collectors.toList()))
-                .thenCompose(CollectionUtils::listToCompletableFuture);
+        return find(() -> mapper.findWhere(values));
+    }
+
+    @Override
+    public <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values) {
+        return find(() -> mapper.findWhere(page, values));
     }
 
     @Override
@@ -87,12 +88,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<List<T>> findAll() {
-        UnitOfWork current = checkUnitOfWork();
-        return mapper.findAll()
-                .thenApply(Collection::stream)
-                .thenApply(tStream -> processNewObjects(current, tStream))
-                .thenApply(tStream -> tStream.collect(Collectors.toList()))
-                .thenCompose(CollectionUtils::listToCompletableFuture);
+        return find(mapper::findAll);
+    }
+
+    @Override
+    public CompletableFuture<List<T>> findAll(int page) {
+        return find(() -> mapper.findAll(page));
     }
 
     @Override
@@ -212,6 +213,16 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                 .thenCompose(aVoid -> unitOfWork.commit());
+    }
+
+
+    private CompletableFuture<List<T>> find(Supplier<CompletableFuture<List<T>>> supplier){
+        UnitOfWork current = checkUnitOfWork();
+        return supplier.get()
+                .thenApply(Collection::stream)
+                .thenApply(tStream -> processNewObjects(current, tStream))
+                .thenApply(completableFutureStream -> completableFutureStream.collect(Collectors.toList()))
+                .thenCompose(CollectionUtils::listToCompletableFuture);
     }
 
     public void invalidate(K identityKey) {

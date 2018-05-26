@@ -31,6 +31,7 @@ public class MapperSettings {
     private String updateQuery;
     private String deleteQuery;
     private String selectByIdQuery;
+    private String pagination;
     private Class<?> primaryKeyType = null;
     private Constructor<?> primaryKeyConstructor;
 
@@ -160,6 +161,8 @@ public class MapperSettings {
                 .map(f -> f.name)
                 .collect(Collectors.toList());
 
+        pagination = " order by " + idName.stream().collect(Collectors.joining(", ")) + " offset %d rows fetch next %d rows only";
+
         List<String> columnsNames = Stream.concat(
                 columns
                         .stream()
@@ -281,6 +284,8 @@ public class MapperSettings {
     public String getSelectByIdQuery() {
         return selectByIdQuery;
     }
+
+    public String getPagination() { return pagination; }
 
     public List<SqlFieldId> getIds() {
         return ids;

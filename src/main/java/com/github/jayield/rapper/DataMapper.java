@@ -24,6 +24,7 @@ import static com.github.jayield.rapper.utils.SqlField.*;
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private static final String QUERY_ERROR = "Couldn't execute query on {}.\nReason: {}";
+    private static final int ITEMS_IN_PAGE = 10;
 
     private final Class<T> type;
     private final Class<?> primaryKeyType;
@@ -48,27 +49,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        String query = Arrays.stream(values)
-                .map(p -> p.getKey() + " = ? ")
-                .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", ""));
+        return findWhereAux("", values);
+    }
 
-        return SQLUtils.execute(query, stmt -> {
-            try {
-                for (int i = 0; i < values.length; i++) {
-                    stmt.setObject(i + 1, values[i].getValue());
-                }
-            } catch (SQLException e) {
-                throw new DataMapperException(e);
-            }
-        })
-                .thenApply(this::getStream)
-                .thenApply(s -> s.collect(Collectors.toList()))
-                .exceptionally(throwable -> {
-                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
-                    /*throwable.printStackTrace();
-                    return Collections.emptyList();*/
-                    throw new DataMapperException(throwable);
-                });
+    @Override
+    public <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values) {
+        return findWhereAux(String.format(mapperSettings.getPagination(), page*ITEMS_IN_PAGE, ITEMS_IN_PAGE), values);
     }
 
     @Override
@@ -90,15 +76,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<List<T>> findAll() {
-        return SQLUtils.execute(mapperSettings.getSelectQuery(), s -> {
-        })
-                .thenApply(this::getStream)
-                .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
-                .exceptionally(throwable -> {
-                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
-                    //throwable.printStackTrace();
-                    return Collections.emptyList();
-                });
+        return findAllAux("");
+    }
+
+    @Override
+    public CompletableFuture<List<T>> findAll(int page) {
+        return findAllAux(String.format(mapperSettings.getPagination(), page*ITEMS_IN_PAGE, ITEMS_IN_PAGE));
     }
 
     @Override
@@ -261,6 +244,44 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Optional<Throwable>> deleteAll(Iterable<K> keys) {
         return reduceCompletableFutures(keys, this::deleteById);
+    }
+
+
+    private <R> CompletableFuture<List<T>> findWhereAux(String suffix, Pair<String, R>... values){
+        String query = Arrays.stream(values)
+                .map(p -> p.getKey() + " = ? ")
+                .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", suffix));
+
+        return SQLUtils.execute(query, stmt -> {
+            try {
+                for (int i = 0; i < values.length; i++) {
+                    stmt.setObject(i + 1, values[i].getValue());
+                }
+            } catch (SQLException e) {
+                throw new DataMapperException(e);
+            }
+        })
+                .thenApply(this::getStream)
+                .thenApply(s -> s.collect(Collectors.toList()))
+                .exceptionally(throwable -> {
+                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
+                    /*throwable.printStackTrace();
+                    return Collections.emptyList();*/
+                    throw new DataMapperException(throwable);
+                });
+    }
+
+
+    private CompletableFuture<List<T>> findAllAux(String suffix) {
+        return SQLUtils.execute(mapperSettings.getSelectQuery() + suffix, s -> {
+        })
+                .thenApply(this::getStream)
+                .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
+                .exceptionally(throwable -> {
+                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
+                    //throwable.printStackTrace();
+                    return Collections.emptyList();
+                });
     }
 
     private <R> CompletableFuture<Optional<Throwable>> reduceCompletableFutures(Iterable<R> r, Function<R, CompletableFuture<Optional<Throwable>>> function) {
