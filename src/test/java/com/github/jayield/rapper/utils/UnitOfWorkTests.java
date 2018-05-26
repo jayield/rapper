@@ -103,7 +103,7 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        assertTrue(UnitOfWork.getCurrent().commit().join());
+        assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
         con = UnitOfWork.getCurrent().getConnection();
 
@@ -147,7 +147,7 @@ public class UnitOfWorkTests {
 
         newObjects.add(employee);
 
-        assertTrue(UnitOfWork.getCurrent().commit().join());
+        assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
         con = UnitOfWork.getCurrent().getConnection();
 
@@ -186,7 +186,7 @@ public class UnitOfWorkTests {
 
         newObjects.add(book);
 
-        assertTrue(UnitOfWork.getCurrent().commit().join());
+        assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
         con = UnitOfWork.getCurrent().getConnection();
 
@@ -220,7 +220,7 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        assertFalse(UnitOfWork.getCurrent().commit().join());
+        assertFalse(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
         con = UnitOfWork.getCurrent().getConnection();
 

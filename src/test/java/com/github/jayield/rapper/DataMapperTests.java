@@ -167,21 +167,21 @@ public class DataMapperTests {
     @Test
     public void testSimpleCreate(){
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
-        assertTrue(personMapper.create(person).join());
+        assertTrue(!personMapper.create(person).join().isPresent());
         assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testEmbeddedIdCreate(){
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        assertTrue(carMapper.create(car).join());
+        assertTrue(!carMapper.create(car).join().isPresent());
         assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testHierarchyCreate(){
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
-        assertTrue(topStudentMapper.create(topStudent).join());
+        assertTrue(!topStudentMapper.create(topStudent).join().isPresent());
         assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
     }
 
@@ -192,21 +192,21 @@ public class DataMapperTests {
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
 
         Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
-        assertTrue(employeeMapper.create(employee).join());
+        assertTrue(!employeeMapper.create(employee).join().isPresent());
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testSingleExternalNullCreate(){
             Employee employee = new Employee(0, "Hugo", 0, null);
-            assertTrue(employeeMapper.create(employee).join());
+            assertTrue(!employeeMapper.create(employee).join().isPresent());
             assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testNoVersionCreate(){
         Dog dog = new Dog(new Dog.DogPK("Bobby", "Pitbull"), 5);
-        assertTrue(dogMapper.create(dog).join());
+        assertTrue(!dogMapper.create(dog).join().isPresent());
         assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Bobby", "Pitbull"), AssertUtils::assertDog, UnitOfWork.getCurrent().getConnection());
     }
 
@@ -216,7 +216,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
-        assertTrue(personMapper.update(person).join());
+        assertTrue(!personMapper.update(person).join().isPresent());
 
         assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection());
     }
@@ -226,7 +226,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
-        assertTrue(carMapper.update(car).join());
+        assertTrue(!carMapper.update(car).join().isPresent());
 
         assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
     }
@@ -239,7 +239,7 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        assertTrue(topStudentMapper.update(topStudent).join());
+        assertTrue(!topStudentMapper.update(topStudent).join().isPresent());
 
         assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
     }
@@ -252,7 +252,7 @@ public class DataMapperTests {
                         .findById(new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
 
-        assertTrue(employeeMapper.update(employee).join());
+        assertTrue(!employeeMapper.update(employee).join().isPresent());
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
@@ -262,7 +262,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), null);
 
-        assertTrue(employeeMapper.update(employee).join());
+        assertTrue(!employeeMapper.update(employee).join().isPresent());
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
@@ -275,33 +275,33 @@ public class DataMapperTests {
                 new Dog.DogPK(
                         rs.getString("name"),
                         rs.getString("race")), 6);
-        assertTrue(dogMapper.update(dog).join());
+        assertTrue(!dogMapper.update(dog).join().isPresent());
         assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), AssertUtils::assertDog, UnitOfWork.getCurrent().getConnection());
     }
 
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testSimpleDeleteById(){
-        assertTrue(personMapper.deleteById(321).join());
+        assertTrue(!personMapper.deleteById(321).join().isPresent());
         assertNotFound(personSelectQuery, getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testEmbeddedDeleteById(){
-        assertTrue(carMapper.deleteById(new CarKey(2, "23we45")).join());
+        assertTrue(!carMapper.deleteById(new CarKey(2, "23we45")).join().isPresent());
         assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testHierarchyDeleteById(){
-        assertTrue(topStudentMapper.deleteById(454).join());
+        assertTrue(!topStudentMapper.deleteById(454).join().isPresent());
         assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testSingleExternalDeleteById() throws SQLException {
         ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
-        assertTrue(employeeMapper.deleteById(rs.getInt("id")).join());
+        assertTrue(!employeeMapper.deleteById(rs.getInt("id")).join().isPresent());
         assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
     }
 
@@ -309,21 +309,21 @@ public class DataMapperTests {
     @Test
     public void testSimpleDelete(){
         Person person = new Person(321, null, null, 0);
-        assertTrue(personMapper.delete(person).join());
+        assertTrue(!personMapper.delete(person).join().isPresent());
         assertNotFound(personSelectQuery, getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testEmbeddedDelete(){
         Car car = new Car(2, "23we45", null, null, 0);
-        assertTrue(carMapper.delete(car).join());
+        assertTrue(!carMapper.delete(car).join().isPresent());
         assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testHierarchyDelete(){
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
-        assertTrue(topStudentMapper.delete(topStudent).join());
+        assertTrue(!topStudentMapper.delete(topStudent).join().isPresent());
         assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
     }
 
@@ -334,7 +334,7 @@ public class DataMapperTests {
                 companyMapper
                         .findById(new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
-        assertTrue(employeeMapper.delete(employee).join());
+        assertTrue(!employeeMapper.delete(employee).join().isPresent());
         assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
     }
 

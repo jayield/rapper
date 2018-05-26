@@ -140,10 +140,10 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        Boolean success = topStudentRepo.create(topStudent).join();
+        Optional<Throwable> success = topStudentRepo.create(topStudent).join();
 
         //Assert
-        assertEquals(true, success);
+        assertTrue(!success.isPresent());
 
         Optional<TopStudent> first = topStudentRepo.findById(456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
@@ -159,10 +159,10 @@ public class DataRepositoryTests {
         list.add(new TopStudent(457, "Maria", null, 0, 2, 18, 2010, 0, 0));
 
         //Act
-        Boolean success = topStudentRepo.createAll(list).join();
+        Optional<Throwable> success = topStudentRepo.createAll(list).join();
 
         //Assert
-        assertEquals(true, success);
+        assertTrue(!success.isPresent());
 
         Optional<TopStudent> first = topStudentRepo.findById(456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
@@ -182,9 +182,9 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        boolean success = topStudentRepo.update(topStudent).join();
+        Optional<Throwable> success = topStudentRepo.update(topStudent).join();
 
-        assertTrue(success);
+        assertTrue(!success.isPresent());
 
         Optional<TopStudent> first = topStudentRepo.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
@@ -203,9 +203,9 @@ public class DataRepositoryTests {
         rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(454), con);
         list.add(new Person(454, "Ze Miguens", new Date(1080, 2, 4), rs.getLong(1)));
 
-        boolean success = personRepo.updateAll(list).join();
+        Optional<Throwable> success = personRepo.updateAll(list).join();
 
-        assertTrue(success);
+        assertTrue(!success.isPresent());
 
         Optional<Person> first = personRepo.findById(321).join();
         assertEquals(2, personMapperify.getIfindById().getCount());
@@ -225,7 +225,7 @@ public class DataRepositoryTests {
 
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), companyRepoById);
 
-        assertTrue(employeeRepo.update(employee).join());
+        assertTrue(!employeeRepo.update(employee).join().isPresent());
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployeeWithExternals, con);
         Optional<Employee> first = companyRepoById
@@ -245,7 +245,7 @@ public class DataRepositoryTests {
 
         Company company = companyRepo.findById(new Company.PrimaryKey(1, 1)).join().orElseThrow(() -> new DataMapperException("Company not found"));
 
-        assertTrue(employeeRepo.update(employee).join());
+        assertTrue(!employeeRepo.update(employee).join().isPresent());
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployeeWithExternals, con);
         Optional<Employee> first = company
@@ -273,7 +273,7 @@ public class DataRepositoryTests {
 
         Book book = new Book(rs.getInt("id"), rs.getString("name"), rs.getLong("version"), null);
 
-        assertTrue(bookRepo.update(book).join());
+        assertTrue(!bookRepo.update(book).join().isPresent());
 
         assertEquals(0, authorMapperify.getIfindById().getCount());
 
@@ -300,7 +300,7 @@ public class DataRepositoryTests {
 
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), company1);
 
-        assertTrue(employeeRepo.update(employee).join());
+        assertTrue(!employeeRepo.update(employee).join().isPresent());
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployeeWithExternals, con);
         Optional<Employee> first = company
@@ -324,7 +324,7 @@ public class DataRepositoryTests {
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testdeleteById() {
-        boolean success = topStudentRepo.deleteById(454).join();
+        boolean success = !topStudentRepo.deleteById(454).join().isPresent();
 
         assertTrue(success);
 
@@ -338,7 +338,7 @@ public class DataRepositoryTests {
     public void testdelete() {
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
 
-        boolean success = topStudentRepo.delete(topStudent).join();
+        boolean success = !topStudentRepo.delete(topStudent).join().isPresent();
 
         assertTrue(success);
 
@@ -357,7 +357,7 @@ public class DataRepositoryTests {
         rs = executeQuery("select id from Employee where name = ?", getEmployeePSConsumer("Charles"), con);
         list.add(rs.getInt("id"));
 
-        boolean success = employeeRepo.deleteAll(list).join();
+        boolean success = !employeeRepo.deleteAll(list).join().isPresent();
 
         assertTrue(success);
 

@@ -96,21 +96,21 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> create(T t) {
+    public CompletableFuture<Optional<Throwable>> create(T t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         t.markNew();
         return unitOfWork.commit();
     }
 
     @Override
-    public CompletableFuture<Boolean> createAll(Iterable<T> t) {
+    public CompletableFuture<Optional<Throwable>> createAll(Iterable<T> t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         t.forEach(DomainObject::markNew);
         return unitOfWork.commit();
     }
 
     @Override
-    public CompletableFuture<Boolean> update(T t) {
+    public CompletableFuture<Optional<Throwable>> update(T t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
 
         CompletableFuture<T> future = identityMap.computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
@@ -136,7 +136,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
+    public CompletableFuture<Optional<Throwable>> updateAll(Iterable<T> t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         List<CompletableFuture<T>> completableFutures = new ArrayList<>();
         t.forEach(t1 -> {
@@ -164,7 +164,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteById(K k) {
+    public CompletableFuture<Optional<Throwable>> deleteById(K k) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
             t.markRemoved();
@@ -182,14 +182,14 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Boolean> delete(T t) {
+    public CompletableFuture<Optional<Throwable>> delete(T t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         t.markRemoved();
         return unitOfWork.commit();
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Optional<Throwable>> deleteAll(Iterable<K> keys) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         List<CompletableFuture> completableFutures = new ArrayList<>();
         keys.forEach(k -> {

@@ -12,10 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
@@ -128,39 +125,38 @@ public class UnitOfWork {
         return unitOfWork;
     }
 
-    public CompletableFuture<Boolean> commit() {
-
+    public CompletableFuture<Optional<Throwable>> commit() {
         try {
             Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Boolean>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
+                    List<CompletableFuture<Optional<Throwable>>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
 
             Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Boolean>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+                    List<CompletableFuture<Optional<Throwable>>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
 
             Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Boolean>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
+                    List<CompletableFuture<Optional<Throwable>>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
 
-        List<CompletableFuture<Boolean>> completableFutures = insertPair.getValue();
+        List<CompletableFuture<Optional<Throwable>>> completableFutures = insertPair.getValue();
         completableFutures.addAll(updatePair.getValue());
         completableFutures.addAll(deletePair.getValue());
 
         return completableFutures
                 .stream()
-                .reduce(CompletableFuture.completedFuture(true), (a, b) -> a.thenCombine(b, (a2, b2) -> a2 && b2))
+                .reduce(CompletableFuture.completedFuture(Optional.empty()), (a, b) -> a.thenCombine(b, (a2, b2) -> a2.isPresent() ? a2 : b2/*a2 && b2*/))
                 .thenApply(success -> updateIdentityMap(success, insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
 
         } catch (DataMapperException e){
             rollback();
-            return CompletableFuture.completedFuture(false);
+            throw e;
         }
     }
 
-    private boolean updateIdentityMap(boolean success, List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
+    private Optional<Throwable> updateIdentityMap(Optional<Throwable> success, List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
                                       List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
         try {
-            if(!success) {
+            if(success.isPresent()) {
                 rollback();
-                return false;
+                return success;
             }
 
             //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
@@ -193,11 +189,11 @@ public class UnitOfWork {
             }
 
             connection.commit();
-            return true;
+            return Optional.empty();
         } catch (SQLException e) {
             logger.info("Commit wasn't successful, here's the error message:\n{}", e.getMessage());
             rollback();
-            return false;
+            return Optional.of(e);
         } finally {
             closeConnection();
             newObjects.clear();
@@ -227,13 +223,13 @@ public class UnitOfWork {
      *
      * The value of the Pair is a List containing the completableFutures of the calls of the mapper
      */
-    private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Boolean>>> executeFilteredBiFunctionInList(
-            BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Boolean>> biFunction,
+    private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Optional<Throwable>>>> executeFilteredBiFunctionInList(
+            BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Optional<Throwable>>> biFunction,
             Queue<DomainObject> list,
             Predicate<DomainObject> predicate
     ) {
         List<DataRepository<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
-        List<CompletableFuture<Boolean>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Optional<Throwable>>> completableFutures = new ArrayList<>();
         list
                 .stream()
                 .filter(predicate)
@@ -253,7 +249,7 @@ public class UnitOfWork {
      */
     public void rollback() {
         try {
-            connection.rollback();
+            if(connection != null) connection.rollback();
 
             newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
 
