@@ -112,6 +112,7 @@ public class SqlField {
         public final String[] foreignNames;
         public final String[] externalNames;
         public final String selectTableQuery;
+        public final Object mon = new Object();
         private final List<Integer> values;
         private Object[] idValues;
 

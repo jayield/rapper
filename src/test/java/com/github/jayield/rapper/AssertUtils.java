@@ -98,12 +98,12 @@ public class AssertUtils {
         }
     }
 
-    public static void assertCompany(Company company, ResultSet rs, Connection con) {
+    public static void assertCompany(Company company, ResultSet rs) {
         try {
             assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
             assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
             assertEquals(company.getMotto(), rs.getString("motto"));
-            assertEquals(company.getVersion(), rs.getLong("version"));
+            assertEquals(company.getVersion(), rs.getLong("Cversion"));
             assertNotEquals(0, company.getVersion());
         } catch (SQLException e) {
             throw new RuntimeException(e);

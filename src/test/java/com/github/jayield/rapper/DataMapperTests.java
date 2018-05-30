@@ -10,12 +10,7 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URISyntaxException;
-import java.net.URL;
 import java.net.URLDecoder;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.sql.*;
 import java.sql.Date;
 import java.util.*;
@@ -23,7 +18,6 @@ import java.util.concurrent.CompletableFuture;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
-import static com.github.jayield.rapper.utils.DBsPath.TESTDB;
 import static org.junit.Assert.*;
 
 public class DataMapperTests {
@@ -42,14 +36,12 @@ public class DataMapperTests {
 
     @Before
     public void start() throws SQLException {
-//        ConnectionManager manager = ConnectionManager.getConnectionManager(TESTDB);
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
         SqlSupplier<Connection> connectionSupplier = manager::getConnection;
         UnitOfWork.newCurrent(connectionSupplier.wrap());
         Connection con = UnitOfWork.getCurrent().getConnection();
-//        runScript("/init.sql", con);
 
         con.prepareCall("{call deleteDB()}").execute();
         con.prepareCall("{call populateDB()}").execute();
@@ -102,6 +94,19 @@ public class DataMapperTests {
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Bob"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
 
+    @Test
+    public void testPaginationFindWhere() {
+        List<Company> companies = companyMapper.findWhere(0, 10, new Pair<>("id", 1)).join();
+        assertMultipleRows(UnitOfWork.getCurrent().getConnection(), companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
+    }
+
+    @Test
+    public void testSecondPageFindWhere() {
+        List<Company> companies = companyMapper.findWhere(1, 10, new Pair<>("id", 1)).join();
+        assertEquals(1, companies.size());
+        assertSingleRow(companies.get(0), companySelectQuery, getCompanyPSConsumer(1, 11), AssertUtils::assertCompany, UnitOfWork.getCurrent().getConnection());
+    }
+
     //-----------------------------------FindById-----------------------------------//
     @Test
     public void testSimpleFindById(){
@@ -140,8 +145,8 @@ public class DataMapperTests {
                 .findById(new Company.PrimaryKey(companyId, companyCid))
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(company, "select id, cid, motto, CAST(version as bigint) version from Company where id = ? and cid = ?",
-                getCompanyPSConsumer(companyId, companyCid), (company1, resultSet) -> assertCompany(company1, resultSet, con), con);
+        assertSingleRow(company, "select id, cid, motto, CAST(version as bigint) Cversion from Company where id = ? and cid = ?",
+                getCompanyPSConsumer(companyId, companyCid), AssertUtils::assertCompany, con);
     }
 
     //-----------------------------------FindAll-----------------------------------//
@@ -161,6 +166,12 @@ public class DataMapperTests {
     public void testHierarchyFindAll(){
         List<TopStudent> topStudents = topStudentMapper.findAll().join();
         assertMultipleRows(UnitOfWork.getCurrent().getConnection(), topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
+    }
+
+    @Test
+    public void testPaginationFindAll() {
+        List<Company> companies = companyMapper.findAll(0, 10).join();
+        assertMultipleRows(UnitOfWork.getCurrent().getConnection(), companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
     }
 
     //-----------------------------------Create-----------------------------------//

@@ -27,8 +27,8 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values) {
-        return other.findWhere(page, values);
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
+        return other.findWhere(page, numberOfItems, values);
     }
 
     @Override
@@ -42,8 +42,8 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(int page) {
-        return other.findAll(page);
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return other.findAll(page, numberOfItems);
     }
 
     @Override

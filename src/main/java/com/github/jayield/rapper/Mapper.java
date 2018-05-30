@@ -23,7 +23,7 @@ public interface Mapper<T extends DomainObject<K>, K> {
      * @param <R> The type of the column
      * @return a list of T's which match with the properties passed
      */
-    <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values);
+    <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values);
 
     /**
      * Tries to locate T with the given key K
@@ -43,7 +43,7 @@ public interface Mapper<T extends DomainObject<K>, K> {
      * @param page page to locate the T's
      * @return List of T's
      */
-    CompletableFuture<List<T>> findAll(int page);
+    CompletableFuture<List<T>> findAll(int page, int numberOfItems);
 
     /**
      * It will insert t into the database

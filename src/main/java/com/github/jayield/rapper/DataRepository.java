@@ -57,8 +57,8 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values) {
-        return find(() -> mapper.findWhere(page, values));
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfitems, Pair<String, R>... values) {
+        return find(() -> mapper.findWhere(page, numberOfitems, values));
     }
 
     @Override
@@ -76,6 +76,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                 }
         );
         if(wasComputed[0]) populateExternals(current, completableFuture);
+        else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
 
         return completableFuture
                 .thenApply(Optional::of)
@@ -92,8 +93,8 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(int page) {
-        return find(() -> mapper.findAll(page));
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return find(() -> mapper.findAll(page, numberOfItems));
     }
 
     @Override

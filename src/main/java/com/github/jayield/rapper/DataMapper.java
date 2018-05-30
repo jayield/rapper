@@ -53,8 +53,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(int page, Pair<String, R>... values) {
-        return findWhereAux(String.format(mapperSettings.getPagination(), page*ITEMS_IN_PAGE, ITEMS_IN_PAGE), values);
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
+        return findWhereAux(String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems), values);
     }
 
     @Override
@@ -64,10 +64,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SQLUtils.execute(selectByIdQuery, stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, id))
                 .thenApply(ps -> {
                     UnitOfWork.setCurrent(unitOfWork);
+                    log.info("Queried database for {} with id {}", type.getSimpleName(), id);
                     return getStream(ps).findFirst();
                 })
                 .exceptionally(throwable -> {
-                    log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
+                    log.warn(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
                     /*throwable.printStackTrace();
                     return Optional.empty();*/
                     throw new DataMapperException(throwable);
@@ -80,8 +81,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(int page) {
-        return findAllAux(String.format(mapperSettings.getPagination(), page*ITEMS_IN_PAGE, ITEMS_IN_PAGE));
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return findAllAux(String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems));
     }
 
     @Override
@@ -127,10 +128,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .thenApply(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
+                    log.info("Create new {}", type.getSimpleName());
                     return Optional.<Throwable>empty();
                 })
                 .exceptionally(throwable -> {
-                    log.info("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    log.warn("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
                     //throw new DataMapperException(throwable);
                     return Optional.of(throwable);
                 });
@@ -189,10 +191,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 })
                 .thenApply(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
+                    log.info("Updated {} with id {}", type.getSimpleName(), obj.getIdentityKey());
                     return Optional.<Throwable>empty();
                 })
                 .exceptionally(throwable -> {
-                    log.info("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    log.warn("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
                     //throw new DataMapperException(throwable);
                     return Optional.of(throwable);
                 });
@@ -211,12 +214,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         )
                 .thenCompose(preparedStatement -> {
                     UnitOfWork.setCurrent(unit);
+                    log.info("Deleted {} with id {}", type.getSimpleName(), k);
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.deleteById(k))
                             .orElse(CompletableFuture.completedFuture(Optional.empty()));
                 })
                 .exceptionally(throwable -> {
-                    log.info("Couldn't deleteById {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    log.warn("Couldn't deleteById {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
                     //throw new DataMapperException(throwable);
                     return Optional.of(throwable);
                 });
@@ -230,12 +234,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         )
                 .thenCompose(preparedStatement -> {
                     UnitOfWork.setCurrent(unit);
+                    log.info("Deleted {} with id {}", type.getSimpleName(), obj.getIdentityKey());
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.delete(obj))
                             .orElse(CompletableFuture.completedFuture(Optional.empty()));
                 })
                 .exceptionally(throwable -> {
-                    log.info("Couldn't delete {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    log.warn("Couldn't delete {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
                     //throw new DataMapperException(throwable);
                     return Optional.of(throwable);
                 });
@@ -261,8 +266,16 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 throw new DataMapperException(e);
             }
         })
-                .thenApply(this::getStream)
-                .thenApply(s -> s.collect(Collectors.toList()))
+                .thenApply(preparedStatement -> {
+                    StringBuilder sb = new StringBuilder("Queried database for ");
+                    sb.append(type.getSimpleName()).append(" where ");
+                    for (int i = 0; i < values.length; i++) {
+                        sb.append(values[i].getKey()).append(" = ").append(values[i].getValue());
+                        if (i + 1 < values.length) sb.append(" and ");
+                    }
+                    log.info(sb.toString());
+                    return getStream(preparedStatement).collect(Collectors.toList());
+                })
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
                     /*throwable.printStackTrace();
@@ -275,12 +288,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private CompletableFuture<List<T>> findAllAux(String suffix) {
         return SQLUtils.execute(mapperSettings.getSelectQuery() + suffix, s -> {
         })
-                .thenApply(this::getStream)
-                .thenApply(tStream1 -> tStream1.collect(Collectors.toList()))
+                .thenApply(preparedStatement -> {
+                    log.info("Queried database for all objects of type {}", type.getSimpleName());
+                    return getStream(preparedStatement).collect(Collectors.toList());
+                })
                 .exceptionally(throwable -> {
                     log.info(QUERY_ERROR, type.getSimpleName(), throwable.getMessage());
                     //throwable.printStackTrace();
-                    return Collections.emptyList();
+                    //return Collections.emptyList();
+                    throw new DataMapperException(throwable);
                 });
     }
 
@@ -383,8 +399,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 }
                 else
                     field.set(t, rs.getObject(name, field.getType()));
-                /**
-                 * This is done because jdbc might not convert to the right type in the first rs.getObject, but in the second it will
+                /*
+                 * This "if else" is done because jdbc might not convert to the right type in the first rs.getObject, but in the second it will
                  * Ex: for a field of type "short" rs.getObject(name, field.getType()) will return null, but rs.getObject(name) will return an Integer
                  * if we execute first rs.getObject(name) and then rs.getObject(name, field.getType()), it will return a "short" value...
                  */
