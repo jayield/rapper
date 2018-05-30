@@ -36,6 +36,7 @@ public class UnitOfWorkTests {
     private Queue<DomainObject> removedObjects;
     private Connection con;
     private Map<Class, DataRepository> repositoryMap;
+    private SqlSupplier<Connection> connectionSupplier;
 
     public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
@@ -71,7 +72,7 @@ public class UnitOfWorkTests {
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
-        SqlSupplier<Connection> connectionSupplier = manager::getConnection;
+        connectionSupplier = manager::getConnection;
         UnitOfWork.newCurrent(connectionSupplier.wrap());
         con = UnitOfWork.getCurrent().getConnection();
         con.prepareCall("{call deleteDB()}").execute();
@@ -89,11 +90,11 @@ public class UnitOfWorkTests {
     @After
     public void finish() throws SQLException {
         con.rollback();
-        UnitOfWork.getCurrent().closeConnection();
+        con.close();
     }
 
     @Test
-    public void testCommit() throws NoSuchFieldException, IllegalAccessException {
+    public void testCommit() throws NoSuchFieldException, IllegalAccessException, SQLException {
         populateIdentityMaps();
         addNewObjects();
         addDirtyAndClonedObjects();
@@ -105,7 +106,7 @@ public class UnitOfWorkTests {
 
         assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
-        con = UnitOfWork.getCurrent().getConnection();
+        con = connectionSupplier.get();
 
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
         identityMapField.setAccessible(true);
@@ -120,7 +121,7 @@ public class UnitOfWorkTests {
     }
 
     @Test
-    public void testUpdateReference() throws NoSuchFieldException, IllegalAccessException {
+    public void testUpdateReference() throws NoSuchFieldException, IllegalAccessException, SQLException {
         DataRepository<Company, Company.PrimaryKey> companyRepo = MapperRegistry.getRepository(Company.class);
 
         MapperSettings mapperSettings = new MapperSettings(Employee.class);
@@ -149,7 +150,7 @@ public class UnitOfWorkTests {
 
         assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
-        con = UnitOfWork.getCurrent().getConnection();
+        con = connectionSupplier.get();
 
         //Check if employee is in the Company's list
         Company company = companyCompletableFuture.join();
@@ -168,7 +169,7 @@ public class UnitOfWorkTests {
     }
 
     @Test
-    public void testMultipleReference() throws NoSuchFieldException, IllegalAccessException {
+    public void testMultipleReference() throws NoSuchFieldException, IllegalAccessException, SQLException {
         MapperRegistry.Container<Author, Long> authorContainer = getContainer(Author.class);
         MapperRegistry.Container<Book, Long> bookContainer = getContainer(Book.class);
 
@@ -188,7 +189,7 @@ public class UnitOfWorkTests {
 
         assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
-        con = UnitOfWork.getCurrent().getConnection();
+        con = connectionSupplier.get();
 
         //Check if book is in the author's list
         Author author = authorCP.join().get(0);
@@ -206,7 +207,7 @@ public class UnitOfWorkTests {
     }
 
     @Test
-    public void testRollback() throws IllegalAccessException, NoSuchFieldException {
+    public void testRollback() throws IllegalAccessException, NoSuchFieldException, SQLException {
         populateIdentityMaps();
         addNewObjects();
         addDirtyAndClonedObjects();
@@ -222,7 +223,7 @@ public class UnitOfWorkTests {
 
         assertFalse(!UnitOfWork.getCurrent().commit().join().isPresent());
         //Get new connection since the commit will close the current one
-        con = UnitOfWork.getCurrent().getConnection();
+        con = connectionSupplier.get();
 
         removedObjects.remove(chat);
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");

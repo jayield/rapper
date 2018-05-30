@@ -110,6 +110,8 @@ public class DataRepositoryTests {
         con.close();
     }
 
+    //-----------------------------------Find-----------------------------------//
+
     @Test
     public void testfindById() {
         Optional<TopStudent> first = topStudentRepo.findById(454).join();
@@ -133,6 +135,8 @@ public class DataRepositoryTests {
 
         assertMultipleRows(con, second, topStudentSelectQuery.substring(0, topStudentSelectQuery.length()-16), AssertUtils::assertTopStudent, second.size());
     }
+
+    //-----------------------------------Create-----------------------------------//
 
     @Test
     public void testcreate() {

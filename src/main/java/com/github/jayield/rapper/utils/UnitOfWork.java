@@ -4,6 +4,7 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Mapper;
+import com.github.jayield.rapper.Transaction;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import javafx.util.Pair;
@@ -36,7 +37,7 @@ public class UnitOfWork {
     private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
 
-    private UnitOfWork(Supplier<Connection> connectionSupplier){
+    protected UnitOfWork(Supplier<Connection> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
     }
 
@@ -148,6 +149,11 @@ public class UnitOfWork {
         } catch (DataMapperException e){
             rollback();
             throw e;
+        } finally {
+            /*
+             * This must be done to remove CustomUnitOfWork of the current thread
+             */
+            UnitOfWork.removeCurrent();
         }
     }
 
