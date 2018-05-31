@@ -186,8 +186,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             }
         })
                 .thenCompose(ps -> {
-                    UnitOfWork.setCurrent(current);
-                    return this.findById(obj.getIdentityKey());
+                    try {
+                        UnitOfWork.setCurrent(current);
+                        int updateCount = ps.getUpdateCount();
+                        if (updateCount == 0) throw new DataMapperException("No rows affected by update, object's version might be wrong");
+                        return this.findById(obj.getIdentityKey());
+                    } catch (SQLException e) {
+                        throw new DataMapperException(e);
+                    }
                 })
                 .thenApply(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
