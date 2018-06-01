@@ -109,6 +109,12 @@ public class DataRepositoryTests {
         con.close();
     }
 
+    @Test
+    public void testGetNumberOfEntries(){
+        long numberOfEntries = companyRepo.getNumberOfEntries().join();
+        assertEquals(11, numberOfEntries);
+    }
+
     //-----------------------------------Find-----------------------------------//
 
     @Test

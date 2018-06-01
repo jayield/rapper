@@ -48,6 +48,21 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
+    public CompletableFuture<Long> getNumberOfEntries() {
+        return SQLUtils.execute(String.format("select COUNT(*) as c from %s", type.getSimpleName()), s -> { })
+                .thenApply(this::getNumberOfEntries);
+    }
+
+    private Long getNumberOfEntries(PreparedStatement ps) {
+        try (ResultSet rs = ps.getResultSet()) {
+            rs.next();
+            return rs.getLong(1);
+        } catch (SQLException e) {
+            throw new DataMapperException(e);
+        }
+    }
+
+    @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
         return findWhereAux("", values);
     }

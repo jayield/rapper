@@ -9,6 +9,12 @@ import java.util.concurrent.CompletableFuture;
 public interface Mapper<T extends DomainObject<K>, K> {
 
     /**
+     * It will query the DB for how many entries does the table have.
+     * @return number of entries that the table currently has.
+     */
+    CompletableFuture<Long> getNumberOfEntries();
+
+    /**
      * It will try to locate T with the given properties passed in values
      * @param values a pair containing the properties to search T, the key must be the name of the column and the value the expected value of the column
      * @param <R> The type of the column

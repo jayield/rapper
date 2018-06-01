@@ -22,6 +22,11 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
+    public CompletableFuture<Long> getNumberOfEntries() {
+        return other.getNumberOfEntries();
+    }
+
+    @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
         return ifindWhere.apply((Pair<String, Object>[]) values);
     }

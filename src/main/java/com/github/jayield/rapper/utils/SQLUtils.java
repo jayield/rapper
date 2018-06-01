@@ -31,7 +31,6 @@ public class SQLUtils {
                 }
             });
         } catch (SQLException e) {
-            //throw new DataMapperException(e);
             return CompletableFuture.supplyAsync(() -> {
                 throw new DataMapperException(e);
             });

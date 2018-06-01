@@ -22,8 +22,6 @@ import static org.junit.Assert.*;
 public class DataMapperTests {
     private static String detailMessage = "DomainObject wasn't found";
 
-    private final Logger logger = LoggerFactory.getLogger(DataMapperTests.class);
-
     private final DataMapper<Person, Integer> personMapper = (DataMapper<Person, Integer>) MapperRegistry.getRepository(Person.class).getMapper();
     private final DataMapper<Car, CarKey> carMapper = (DataMapper<Car, CarKey>) MapperRegistry.getRepository(Car.class).getMapper();
     private final DataMapper<TopStudent, Integer> topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class).getMapper();
@@ -31,7 +29,6 @@ public class DataMapperTests {
     private final DataMapper<Book, Long> bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class).getMapper();
     private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
     private final DataMapper<Dog, Dog.DogPK> dogMapper = (DataMapper<Dog, Dog.DogPK>) MapperRegistry.getRepository(Dog.class).getMapper();
-    //private Connection con;
 
     @Before
     public void start() throws SQLException {
@@ -51,6 +48,12 @@ public class DataMapperTests {
     public void finish() throws SQLException {
         UnitOfWork.getCurrent().getConnection().rollback();
         UnitOfWork.getCurrent().getConnection().close();
+    }
+
+    @Test
+    public void testGetNumberOfEntries(){
+        long numberOfEntries = companyMapper.getNumberOfEntries().join();
+        assertEquals(11, numberOfEntries);
     }
 
     //-----------------------------------FindWhere-----------------------------------//

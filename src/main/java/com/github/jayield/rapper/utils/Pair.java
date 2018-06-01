@@ -1,8 +1,8 @@
 package com.github.jayield.rapper.utils;
 
 public class Pair<T, R> {
-    final T key;
-    final R value;
+    private final T key;
+    private final R value;
 
     public Pair(T key, R value) {
         this.key = key;

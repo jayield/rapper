@@ -51,6 +51,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
+    public CompletableFuture<Long> getNumberOfEntries() {
+        checkUnitOfWork();
+        return mapper.getNumberOfEntries();
+    }
+
+    @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
         return find(() -> mapper.findWhere(values));
     }
