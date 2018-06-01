@@ -2,7 +2,6 @@ package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
-import javafx.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

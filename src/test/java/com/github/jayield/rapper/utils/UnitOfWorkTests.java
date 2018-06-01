@@ -3,7 +3,6 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.*;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import javafx.util.Pair;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -104,7 +103,13 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
+        UnitOfWork.getCurrent()
+                .commit()
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         //Get new connection since the commit will close the current one
         con = connectionSupplier.get();
 
@@ -148,7 +153,13 @@ public class UnitOfWorkTests {
 
         newObjects.add(employee);
 
-        assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
+        UnitOfWork.getCurrent()
+                .commit()
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         //Get new connection since the commit will close the current one
         con = connectionSupplier.get();
 
@@ -187,7 +198,13 @@ public class UnitOfWorkTests {
 
         newObjects.add(book);
 
-        assertTrue(!UnitOfWork.getCurrent().commit().join().isPresent());
+        UnitOfWork.getCurrent()
+                .commit()
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         //Get new connection since the commit will close the current one
         con = connectionSupplier.get();
 
@@ -221,7 +238,16 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        assertFalse(!UnitOfWork.getCurrent().commit().join().isPresent());
+        final boolean[] failed = {false};
+        UnitOfWork.getCurrent()
+                .commit()
+                .exceptionally(throwable -> {
+                    failed[0] = true;
+                    return null;
+                })
+                .join();
+
+        assertTrue(failed[0]);
         //Get new connection since the commit will close the current one
         con = connectionSupplier.get();
 

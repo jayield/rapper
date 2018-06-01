@@ -1,6 +1,6 @@
 package com.github.jayield.rapper;
 
-import javafx.util.Pair;
+import com.github.jayield.rapper.utils.Pair;
 
 import java.util.List;
 import java.util.Optional;
@@ -47,37 +47,37 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> create(T t) {
+    public CompletableFuture<Void> create(T t) {
         return other.create(t);
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> createAll(Iterable<T> t) {
+    public CompletableFuture<Void> createAll(Iterable<T> t) {
         return other.createAll(t);
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> update(T t) {
+    public CompletableFuture<Void> update(T t) {
         return other.update(t);
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> updateAll(Iterable<T> t) {
+    public CompletableFuture<Void> updateAll(Iterable<T> t) {
         return other.updateAll(t);
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> deleteById(K k) {
+    public CompletableFuture<Void> deleteById(K k) {
         return other.deleteById(k);
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> delete(T t) {
+    public CompletableFuture<Void> delete(T t) {
         return other.delete(t);
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
         return other.deleteAll(keys);
     }
 

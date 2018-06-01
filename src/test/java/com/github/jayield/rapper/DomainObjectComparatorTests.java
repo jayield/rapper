@@ -6,7 +6,6 @@ import com.github.jayield.rapper.domainModel.CarKey;
 import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
-import javafx.util.Pair;
 import org.junit.Before;
 import org.junit.Test;
 

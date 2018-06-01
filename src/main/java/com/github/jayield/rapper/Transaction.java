@@ -43,7 +43,7 @@ public class Transaction {
      * It will try to commit, if anything goes wrong, rollback is executed
      * @return a CompletableFuture<Optional<Throwable>> representing the end of the commit. If an exception was caught, the optional will contain it
      */
-    public CompletableFuture<Optional<Throwable>> commit() {
+    public CompletableFuture<Void> commit() {
         if (!actionsQueue.isEmpty()) {
             Supplier<CompletableFuture> action = actionsQueue.remove();
             return action.get().thenCompose(o -> commit());
@@ -68,11 +68,11 @@ public class Transaction {
         }
 
         @Override
-        public CompletableFuture<Optional<Throwable>> commit() {
-            return CompletableFuture.completedFuture(Optional.empty());
+        public CompletableFuture<Void> commit() {
+            return CompletableFuture.completedFuture(null);
         }
 
-        CompletableFuture<Optional<Throwable>> commitTransaction() {
+        CompletableFuture<Void> commitTransaction() {
             return super.commit();
         }
     }

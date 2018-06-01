@@ -3,7 +3,6 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
-import javafx.util.Pair;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -178,21 +177,36 @@ public class DataMapperTests {
     @Test
     public void testSimpleCreate(){
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
-        assertTrue(!personMapper.create(person).join().isPresent());
+        personMapper.create(person)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testEmbeddedIdCreate(){
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        assertTrue(!carMapper.create(car).join().isPresent());
+        carMapper.create(car)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testHierarchyCreate(){
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
-        assertTrue(!topStudentMapper.create(topStudent).join().isPresent());
+        topStudentMapper.create(topStudent)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
     }
 
@@ -203,21 +217,36 @@ public class DataMapperTests {
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
 
         Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
-        assertTrue(!employeeMapper.create(employee).join().isPresent());
+        employeeMapper.create(employee)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testSingleExternalNullCreate(){
             Employee employee = new Employee(0, "Hugo", 0, null);
-            assertTrue(!employeeMapper.create(employee).join().isPresent());
+            employeeMapper.create(employee)
+                    .exceptionally(throwable -> {
+                        fail(throwable.getMessage());
+                        return null;
+                    })
+                    .join();
             assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testNoVersionCreate(){
         Dog dog = new Dog(new Dog.DogPK("Bobby", "Pitbull"), 5);
-        assertTrue(!dogMapper.create(dog).join().isPresent());
+        dogMapper.create(dog)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Bobby", "Pitbull"), AssertUtils::assertDog, UnitOfWork.getCurrent().getConnection());
     }
 
@@ -227,7 +256,12 @@ public class DataMapperTests {
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
-        assertTrue(!personMapper.update(person).join().isPresent());
+        personMapper.update(person)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
 
         assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection());
     }
@@ -237,7 +271,12 @@ public class DataMapperTests {
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
-        assertTrue(!carMapper.update(car).join().isPresent());
+        carMapper.update(car)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
 
         assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
     }
@@ -250,7 +289,12 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
-        assertTrue(!topStudentMapper.update(topStudent).join().isPresent());
+        topStudentMapper.update(topStudent)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
 
         assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
     }
@@ -263,7 +307,12 @@ public class DataMapperTests {
                         .findById(new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
 
-        assertTrue(!employeeMapper.update(employee).join().isPresent());
+        employeeMapper.update(employee)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
@@ -273,7 +322,12 @@ public class DataMapperTests {
         ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), null);
 
-        assertTrue(!employeeMapper.update(employee).join().isPresent());
+        employeeMapper.update(employee)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
 
         assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
     }
@@ -286,33 +340,58 @@ public class DataMapperTests {
                 new Dog.DogPK(
                         rs.getString("name"),
                         rs.getString("race")), 6);
-        assertTrue(!dogMapper.update(dog).join().isPresent());
+        dogMapper.update(dog)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), AssertUtils::assertDog, UnitOfWork.getCurrent().getConnection());
     }
 
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testSimpleDeleteById(){
-        assertTrue(!personMapper.deleteById(321).join().isPresent());
+        personMapper.deleteById(321)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(personSelectQuery, getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testEmbeddedDeleteById(){
-        assertTrue(!carMapper.deleteById(new CarKey(2, "23we45")).join().isPresent());
+        carMapper.deleteById(new CarKey(2, "23we45"))
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testHierarchyDeleteById(){
-        assertTrue(!topStudentMapper.deleteById(454).join().isPresent());
+        topStudentMapper.deleteById(454)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testSingleExternalDeleteById() throws SQLException {
         ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
-        assertTrue(!employeeMapper.deleteById(rs.getInt("id")).join().isPresent());
+        employeeMapper.deleteById(rs.getInt("id"))
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
     }
 
@@ -320,21 +399,36 @@ public class DataMapperTests {
     @Test
     public void testSimpleDelete(){
         Person person = new Person(321, null, null, 0);
-        assertTrue(!personMapper.delete(person).join().isPresent());
+        personMapper.delete(person)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(personSelectQuery, getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testEmbeddedDelete(){
         Car car = new Car(2, "23we45", null, null, 0);
-        assertTrue(!carMapper.delete(car).join().isPresent());
+        carMapper.delete(car)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
     }
 
     @Test
     public void testHierarchyDelete(){
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
-        assertTrue(!topStudentMapper.delete(topStudent).join().isPresent());
+        topStudentMapper.delete(topStudent)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
     }
 
@@ -345,99 +439,12 @@ public class DataMapperTests {
                 companyMapper
                         .findById(new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
-        assertTrue(!employeeMapper.delete(employee).join().isPresent());
+        employeeMapper.delete(employee)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
         assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
     }
-
-    /*@Test
-    public void test() throws NoSuchFieldException, IllegalAccessException {
-        DataRepository<Company, Company.PrimaryKey> repository = MapperRegistry.getRepository(Company.class);
-
-        Field identityMapField = repository.getClass().getDeclaredField("identityMap");
-        identityMapField.setAccessible(true);
-        ConcurrentMap<Company.PrimaryKey, CompletableFuture<Company>> identityMap = (ConcurrentMap<Company.PrimaryKey, CompletableFuture<Company>>) identityMapField.get(repository);
-        DataRepository<Employee, Integer> repository1 = MapperRegistry.getRepository(Employee.class);
-
-        Company.PrimaryKey k = new Company.PrimaryKey(1, 1);
-        CompletableFuture<Company> companyCompletableFuture = repository.findById(k).thenApply(Optional::get);
-        *//*companyCompletableFuture.join();
-
-        companyCompletableFuture
-                .thenAccept(company -> company
-                        .getEmployees()
-                        .join()
-                        .forEach(System.out::println)
-                ).join();
-        System.out.println();*//*
-
-        Employee employee = new Employee(0, "Hugo", 0, companyMapper
-                .findById(k)
-                .thenApply(company1 -> company1.orElseThrow(() -> new DataMapperException(("Company not found")))));
-        assertTrue(repository1.create(employee).join());
-
-        //Insert in IdentityMap
-        identityMap
-                .get(k)
-                .thenCompose(company -> company.getEmployees()
-                        .thenApply(employees -> employees.add(employee))
-                ).join();
-
-        companyCompletableFuture
-                .thenAccept(company -> company
-                        .getEmployees()
-                        .join()
-                        .forEach(System.out::println)
-                ).join();
-
-        System.out.println();
-
-        identityMap
-                .get(k)
-                .thenAccept(company -> company
-                        .getEmployees()
-                        .join()
-                        .forEach(System.out::println)
-                ).join();
-        System.out.println();
-    }*/
-
-    /*@Test
-    public void test2(){
-        for (int i = 0; i < 50; i++) {
-            CompletableFuture<ConcurrentLinkedQueue<Integer>> future = CompletableFuture.supplyAsync(() -> {
-                try {
-                    Thread.sleep(500);
-                } catch (InterruptedException e) {
-                    System.out.println("I was interrupted");
-                }
-
-                ConcurrentLinkedQueue<Integer> integers = new ConcurrentLinkedQueue<>();
-                integers.add(1);
-                return integers;
-            });
-
-            CompletableFuture<Void> future1 = future.thenAcceptAsync(integer -> integer.add(2));
-            CompletableFuture<Void> future2 = future.thenAcceptAsync(integer -> integer.add(3));
-            CompletableFuture<Void> future3 = future.thenAcceptAsync(integer -> integer.add(4));
-            CompletableFuture<Void> future4 = future.thenAcceptAsync(integer -> integer.add(5));
-            CompletableFuture<Void> future5 = future.thenAcceptAsync(integer -> integer.add(6));
-            CompletableFuture<Void> future6 = future.thenAcceptAsync(integer -> integer.add(7));
-
-            List<CompletableFuture<Void>> list = new ArrayList<>();
-            list.add(future1);
-            list.add(future2);
-            list.add(future3);
-            list.add(future4);
-            list.add(future5);
-            list.add(future6);
-            CompletableFuture.allOf(list.toArray(new CompletableFuture[list.size()])).join();
-
-            *//*System.out.println("Future1 result = " + future1.join());
-            System.out.println("Future2 result = " + future2.join());*//*
-            StringBuilder print = new StringBuilder("[" + i + "] Future = ");
-            future.join().forEach(print::append);
-            logger.info(print.toString());
-            assertEquals(7, future.join().size());
-        }
-    }*/
 }

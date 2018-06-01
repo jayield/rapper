@@ -1,22 +1,15 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.utils.ConnectionManager;
-import com.github.jayield.rapper.utils.MapperRegistry;
-import com.github.jayield.rapper.utils.SqlSupplier;
-import com.github.jayield.rapper.utils.UnitOfWork;
-import javafx.util.Pair;
+import com.github.jayield.rapper.utils.*;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.net.URLDecoder;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class TransactionTests {
 
@@ -55,13 +48,17 @@ public class TransactionTests {
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
 
-        CompletableFuture<Optional<Throwable>> future = new Transaction(Connection.TRANSACTION_READ_COMMITTED)
+        new Transaction(Connection.TRANSACTION_READ_COMMITTED)
                 .andDo(() -> employeeRepo.deleteById(employee.getIdentityKey()))
                 .andDo(() -> employeeRepo.deleteById(employee2.getIdentityKey()))
                 .andDo(() -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
-                .commit();
+                .commit()
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
 
-        assertFalse(future.join().isPresent());
         assertTrue(employeeRepo.findWhere(new Pair<>("name", "Bob")).join().isEmpty());
         assertTrue(employeeRepo.findWhere(new Pair<>("name", "Charles")).join().isEmpty());
         assertTrue(!companyRepo.findById(new Company.PrimaryKey(1, 1)).join().isPresent());
@@ -71,12 +68,18 @@ public class TransactionTests {
     public void testTransactionRollback() {
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
 
-        CompletableFuture<Optional<Throwable>> future = new Transaction(Connection.TRANSACTION_READ_COMMITTED)
+        final boolean[] failed = {false};
+        new Transaction(Connection.TRANSACTION_READ_COMMITTED)
                 .andDo(() -> employeeRepo.deleteById(employee.getIdentityKey()))
                 .andDo(() -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
-                .commit();
+                .commit()
+                .exceptionally(throwable -> {
+                    failed[0] = true;
+                    return null;
+                })
+                .join();
 
-        assertTrue(future.join().isPresent());
+        assertTrue(failed[0]);
 
         assertFalse(employeeRepo.findWhere(new Pair<>("name", "Bob")).join().isEmpty());
         assertTrue(companyRepo.findById(new Company.PrimaryKey(1, 1)).join().isPresent());

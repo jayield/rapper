@@ -3,7 +3,6 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import com.github.jayield.rapper.utils.*;
-import javafx.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,21 +97,21 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> create(T t) {
+    public CompletableFuture<Void> create(T t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         t.markNew();
         return unitOfWork.commit();
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> createAll(Iterable<T> t) {
+    public CompletableFuture<Void> createAll(Iterable<T> t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         t.forEach(DomainObject::markNew);
         return unitOfWork.commit();
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> update(T t) {
+    public CompletableFuture<Void> update(T t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
 
         CompletableFuture<T> future = identityMap.computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
@@ -138,7 +137,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> updateAll(Iterable<T> t) {
+    public CompletableFuture<Void> updateAll(Iterable<T> t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         List<CompletableFuture<T>> completableFutures = new ArrayList<>();
         t.forEach(t1 -> {
@@ -166,7 +165,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> deleteById(K k) {
+    public CompletableFuture<Void> deleteById(K k) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
             t.markRemoved();
@@ -184,14 +183,14 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> delete(T t) {
+    public CompletableFuture<Void> delete(T t) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         t.markRemoved();
         return unitOfWork.commit();
     }
 
     @Override
-    public CompletableFuture<Optional<Throwable>> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
         UnitOfWork unitOfWork = checkUnitOfWork();
         List<CompletableFuture> completableFutures = new ArrayList<>();
         keys.forEach(k -> {

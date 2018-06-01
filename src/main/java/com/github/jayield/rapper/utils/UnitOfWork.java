@@ -4,10 +4,8 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Mapper;
-import com.github.jayield.rapper.Transaction;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
-import javafx.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -126,25 +124,28 @@ public class UnitOfWork {
         return unitOfWork;
     }
 
-    public CompletableFuture<Optional<Throwable>> commit() {
+    public CompletableFuture<Void> commit() {
         try {
             Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Optional<Throwable>>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
+                    List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
 
             Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Optional<Throwable>>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+                    List<CompletableFuture<Void>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
 
             Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Optional<Throwable>>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
+                    List<CompletableFuture<Void>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
 
-        List<CompletableFuture<Optional<Throwable>>> completableFutures = insertPair.getValue();
-        completableFutures.addAll(updatePair.getValue());
-        completableFutures.addAll(deletePair.getValue());
+            List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
+            completableFutures.addAll(updatePair.getValue());
+            completableFutures.addAll(deletePair.getValue());
 
-        return completableFutures
-                .stream()
-                .reduce(CompletableFuture.completedFuture(Optional.empty()), (a, b) -> a.thenCombine(b, (a2, b2) -> a2.isPresent() ? a2 : b2/*a2 && b2*/))
-                .thenApply(success -> updateIdentityMap(success, insertPair.getKey(), updatePair.getKey(), deletePair.getKey()));
+            return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                    .thenAccept(aVoid -> updateIdentityMap(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
+                    .exceptionally(throwable -> {
+                        logger.info("Commit wasn't successful, here's the error message:\n{}", throwable.getMessage());
+                        rollback();
+                        throw new DataMapperException(throwable);
+                    });
 
         } catch (DataMapperException e){
             rollback();
@@ -157,14 +158,9 @@ public class UnitOfWork {
         }
     }
 
-    private Optional<Throwable> updateIdentityMap(Optional<Throwable> success, List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
+    private void updateIdentityMap(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
                                       List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
         try {
-            if(success.isPresent()) {
-                rollback();
-                return success;
-            }
-
             //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
             Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator();
             Iterator<DataRepository<? extends DomainObject<?>, ?>> updatedReposIterator = updateRepos.iterator();
@@ -195,11 +191,9 @@ public class UnitOfWork {
             }
 
             connection.commit();
-            return Optional.empty();
         } catch (SQLException e) {
             logger.info("Commit wasn't successful, here's the error message:\n{}", e.getMessage());
             rollback();
-            return Optional.of(e);
         } finally {
             closeConnection();
             newObjects.clear();
@@ -229,13 +223,13 @@ public class UnitOfWork {
      *
      * The value of the Pair is a List containing the completableFutures of the calls of the mapper
      */
-    private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Optional<Throwable>>>> executeFilteredBiFunctionInList(
-            BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Optional<Throwable>>> biFunction,
+    private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> executeFilteredBiFunctionInList(
+            BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Void>> biFunction,
             Queue<DomainObject> list,
             Predicate<DomainObject> predicate
     ) {
         List<DataRepository<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
-        List<CompletableFuture<Optional<Throwable>>> completableFutures = new ArrayList<>();
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         list
                 .stream()
                 .filter(predicate)
