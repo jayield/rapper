@@ -24,7 +24,6 @@ import static com.github.jayield.rapper.utils.SqlField.*;
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private static final String QUERY_ERROR = "Couldn't execute query on {}.\nReason: {}";
-    private static final int ITEMS_IN_PAGE = 10;
 
     private final Class<T> type;
     private final Class<?> primaryKeyType;
@@ -45,6 +44,16 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         } catch (NoSuchMethodException e) {
             throw new DataMapperException(e);
         }
+    }
+
+    @Override
+    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
+        String whereCondition = Arrays.stream(values)
+                .map(pair -> pair.getKey() + " = ?")
+                .collect(Collectors.joining(" and ", " where ", ""));
+
+        return SQLUtils.execute(String.format("select COUNT(*) as c from %s %s", type.getSimpleName(), whereCondition), s -> prepareFindWhere(s, values))
+                .thenApply(this::getNumberOfEntries);
     }
 
     @Override
@@ -108,7 +117,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     .get()
                     .create(obj)
                     .thenCompose(ignored -> createAux(obj, current));
-        } else return createAux(obj, current);
+        } else
+            return createAux(obj, current);
     }
 
     @Override
@@ -126,7 +136,8 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     .get()
                     .update(obj)
                     .thenCompose(ignored -> updateAux(obj, current));
-        } else return updateAux(obj, current);
+        } else
+            return updateAux(obj, current);
     }
 
     @Override

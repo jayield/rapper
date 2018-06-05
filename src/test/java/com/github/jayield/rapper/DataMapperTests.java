@@ -51,6 +51,12 @@ public class DataMapperTests {
     }
 
     @Test
+    public void testGetNumberOfEntriesWhere(){
+        long numberOfEntries = companyMapper.getNumberOfEntries(new Pair<>("id", 1)).join();
+        assertEquals(11, numberOfEntries);
+    }
+
+    @Test
     public void testGetNumberOfEntries(){
         long numberOfEntries = companyMapper.getNumberOfEntries().join();
         assertEquals(11, numberOfEntries);

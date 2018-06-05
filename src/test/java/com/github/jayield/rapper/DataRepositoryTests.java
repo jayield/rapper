@@ -110,6 +110,12 @@ public class DataRepositoryTests {
     }
 
     @Test
+    public void testGetNumberOfEntriesWhere(){
+        long numberOfEntries = companyRepo.getNumberOfEntries(new Pair<>("id", 1)).join();
+        assertEquals(11, numberOfEntries);
+    }
+
+    @Test
     public void testGetNumberOfEntries(){
         long numberOfEntries = companyRepo.getNumberOfEntries().join();
         assertEquals(11, numberOfEntries);

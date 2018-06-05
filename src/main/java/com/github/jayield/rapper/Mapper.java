@@ -9,6 +9,12 @@ import java.util.concurrent.CompletableFuture;
 public interface Mapper<T extends DomainObject<K>, K> {
 
     /**
+     * It will query the DB for how many entries does the table have where the condition matches.
+     * @return number of entries that the table currently has.
+     */
+    <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values);
+
+    /**
      * It will query the DB for how many entries does the table have.
      * @return number of entries that the table currently has.
      */
