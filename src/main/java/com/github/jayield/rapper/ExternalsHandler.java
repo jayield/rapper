@@ -121,7 +121,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         CompletableFuture<? extends DomainObject> domainObjects = externalRepo
                 .findById((V) id)
                 .thenApply(domainObject -> domainObject
-                        .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". \nThe object wasn't found in the DB")));
+                        .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
         setExternal(t, domainObjects, sqlFieldExternal.field, sqlFieldExternal.type);
     }
 
@@ -138,7 +138,9 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 .map(str -> new Pair<>(str, idValues.next()))
                 .toArray(Pair[]::new);
 
-        setExternal(t, repo.findWhere(pairs), sqlFieldExternal.field, sqlFieldExternal.type);
+        CompletableFuture<? extends List<? extends DomainObject>> objects = repo.findWhere(pairs);
+
+        setExternal(t, objects, sqlFieldExternal.field, sqlFieldExternal.type);
     }
 
     /**
@@ -154,7 +156,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param idValues
      */
     private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlFieldExternal sqlFieldExternal, DataRepository<N, V> repo, Iterator<Object> idValues) {
-        UnitOfWork current = UnitOfWork.getCurrent();
         CompletableFuture<List<N>> completableFuture = SQLUtils.execute(sqlFieldExternal.selectTableQuery, stmt -> {
             try {
                 for (int i = 1; idValues.hasNext(); i++) stmt.setObject(i, idValues.next());
@@ -164,7 +165,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         })
                 .thenCompose(preparedStatement -> {
                     try {
-                        UnitOfWork.setCurrent(current);
                         return getExternalObjects(repo, sqlFieldExternal.externalNames, preparedStatement.getResultSet())
                                 .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture));
                     } catch (SQLException e) {
@@ -172,7 +172,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                     }
                 })
                 .exceptionally(throwable -> {
-                    logger.info("Couldn't populate externals of {}. \nReason: {}", t.getClass().getSimpleName(), throwable.getMessage());
+                    logger.info("Couldn't populate externals of {} due to {}", t.getClass().getSimpleName(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
 
@@ -325,7 +325,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 } else if (prevExternalCF != null && externalCF != null) {
                     changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
                     changeCFReferences(obj, externalCF, domainObjectExternals, true);
-                } else if (prevExternalCF != null && externalCF == null) {
+                } else if (prevExternalCF != null) {
                     changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
                 }
             } catch (IllegalAccessException e) {

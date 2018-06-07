@@ -68,28 +68,22 @@ public class UnitOfWorkTests {
     public void before() throws SQLException, NoSuchFieldException, IllegalAccessException {
         repositoryMap.clear();
         UnitOfWork.removeCurrent();
+
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
         connectionSupplier = manager::getConnection;
+
         UnitOfWork.newCurrent(connectionSupplier.wrap());
-        con = UnitOfWork.getCurrent().getConnection();
+        UnitOfWork current = UnitOfWork.getCurrent();
+
+        con = current.getConnection();
         con.prepareCall("{call deleteDB()}").execute();
         con.prepareCall("{call populateDB()}").execute();
         con.commit();
-        /*createTables(con);
-        deleteDB(con);
-        populateDB(con);*/
 
         objectsContainer = new ObjectsContainer(con);
-
         setupLists();
-    }
-
-    @After
-    public void finish() throws SQLException {
-        con.rollback();
-        con.close();
     }
 
     @Test

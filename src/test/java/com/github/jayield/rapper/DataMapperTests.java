@@ -3,21 +3,18 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.URLDecoder;
 import java.sql.*;
-import java.sql.Date;
-import java.util.*;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class DataMapperTests {
     private static String detailMessage = "DomainObject wasn't found";
@@ -33,21 +30,18 @@ public class DataMapperTests {
     @Before
     public void start() throws SQLException {
         ConnectionManager manager = ConnectionManager.getConnectionManager(
-                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
+                "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
                 "SA", "");
         SqlSupplier<Connection> connectionSupplier = manager::getConnection;
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-        Connection con = UnitOfWork.getCurrent().getConnection();
+        UnitOfWork.removeCurrent();
 
+        Connection con = connectionSupplier.get();
         con.prepareCall("{call deleteDB()}").execute();
         con.prepareCall("{call populateDB()}").execute();
         con.commit();
-    }
+        con.close();
 
-    @After
-    public void finish() throws SQLException {
-        UnitOfWork.getCurrent().getConnection().rollback();
-        UnitOfWork.getCurrent().getConnection().close();
+        UnitOfWork.newCurrent(connectionSupplier.wrap());
     }
 
     @Test
@@ -80,13 +74,16 @@ public class DataMapperTests {
     public void testEmbeddedIdFindWhere() throws SQLException {
         List<Car> cars = carMapper.findWhere(new Pair<>("brand", "Mitsubishi")).join();
 
-        PreparedStatement ps = UnitOfWork.getCurrent().getConnection().prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        PreparedStatement ps = con.prepareStatement("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?");
         ps.setString(1, "Mitsubishi");
         ResultSet rs = ps.executeQuery();
 
         if (rs.next())
             assertCar(cars.remove(0), rs);
         else fail("Database has no data");
+        con.rollback();
+        con.close();
     }
 
     @Test
@@ -127,22 +124,28 @@ public class DataMapperTests {
     }
 
     @Test
-    public void testEmbeddedIdFindById(){
+    public void testEmbeddedIdFindById() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         int owner = 2; String plate = "23we45";
         Car car = carMapper
                 .findById(new CarKey(owner, plate))
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(owner, plate), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(owner, plate), AssertUtils::assertCar, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testHierarchyFindById(){
+    public void testHierarchyFindById() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         TopStudent topStudent = topStudentMapper
                 .findById(454)
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(454), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(454), AssertUtils::assertTopStudent, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
@@ -165,9 +168,12 @@ public class DataMapperTests {
     }
 
     @Test
-    public void testEmbeddedIdFindAll(){
+    public void testEmbeddedIdFindAll() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         List<Car> cars = carMapper.findAll().join();
-        assertMultipleRows(UnitOfWork.getCurrent().getConnection(), cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
+        assertMultipleRows(con, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
+        con.rollback();
+        con.close();
     }
 
     @Test
@@ -177,14 +183,18 @@ public class DataMapperTests {
     }
 
     @Test
-    public void testPaginationFindAll() {
+    public void testPaginationFindAll() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         List<Company> companies = companyMapper.findAll(0, 10).join();
-        assertMultipleRows(UnitOfWork.getCurrent().getConnection(), companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
+        assertMultipleRows(con, companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
+        con.rollback();
+        con.close();
     }
 
     //-----------------------------------Create-----------------------------------//
     @Test
-    public void testSimpleCreate(){
+    public void testSimpleCreate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         Person person = new Person(123, "abc", new Date(1969, 6, 9), 0);
         personMapper.create(person)
                 .exceptionally(throwable -> {
@@ -192,11 +202,14 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testEmbeddedIdCreate(){
+    public void testEmbeddedIdCreate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
         carMapper.create(car)
                 .exceptionally(throwable -> {
@@ -204,11 +217,14 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testHierarchyCreate(){
+    public void testHierarchyCreate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
         topStudentMapper.create(topStudent)
                 .exceptionally(throwable -> {
@@ -216,11 +232,14 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testSingleExternalCreate(){
+    public void testSingleExternalCreate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         CompletableFuture<Company> companyCompletableFuture = companyMapper
                 .findById(new Company.PrimaryKey(1, 1))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
@@ -232,23 +251,29 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testSingleExternalNullCreate(){
-            Employee employee = new Employee(0, "Hugo", 0, null);
-            employeeMapper.create(employee)
-                    .exceptionally(throwable -> {
-                        fail(throwable.getMessage());
-                        return null;
-                    })
-                    .join();
-            assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
+    public void testSingleExternalNullCreate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        Employee employee = new Employee(0, "Hugo", 0, null);
+        employeeMapper.create(employee)
+                .exceptionally(throwable -> {
+                    fail(throwable.getMessage());
+                    return null;
+                })
+                .join();
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Hugo"), AssertUtils::assertEmployee, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testNoVersionCreate(){
+    public void testNoVersionCreate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         Dog dog = new Dog(new Dog.DogPK("Bobby", "Pitbull"), 5);
         dogMapper.create(dog)
                 .exceptionally(throwable -> {
@@ -256,13 +281,16 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Bobby", "Pitbull"), AssertUtils::assertDog, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Bobby", "Pitbull"), AssertUtils::assertDog, con);
+        con.rollback();
+        con.close();
     }
 
     //-----------------------------------Update-----------------------------------//
     @Test
     public void testSimpleUpdate() throws SQLException {
-        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321), con);
         Person person = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
 
         personMapper.update(person)
@@ -272,12 +300,15 @@ public class DataMapperTests {
                 })
                 .join();
 
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testEmbeddedIdUpdate() throws SQLException {
-        ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"), con);
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
 
         carMapper.update(car)
@@ -287,14 +318,17 @@ public class DataMapperTests {
                 })
                 .join();
 
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testHierarchyUpdate() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         ResultSet rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
+                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454), con);
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
                 4, 6, 7, rs.getLong(3), rs.getLong(1));
 
@@ -305,12 +339,15 @@ public class DataMapperTests {
                 })
                 .join();
 
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testSingleExternalUpdate() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"),
                 companyMapper
                         .findById(new Company.PrimaryKey(1, 2))
@@ -323,27 +360,33 @@ public class DataMapperTests {
                 })
                 .join();
 
-        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testSingleExternalNullUpdate() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), null);
 
         employeeMapper.update(employee)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
 
-        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(employee, employeeSelectQuery, getEmployeePSConsumer("Boba"), AssertUtils::assertEmployee, con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testNoVersionUpdate() throws SQLException {
-        ResultSet rs = executeQuery(dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery(dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), con);
 
         Dog dog = new Dog(
                 new Dog.DogPK(
@@ -355,58 +398,73 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), AssertUtils::assertDog, UnitOfWork.getCurrent().getConnection());
+        assertSingleRow(dog, dogSelectQuery, getDogPSConsumer("Doggy", "Bulldog"), AssertUtils::assertDog, con);
+        con.rollback();
+        con.close();
     }
 
     //-----------------------------------DeleteById-----------------------------------//
     @Test
-    public void testSimpleDeleteById(){
+    public void testSimpleDeleteById() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         personMapper.deleteById(321)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
                 })
                 .join();
-        assertNotFound(personSelectQuery, getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(personSelectQuery, getPersonPSConsumer(321), con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testEmbeddedDeleteById(){
+    public void testEmbeddedDeleteById() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         carMapper.deleteById(new CarKey(2, "23we45"))
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
                 })
                 .join();
-        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testHierarchyDeleteById(){
+    public void testHierarchyDeleteById() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         topStudentMapper.deleteById(454)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
                 })
                 .join();
-        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testSingleExternalDeleteById() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
         employeeMapper.deleteById(rs.getInt("id"))
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
                 })
                 .join();
-        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
+        con.rollback();
+        con.close();
     }
 
     //-----------------------------------Delete-----------------------------------//
     @Test
-    public void testSimpleDelete(){
+    public void testSimpleDelete() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         Person person = new Person(321, null, null, 0);
         personMapper.delete(person)
                 .exceptionally(throwable -> {
@@ -414,11 +472,14 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertNotFound(personSelectQuery, getPersonPSConsumer(321), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(personSelectQuery, getPersonPSConsumer(321), con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testEmbeddedDelete(){
+    public void testEmbeddedDelete() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         Car car = new Car(2, "23we45", null, null, 0);
         carMapper.delete(car)
                 .exceptionally(throwable -> {
@@ -426,11 +487,14 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(carSelectQuery, getCarPSConsumer(2, "23we45"), con);
+        con.rollback();
+        con.close();
     }
 
     @Test
-    public void testHierarchyDelete(){
+    public void testHierarchyDelete() throws SQLException {
+        Connection con = UnitOfWork.getCurrent().getConnection();
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
         topStudentMapper.delete(topStudent)
                 .exceptionally(throwable -> {
@@ -438,12 +502,15 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(topStudentSelectQuery, getPersonPSConsumer(454), con);
+        con.rollback();
+        con.close();
     }
 
     @Test
     public void testSingleExternalDelete() throws SQLException {
-        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
+        Connection con = UnitOfWork.getCurrent().getConnection();
+        ResultSet rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
         Employee employee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getLong("version"),
                 companyMapper
                         .findById(new Company.PrimaryKey(1, 2))
@@ -454,6 +521,8 @@ public class DataMapperTests {
                     return null;
                 })
                 .join();
-        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), UnitOfWork.getCurrent().getConnection());
+        assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Bob"), con);
+        con.rollback();
+        con.close();
     }
 }

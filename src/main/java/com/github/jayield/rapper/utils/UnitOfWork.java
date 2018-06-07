@@ -1,6 +1,5 @@
 package com.github.jayield.rapper.utils;
 
-
 import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Mapper;
@@ -19,14 +18,17 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
+import static com.github.jayield.rapper.utils.ConnectionManager.getConnectionManager;
 import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 
 public class UnitOfWork {
+    private static final String UNSUCCESSFUL_COMMIT_MESSAGE = "{} - Rolling back changes due to {}";
+    private static final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
+
     /**
      * Private for each transaction
      */
     private Connection connection = null;
-    private final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
     private final Supplier<Connection> connectionSupplier;
 
     //Multiple Threads may be accessing the Queue, so it must be a ConcurrentLinkedQueue
@@ -40,13 +42,16 @@ public class UnitOfWork {
     }
 
     public Connection getConnection() {
-        if(connection == null)
+        if(connection == null) {
             connection = connectionSupplier.get();
+            logger.info("{} - New connection opened", this.hashCode());
+        }
         return connection;
     }
 
-    public void closeConnection(){
+    private void closeConnection(){
         try {
+            logger.info("{} - Closing connection", this.hashCode());
             connection.close();
         } catch (SQLException e) {
             logger.info("Error closing connection\nError Message: {}", e.getMessage());
@@ -105,16 +110,53 @@ public class UnitOfWork {
     /**
      * Each Thread will have its own UnitOfWork
      */
-    public static void newCurrent(Supplier<Connection> supplier) {
-        setCurrent(new UnitOfWork(supplier));
+    public static UnitOfWork newCurrent(Supplier<Connection> supplier) {
+        UnitOfWork uow = new UnitOfWork(supplier);
+        setCurrent(uow);
+
+        logger.info("New Unit of Work {}", uow.hashCode());
+
+        return uow;
     }
 
-    public static void setCurrent(UnitOfWork uow) {
+    private static void setCurrent(UnitOfWork uow) {
         current.set(uow);
     }
 
     public static void removeCurrent(){
+        UnitOfWork unitOfWork = current.get();
+        if(unitOfWork!= null) logger.info("{} - Unit of Work removed", unitOfWork.hashCode());
         current.remove();
+    }
+
+    public static <R> R executeActionWithinUnit(UnitOfWork unitOfWork, Supplier<R> action) {
+        try {
+            UnitOfWork.getCurrent();
+            return action.get();
+        } catch (UnitOfWorkException e) {
+            UnitOfWork.setCurrent(unitOfWork);
+            R r = action.get();
+            UnitOfWork.removeCurrent();
+            return r;
+        }
+    }
+
+    public static <R> R executeActionWithNewUnit(Supplier<R> action) {
+        ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
+        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+        try {
+            UnitOfWork current = UnitOfWork.getCurrent();
+
+            UnitOfWork.newCurrent(connectionSupplier.wrap());
+            R r = action.get();
+            UnitOfWork.setCurrent(current);
+            return r;
+        } catch (UnitOfWorkException e) {
+            UnitOfWork.newCurrent(connectionSupplier.wrap());
+            R r = action.get();
+            UnitOfWork.removeCurrent();
+            return r;
+        }
     }
 
     public static UnitOfWork getCurrent() {
@@ -126,40 +168,44 @@ public class UnitOfWork {
 
     public CompletableFuture<Void> commit() {
         try {
-            Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
+            if (newObjects.isEmpty() && clonedObjects.isEmpty() && dirtyObjects.isEmpty() && removedObjects.isEmpty()) {
+                if (connection != null) {
+                    connection.commit();
+                    closeConnection();
+                }
+                logger.info("{} - Changes have been committed", this.hashCode());
+                return CompletableFuture.completedFuture(null);
+            } else {
+                Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
+                        List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
 
-            Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Void>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+                Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
+                        List<CompletableFuture<Void>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
 
-            Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                    List<CompletableFuture<Void>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
+                Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
+                        List<CompletableFuture<Void>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
 
-            List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
-            completableFutures.addAll(updatePair.getValue());
-            completableFutures.addAll(deletePair.getValue());
+                List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
+                completableFutures.addAll(updatePair.getValue());
+                completableFutures.addAll(deletePair.getValue());
 
-            return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                    .thenAccept(aVoid -> updateIdentityMap(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
-                    .exceptionally(throwable -> {
-                        logger.info("Commit wasn't successful, here's the error message:\n{}", throwable.getMessage());
-                        rollback();
-                        throw new DataMapperException(throwable);
-                    });
-
-        } catch (DataMapperException e){
+                return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+                        .thenAccept(aVoid -> proceedCommit(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
+                        .exceptionally(throwable -> {
+                            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
+                            rollback();
+                            throw new DataMapperException(throwable);
+                        });
+            }
+        } catch (DataMapperException | SQLException e){
+            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
             rollback();
-            throw e;
-        } finally {
-            /*
-             * This must be done to remove CustomUnitOfWork of the current thread
-             */
-            UnitOfWork.removeCurrent();
+            throw new DataMapperException(e);
         }
     }
 
-    private void updateIdentityMap(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
-                                      List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
+    private void proceedCommit(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
+                               List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
         try {
             //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
             Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator();
@@ -191,11 +237,12 @@ public class UnitOfWork {
             }
 
             connection.commit();
+            closeConnection();
+            logger.info("{} - Changes have been committed", this.hashCode());
         } catch (SQLException e) {
-            logger.info("Commit wasn't successful, here's the error message:\n{}", e.getMessage());
+            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
             rollback();
         } finally {
-            closeConnection();
             newObjects.clear();
             clonedObjects.clear();
             dirtyObjects.clear();
@@ -235,7 +282,7 @@ public class UnitOfWork {
                 .filter(predicate)
                 .forEach(domainObject -> {
                     DataRepository repository = getRepository(domainObject.getClass());
-                    completableFutures.add(biFunction.apply(repository.getMapper(), domainObject));
+                    completableFutures.add(UnitOfWork.executeActionWithinUnit(this, () -> biFunction.apply(repository.getMapper(), domainObject)));
                     mappers.add(repository);
                 });
 
@@ -249,7 +296,10 @@ public class UnitOfWork {
      */
     public void rollback() {
         try {
-            if(connection != null) connection.rollback();
+            if(connection != null) {
+                connection.rollback();
+                closeConnection();
+            }
 
             newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
 

@@ -32,10 +32,7 @@ public class Transaction {
      * @return Transaction
      */
     public Transaction andDo(Supplier<CompletableFuture> action) {
-        actionsQueue.add(() -> {
-            UnitOfWork.setCurrent(customUnitOfWork);
-            return action.get();
-        });
+        actionsQueue.add(() -> UnitOfWork.executeActionWithinUnit(customUnitOfWork, action));
         return this;
     }
 

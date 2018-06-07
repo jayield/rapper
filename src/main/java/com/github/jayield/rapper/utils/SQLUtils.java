@@ -17,11 +17,12 @@ public class SQLUtils {
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
     public static CompletableFuture<PreparedStatement> execute(String sqlQuery, Consumer<PreparedStatement> handleStatement) {
-        Connection con = UnitOfWork.getCurrent().getConnection();
+        UnitOfWork current = UnitOfWork.getCurrent();
+        Connection con = current.getConnection();
         try {
             PreparedStatement preparedStatement = con.prepareStatement(sqlQuery, Statement.RETURN_GENERATED_KEYS);
             handleStatement.accept(preparedStatement);
-            logger.debug("Prepared Statement - {}", preparedStatement);
+            logger.info("New Prepared Statement {} from Unit of Work {}", preparedStatement.hashCode(), current.hashCode());
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     preparedStatement.execute();

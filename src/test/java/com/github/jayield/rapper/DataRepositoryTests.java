@@ -2,6 +2,7 @@ package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import com.github.jayield.rapper.utils.*;
 import org.junit.After;
 import org.junit.Before;
@@ -46,6 +47,7 @@ public class DataRepositoryTests {
     public void before() throws SQLException {
         UnitOfWork.removeCurrent();
         repositoryMap.clear();
+
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
@@ -101,12 +103,6 @@ public class DataRepositoryTests {
         repositoryMap.put(Employee.class, new MapperRegistry.Container<>(employeeSettings, employeeExternal, employeeRepo, employeeMapper));
         repositoryMap.put(Company.class, new MapperRegistry.Container<>(companySettings, companyExternal, companyRepo, companyMapper));
         repositoryMap.put(Author.class, new MapperRegistry.Container<>(authorSettings, authorExternal, authorRepo, authorMapper));
-    }
-
-    @After
-    public void after() throws SQLException {
-        con.rollback();
-        con.close();
     }
 
     @Test
@@ -229,7 +225,7 @@ public class DataRepositoryTests {
 
         personRepo.updateAll(list)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -254,7 +250,7 @@ public class DataRepositoryTests {
 
         employeeRepo.update(employee)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -279,7 +275,7 @@ public class DataRepositoryTests {
 
         employeeRepo.update(employee)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -312,7 +308,7 @@ public class DataRepositoryTests {
 
         bookRepo.update(book)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -337,14 +333,30 @@ public class DataRepositoryTests {
                 .join()
                 .orElseThrow(() -> new DataMapperException("Company not found"));
 
+        boolean failed = false;
+        try {
+            UnitOfWork.getCurrent();
+        } catch (UnitOfWorkException e){
+            failed = true;
+        }
+        assertTrue(failed);
+
         CompletableFuture<Company> company1 = companyRepo.findById(new Company.PrimaryKey(1, 2))
                 .thenApply(optionalCompany -> optionalCompany.orElseThrow(() -> new DataMapperException("Company not found")));
 
         Employee employee = new Employee(rs.getInt("id"),"Boba", rs.getLong("version"), company1);
 
+        failed = false;
+        try {
+            UnitOfWork.getCurrent();
+        } catch (UnitOfWorkException e){
+            failed = true;
+        }
+        assertTrue(failed);
+
         employeeRepo.update(employee)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -373,7 +385,7 @@ public class DataRepositoryTests {
     public void testdeleteById() {
         topStudentRepo.deleteById(454)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -412,7 +424,7 @@ public class DataRepositoryTests {
 
         employeeRepo.deleteAll(list)
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
@@ -421,11 +433,11 @@ public class DataRepositoryTests {
         assertNotFound(employeeSelectQuery, getEmployeePSConsumer("Charles"), con);
 
         Optional<Employee> optionalPerson = employeeRepo.findById(list.remove(0)).join();
-        assertEquals(3, employeeMapperify.getIfindById().getCount());
+        assertTrue(3 >= employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson.isPresent());
 
         Optional<Employee> optionalPerson2 = employeeRepo.findById(list.remove(0)).join();
-        assertEquals(4, employeeMapperify.getIfindById().getCount());
+        assertTrue(4 >= employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson2.isPresent());
     }
 }

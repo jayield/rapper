@@ -40,7 +40,8 @@ public class TransactionTests {
 
         con.prepareCall("{call deleteDB()}").execute();
         con.prepareCall("{call populateDB()}").execute();
-        con.commit();
+        UnitOfWork.getCurrent().commit();
+        UnitOfWork.removeCurrent();
     }
 
     @Test
@@ -54,7 +55,7 @@ public class TransactionTests {
                 .andDo(() -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
                 .commit()
                 .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
+                    fail();
                     return null;
                 })
                 .join();
