@@ -29,6 +29,8 @@ public class UnitOfWorkTests {
 
     private ObjectsContainer objectsContainer;
     private final Logger logger = LoggerFactory.getLogger(UnitOfWorkTests.class);
+    private DataRepository<Employee, Integer> employeeRepo;
+    private DataRepository<Company, Company.PrimaryKey> companyRepo;
     private Queue<DomainObject> newObjects;
     private Queue<DomainObject> clonedObjects;
     private Queue<DomainObject> dirtyObjects;
@@ -84,6 +86,9 @@ public class UnitOfWorkTests {
 
         objectsContainer = new ObjectsContainer(con);
         setupLists();
+
+        employeeRepo = MapperRegistry.getRepository(Employee.class);
+        companyRepo = MapperRegistry.getRepository(Company.class);
     }
 
     @Test
@@ -262,6 +267,33 @@ public class UnitOfWorkTests {
                 assertNull(identityMap.get(domainObject.getIdentityKey()));
         });
         assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+    }
+
+    @Test
+    public void testTransaction() {
+        ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
+        SqlSupplier<Connection> connectionSqlSupplier = () -> connectionManager.getConnection(Connection.TRANSACTION_READ_COMMITTED);
+
+        Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
+        Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
+
+        UnitOfWork unitOfWork = UnitOfWork.newCurrent(connectionSqlSupplier.wrap());
+        CompletableFuture<Void> future1 = employeeRepo.deleteById(employee.getIdentityKey());
+        CompletableFuture<Void> future = employeeRepo.deleteById(employee2.getIdentityKey());
+
+        CompletableFuture.allOf(future, future1)
+                .thenApply(aVoid -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> companyRepo.deleteById(new Company.PrimaryKey(1, 1))))
+                .thenCompose(voidCompletableFuture -> unitOfWork.commit())
+                .exceptionally(throwable -> {
+                    fail();
+                    return null;
+                })
+                .join();
+        UnitOfWork.removeCurrent();
+
+        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Bob")).join().isEmpty());
+        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Charles")).join().isEmpty());
+        assertTrue(!companyRepo.findById(new Company.PrimaryKey(1, 1)).join().isPresent());
     }
 
     private void assertIdentityMaps(Field identityMapField, List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {

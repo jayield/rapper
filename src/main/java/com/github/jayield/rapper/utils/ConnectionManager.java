@@ -28,13 +28,16 @@ public class ConnectionManager {
      * @return
      */
     public static ConnectionManager getConnectionManager(DBsPath envVar) {
-        String[] connectionStringParts = new String[3];
-        if (connectionManager == null)
+        if (connectionManager == null) {
+            String[] connectionStringParts;
             connectionStringParts = separateComponents(envVar);
-        return getConnectionManager(
-                connectionStringParts[0],
-                connectionStringParts[1],
-                connectionStringParts[2]);
+            return getConnectionManager(
+                    connectionStringParts[0],
+                    connectionStringParts[1],
+                    connectionStringParts[2]
+            );
+        }
+        return connectionManager;
     }
 
     public static ConnectionManager getConnectionManager(String url, String user, String password){
@@ -46,6 +49,15 @@ public class ConnectionManager {
     }
 
     public static ConnectionManager getConnectionManager(){
+        if (connectionManager == null) {
+            String[] connectionStringParts;
+            connectionStringParts = separateComponents(DBsPath.DEFAULTDB);
+            return getConnectionManager(
+                    connectionStringParts[0],
+                    connectionStringParts[1],
+                    connectionStringParts[2]
+            );
+        }
         return connectionManager;
     }
 
@@ -74,6 +86,14 @@ public class ConnectionManager {
     public Connection getConnection() throws SQLException {
         Connection connection = poolDataSource.getPooledConnection().getConnection();
         connection.setAutoCommit(false);
+
+        return connection;
+    }
+
+    public Connection getConnection(int transactionLevel) throws SQLException {
+        Connection connection = poolDataSource.getPooledConnection().getConnection();
+        connection.setAutoCommit(false);
+        connection.setTransactionIsolation(transactionLevel);
 
         return connection;
     }

@@ -142,13 +142,14 @@ public class UnitOfWork {
     }
 
     public static <R> R executeActionWithNewUnit(Supplier<R> action) {
-        ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
+        ConnectionManager connectionManager = getConnectionManager();
         SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
         try {
             UnitOfWork current = UnitOfWork.getCurrent();
 
             UnitOfWork.newCurrent(connectionSupplier.wrap());
             R r = action.get();
+
             UnitOfWork.setCurrent(current);
             return r;
         } catch (UnitOfWorkException e) {

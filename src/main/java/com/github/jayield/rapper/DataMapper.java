@@ -48,11 +48,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
-        String whereCondition = Arrays.stream(values)
-                .map(pair -> pair.getKey() + " = ?")
-                .collect(Collectors.joining(" and ", " where ", ""));
+        String whereCondition = null;
+        if (values.length > 0)
+            whereCondition = Arrays.stream(values)
+                    .map(pair -> pair.getKey() + " = ?")
+                    .collect(Collectors.joining(" and ", " where ", ""));
 
-        return SQLUtils.execute(String.format("select COUNT(*) as c from %s %s", type.getSimpleName(), whereCondition), s -> prepareFindWhere(s, values))
+        return SQLUtils.execute(String.format("select COUNT(*) as c from %s %s", type.getSimpleName(), whereCondition != null ? whereCondition : ""), s -> prepareFindWhere(s, values))
                 .thenApply(this::getNumberOfEntries);
     }
 
@@ -157,7 +159,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         UnitOfWork unit = UnitOfWork.getCurrent();
         return SQLUtils.execute(mapperSettings.getDeleteQuery(), stmt -> SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, k))
                 .thenCompose(preparedStatement -> UnitOfWork.executeActionWithinUnit(unit, () -> {
-                    log.info("Deleted {} with id {}", type.getSimpleName(), k);
+                    log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), k, unit.hashCode());
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.deleteById(k))
                             .orElse(CompletableFuture.completedFuture(null));
@@ -175,13 +177,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), stmt, obj)
         )
                 .thenCompose(preparedStatement -> UnitOfWork.executeActionWithinUnit(unit, () -> {
-                    log.info("Deleted {} with id {}", type.getSimpleName(), obj.getIdentityKey());
+                    log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), obj.getIdentityKey(), unit.hashCode());
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.delete(obj))
                             .orElse(CompletableFuture.completedFuture(null));
                 }))
                 .exceptionally(throwable -> {
-                    log.warn("Couldn't delete {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    log.warn("Couldn't delete {} due to {}", type.getSimpleName(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
@@ -194,9 +196,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private <R> CompletableFuture<List<T>> findWhereAux(String suffix, Pair<String, R>... values){
         UnitOfWork current = UnitOfWork.getCurrent();
 
-        String query = Arrays.stream(values)
+        String query;
+        if (values.length > 0)
+            query = Arrays.stream(values)
                 .map(p -> p.getKey() + " = ? ")
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", suffix));
+        else query = mapperSettings.getSelectQuery() + suffix;
 
         return SQLUtils.execute(query, stmt -> prepareFindWhere(stmt, values))
                 .thenApply(preparedStatement -> processFindWhere(preparedStatement, values, current))
@@ -258,7 +263,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                             log.info("Create new {}", type.getSimpleName());
                         })
                         .exceptionally(throwable -> {
-                            log.warn("Couldn't create {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                            log.warn("Couldn't create {} due to {}", type.getSimpleName(), throwable.getMessage());
                             throw new DataMapperException(throwable);
                         })
         );
