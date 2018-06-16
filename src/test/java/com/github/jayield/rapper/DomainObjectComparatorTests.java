@@ -6,13 +6,13 @@ import com.github.jayield.rapper.domainModel.CarKey;
 import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.SQLConnection;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
 import java.net.URLDecoder;
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.Comparator;
 import java.util.Map;
 
@@ -42,22 +42,17 @@ public class DomainObjectComparatorTests {
     }
 
     @Before
-    public void start() throws SQLException {
+    public void start() {
         repositoryMap.clear();
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
-        UnitOfWork.newCurrent(() -> {
-            try {
-                return connectionManager.getConnection();
-            } catch (SQLException e) {
-                throw new DataMapperException(e);
-            }
-        });
-        Connection con = connectionManager.getConnection();
-        con.prepareCall("{call deleteDB()}").execute();
-        con.prepareCall("{call populateDB()}").execute();
-        con.commit();
+        UnitOfWork.newCurrent(connectionManager::getConnection);
+        SQLConnection con = connectionManager.getConnection().join();
+
+        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
+        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
+        SQLUtils.callbackToPromise(con::commit).join();
     }
 
     @Test

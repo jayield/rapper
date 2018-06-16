@@ -1,25 +1,27 @@
 package com.github.jayield.rapper.utils;
 
-import com.github.jayield.rapper.exceptions.DataMapperException;
-import org.apache.commons.dbcp2.cpdsadapter.DriverAdapterCPDS;
-import org.apache.commons.dbcp2.datasources.SharedPoolDataSource;
+import io.vertx.core.Vertx;
+import io.vertx.core.VertxOptions;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.jdbc.JDBCClient;
+import io.vertx.ext.sql.SQLConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.sql.ConnectionPoolDataSource;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 public class ConnectionManager {
     private static final Logger staticLogger = LoggerFactory.getLogger(ConnectionManager.class);
     private static ConnectionManager connectionManager = null;
 
-    private final ConnectionPoolDataSource poolDataSource;
+    private final JDBCClient client;
     private final String url;
 
     private ConnectionManager(String url, String user, String password){
         this.url = url;
-        poolDataSource = getDataSource(url, user, password);
+        client = getDataSource(url, user, password);
     }
 
     /**
@@ -55,27 +57,17 @@ public class ConnectionManager {
         return connectionString.split("%;");
     }
 
-    private static ConnectionPoolDataSource getDataSource(String url, String user, String password){
-        DriverAdapterCPDS cpds = new DriverAdapterCPDS();
-
-        cpds.setUrl(url);
-        cpds.setUser(user);
-        cpds.setPassword(password);
-
-        try (SharedPoolDataSource tds = new SharedPoolDataSource()) {
-            tds.setConnectionPoolDataSource(cpds);
-
-            return tds.getConnectionPoolDataSource();
-        } catch (Exception e) {
-            throw new DataMapperException(e);
-        }
+    private static JDBCClient getDataSource(String url, String user, String password){
+        return JDBCClient.createShared(Vertx.vertx(), new JsonObject()
+            .put("url", url)
+            .put("user", user)
+            .put("password", password));
     }
 
-    public Connection getConnection() throws SQLException {
-        Connection connection = poolDataSource.getPooledConnection().getConnection();
-        connection.setAutoCommit(false);
-
-        return connection;
+    public CompletableFuture<SQLConnection> getConnection() {
+        return SQLUtils.callbackToPromise(client::getConnection)
+                .thenCompose(con -> SQLUtils.<Void>callbackToPromise(ar -> con.setAutoCommit(false, ar))
+                        .thenApply(v -> con));
     }
 
     public String getUrl() {

@@ -5,6 +5,7 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Mapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
+import io.vertx.ext.sql.SQLConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,8 +29,8 @@ public class UnitOfWork {
     /**
      * Private for each transaction
      */
-    private Connection connection = null;
-    private final Supplier<Connection> connectionSupplier;
+    private CompletableFuture<SQLConnection> connection = null;
+    private final Supplier<CompletableFuture<SQLConnection>> connectionSupplier;
 
     //Multiple Threads may be accessing the Queue, so it must be a ConcurrentLinkedQueue
     private final Queue<DomainObject> newObjects = new ConcurrentLinkedQueue<>();
@@ -37,11 +38,11 @@ public class UnitOfWork {
     private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
 
-    protected UnitOfWork(Supplier<Connection> connectionSupplier){
+    protected UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
     }
 
-    public Connection getConnection() {
+    public CompletableFuture<SQLConnection> getConnection() {
         if(connection == null) {
             connection = connectionSupplier.get();
             logger.info("{} - New connection opened", this.hashCode());
@@ -50,12 +51,8 @@ public class UnitOfWork {
     }
 
     private void closeConnection(){
-        try {
-            logger.info("{} - Closing connection", this.hashCode());
-            connection.close();
-        } catch (SQLException e) {
-            logger.info("Error closing connection\nError Message: {}", e.getMessage());
-        }
+        System.out.println("closing the connection " + connection + " ...");
+        connection.thenAccept(SQLConnection::close).join(); // Not sure of this join maybe close connection should return CF<Void>
         connection = null;
     }
 
@@ -110,7 +107,7 @@ public class UnitOfWork {
     /**
      * Each Thread will have its own UnitOfWork
      */
-    public static UnitOfWork newCurrent(Supplier<Connection> supplier) {
+    public static UnitOfWork newCurrent(Supplier<CompletableFuture<SQLConnection>> supplier) {
         UnitOfWork uow = new UnitOfWork(supplier);
         setCurrent(uow);
 
@@ -143,7 +140,7 @@ public class UnitOfWork {
 
     public static <R> R executeActionWithNewUnit(Supplier<R> action) {
         ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
-        SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+        SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = connectionManager::getConnection;
         try {
             UnitOfWork current = UnitOfWork.getCurrent();
 
@@ -169,12 +166,13 @@ public class UnitOfWork {
     public CompletableFuture<Void> commit() {
         try {
             if (newObjects.isEmpty() && clonedObjects.isEmpty() && dirtyObjects.isEmpty() && removedObjects.isEmpty()) {
+                CompletableFuture<Void> toRet = CompletableFuture.completedFuture(null);
                 if (connection != null) {
-                    connection.commit();
-                    closeConnection();
+                    toRet = connection.thenCompose(con -> SQLUtils.callbackToPromise(con::commit))
+                            .thenAccept(v -> closeConnection())
+                            .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()));
                 }
-                logger.info("{} - Changes have been committed", this.hashCode());
-                return CompletableFuture.completedFuture(null);
+                return toRet;
             } else {
                 Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
                         List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
@@ -191,13 +189,18 @@ public class UnitOfWork {
 
                 return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                         .thenAccept(aVoid -> proceedCommit(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
+                        .thenCompose(v ->
+                                connection.thenCompose(con ->
+                                        SQLUtils.callbackToPromise(con::commit)
+                                                .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode()))))
+                        .thenAccept(v -> closeConnection())
                         .exceptionally(throwable -> {
                             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
                             rollback();
                             throw new DataMapperException(throwable);
                         });
             }
-        } catch (DataMapperException | SQLException e){
+        } catch (DataMapperException e){
             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
             rollback();
             throw new DataMapperException(e);
@@ -236,10 +239,12 @@ public class UnitOfWork {
                 });
             }
 
-            connection.commit();
-            closeConnection();
-            logger.info("{} - Changes have been committed", this.hashCode());
-        } catch (SQLException e) {
+//            SQLUtils.<Void>callbackToPromise(ar -> connection.commit(ar))
+//                    .thenAccept(v -> closeConnection())
+//                    .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()))
+//                    .join();
+
+        } catch (Exception e) {
             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
             rollback();
         } finally {
@@ -294,11 +299,12 @@ public class UnitOfWork {
      * Puts the objects in removedObjects into the IdentityMap
      * The objects in dirtyObjects need to go back as before
      */
-    public void rollback() {
+    public CompletableFuture<Void> rollback() {
         try {
+            System.out.println("connection in rollbak " + connection);
             if(connection != null) {
-                connection.rollback();
-                closeConnection();
+                return connection.thenCompose(con -> SQLUtils.callbackToPromise(con::rollback))
+                        .thenAccept(v -> closeConnection());
             }
 
             newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
@@ -317,7 +323,9 @@ public class UnitOfWork {
                     .stream()
                     .filter(obj -> !dirtyObjects.contains(obj))
                     .forEach(obj -> getRepository(obj.getClass()).validate(obj.getIdentityKey(), obj));
-        } catch (SQLException e) {
+
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception e) {
             throw new DataMapperException(e);
         }
     }

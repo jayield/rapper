@@ -7,6 +7,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
@@ -38,8 +39,7 @@ public class MapperSettings {
     private final Predicate<Field> fieldPredicate = field ->
             field.getType().isPrimitive()
             || field.getType().isAssignableFrom(String.class)
-            || field.getType().isAssignableFrom(Timestamp.class)
-            || field.getType().isAssignableFrom(Date.class)
+            || field.getType().isAssignableFrom(Instant.class)
             || field.getType().isAssignableFrom(CompletableFuture.class)
             || field.getType().isAssignableFrom(Integer.class)
             || field.getType().isAssignableFrom(Double.class)

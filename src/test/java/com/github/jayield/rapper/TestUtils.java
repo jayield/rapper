@@ -1,17 +1,13 @@
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.utils.ConnectionManager;
-import com.github.jayield.rapper.utils.DBsPath;
-import com.github.jayield.rapper.utils.SqlConsumer;
-import com.github.jayield.rapper.utils.UnitOfWork;
+import com.github.jayield.rapper.utils.*;
+import io.vertx.core.json.JsonArray;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.SQLConnection;
 import org.hsqldb.cmdline.SqlFile;
 import org.hsqldb.cmdline.SqlToolError;
 
 import java.io.*;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.function.Consumer;
 
 import static com.github.jayield.rapper.utils.ConnectionManager.getConnectionManager;
@@ -32,79 +28,70 @@ public class TestUtils {
     public static final String companySelectTop10Query = "select C.id, C.cid, C.motto, CAST(C.version as bigint) Cversion from Company C  order by id, cid offset 0 rows fetch next 10 rows only";
     public static final String dogSelectQuery = "select name, race, age from Dog where name = ? and race = ?";
 
-    public static ResultSet executeQuery(String sql, Consumer<PreparedStatement> preparedStatementConsumer, Connection con){
-        try {
-
-            PreparedStatement ps = con.prepareStatement(sql);
-            preparedStatementConsumer.accept(ps);
-            ResultSet rs = ps.executeQuery();
-            rs.next();
-            return rs;
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+    public static ResultSet executeQuery(String sql, JsonArray jsonArray, SQLConnection con){
+         return SQLUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
     }
 
-    public static Consumer<PreparedStatement> getPersonPSConsumer(int nif) {
-        SqlConsumer<PreparedStatement> consumer = ps -> ps.setInt(1, nif);
-        return consumer.wrap();
-    }
-
-    public static Consumer<PreparedStatement> getCompanyPSConsumer(int companyId, int companyCid) {
-        SqlConsumer<PreparedStatement> companyPSConsumer = ps ->{
-            ps.setInt(1, companyId);
-            ps.setInt(2, companyCid);
-        };
-        return companyPSConsumer.wrap();
-    }
-
-    public static Consumer<PreparedStatement> getCarPSConsumer(int owner, String plate) {
-        SqlConsumer<PreparedStatement> carPSConsumer = ps ->{
-            ps.setInt(1, owner);
-            ps.setString(2, plate);
-        };
-        return carPSConsumer.wrap();
-    }
-
-    public static Consumer<PreparedStatement> getEmployeePSConsumer(String name){
-        SqlConsumer<PreparedStatement> consumer = ps -> {
-            ps.setString(1, name);
-        };
-
-        return consumer.wrap();
-    }
-
-    public static Consumer<PreparedStatement> getBookPSConsumer(String name){
-        SqlConsumer<PreparedStatement> consumer = ps -> {
-            ps.setString(1, name);
-        };
-
-        return consumer.wrap();
-    }
-
-    public static Consumer<PreparedStatement> getDogPSConsumer(String name, String race){
-        SqlConsumer<PreparedStatement> consumer = ps -> {
-            ps.setString(1, name);
-            ps.setString(2, race);
-        };
-
-        return consumer.wrap();
-    }
-
-    public static void runScript(String path, Connection con){
-        try(InputStream inputStream = TestUtils.class.getResourceAsStream(path)) {
-            SqlFile sqlFile = new SqlFile(
-                    new InputStreamReader(
-                            inputStream),
-                    "init",
-                    System.out,
-                    "UTF-8",
-                    false,
-                    new File("."));
-            sqlFile.setConnection(con);
-            sqlFile.execute();
-        } catch (SqlToolError | IOException | SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
+//    public static Consumer<PreparedStatement> getPersonPSConsumer(int nif) {
+//        SqlConsumer<PreparedStatement> consumer = ps -> ps.setInt(1, nif);
+//        return consumer.wrap();
+//    }
+//
+//    public static Consumer<PreparedStatement> getCompanyPSConsumer(int companyId, int companyCid) {
+//        SqlConsumer<PreparedStatement> companyPSConsumer = ps ->{
+//            ps.setInt(1, companyId);
+//            ps.setInt(2, companyCid);
+//        };
+//        return companyPSConsumer.wrap();
+//    }
+//
+//    public static Consumer<PreparedStatement> getCarPSConsumer(int owner, String plate) {
+//        SqlConsumer<PreparedStatement> carPSConsumer = ps ->{
+//            ps.setInt(1, owner);
+//            ps.setString(2, plate);
+//        };
+//        return carPSConsumer.wrap();
+//    }
+//
+//    public static Consumer<PreparedStatement> getEmployeePSConsumer(String name){
+//        SqlConsumer<PreparedStatement> consumer = ps -> {
+//            ps.setString(1, name);
+//        };
+//
+//        return consumer.wrap();
+//    }
+//
+//    public static Consumer<PreparedStatement> getBookPSConsumer(String name){
+//        SqlConsumer<PreparedStatement> consumer = ps -> {
+//            ps.setString(1, name);
+//        };
+//
+//        return consumer.wrap();
+//    }
+//
+//    public static Consumer<PreparedStatement> getDogPSConsumer(String name, String race){
+//        SqlConsumer<PreparedStatement> consumer = ps -> {
+//            ps.setString(1, name);
+//            ps.setString(2, race);
+//        };
+//
+//        return consumer.wrap();
+//    }
+//
+//    public static void runScript(String path, Connection con){
+//        try(InputStream inputStream = TestUtils.class.getResourceAsStream(path)) {
+//            SqlFile sqlFile = new SqlFile(
+//                    new InputStreamReader(
+//                            inputStream),
+//                    "init",
+//                    System.out,
+//                    "UTF-8",
+//                    false,
+//                    new File("."));
+//            sqlFile.setConnection(con);
+//            sqlFile.execute();
+//        } catch (SqlToolError | IOException | SQLException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 }

@@ -17,7 +17,11 @@ repositories {
 
 dependencies {
     compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
-    compile group: 'org.apache.commons', name: 'commons-dbcp2', version: '2.2.0'
+    //compile group: 'org.apache.commons', name: 'commons-dbcp2', version: '2.2.0'
+    compile 'io.vertx:vertx-jdbc-client:3.5.2'
+    // https://mvnrepository.com/artifact/io.vertx/vertx-core
+    compile group: 'io.vertx', name: 'vertx-core', version: '3.5.2'
+
 
     testCompile group: 'org.hsqldb', name: 'hsqldb', version: '2.4.0'
     testCompile group: 'org.hsqldb', name: 'sqltool', version: '2.4.0'

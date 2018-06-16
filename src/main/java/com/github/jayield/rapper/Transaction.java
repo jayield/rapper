@@ -1,9 +1,8 @@
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.utils.ConnectionManager;
-import com.github.jayield.rapper.utils.DBsPath;
-import com.github.jayield.rapper.utils.SqlSupplier;
-import com.github.jayield.rapper.utils.UnitOfWork;
+import com.github.jayield.rapper.utils.*;
+import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.TransactionIsolation;
 
 import java.sql.Connection;
 import java.util.*;
@@ -50,11 +49,12 @@ public class Transaction {
 
     private static class CustomUnitOfWork extends UnitOfWork {
 
-        private static Supplier<Connection> getConnectionSupplier(int transactionLevel) {
+        private static Supplier<CompletableFuture<SQLConnection>> getConnectionSupplier(int transactionLevel) {
             ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
-            SqlSupplier<Connection> connectionSupplier = () -> {
-                Connection connection = connectionManager.getConnection();
-                connection.setTransactionIsolation(transactionLevel);
+            SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = () -> {
+                CompletableFuture<SQLConnection> connection = connectionManager.getConnection();
+                connection
+                        .thenApply(con -> SQLUtils.<Void>callbackToPromise(ar -> con.setTransactionIsolation(TransactionIsolation.from(transactionLevel), ar)));
                 return connection;
             };
             return connectionSupplier.wrap();

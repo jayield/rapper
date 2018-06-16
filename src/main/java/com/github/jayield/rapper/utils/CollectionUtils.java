@@ -1,9 +1,11 @@
 package com.github.jayield.rapper.utils;
 
+import io.vertx.core.json.JsonArray;
+
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
+import java.util.function.*;
+import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
@@ -11,6 +13,14 @@ import java.util.stream.StreamSupport;
 public class CollectionUtils {
 
     private CollectionUtils() {
+    }
+
+    public static <T> Collector<T, JsonArray, JsonArray> toJsonArray(){
+        return Collector.of(JsonArray::new, JsonArray::add, JsonArray::addAll);
+    }
+
+    public static <T> Collector<T, JsonArray, JsonArray> toJsonArray(BiConsumer<T, JsonArray> action){
+        return Collector.of(JsonArray::new, (prev, curr) -> action.accept(curr, prev), JsonArray::addAll);
     }
 
     /**

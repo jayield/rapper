@@ -2,6 +2,7 @@ package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
+import io.vertx.core.json.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,6 +14,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -64,7 +66,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                     .stream()
                     .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
 
-            populateWithExternalTable(t, sqlFieldExternal, externalRepo, idValues.iterator());
+            populateWithExternalTable(t, sqlFieldExternal, externalRepo, idValues);
         });
     }
 
@@ -155,24 +157,14 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param repo
      * @param idValues
      */
-    private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlFieldExternal sqlFieldExternal, DataRepository<N, V> repo, Iterator<Object> idValues) {
-        CompletableFuture<List<N>> completableFuture = SQLUtils.execute(sqlFieldExternal.selectTableQuery, stmt -> {
-            try {
-                for (int i = 1; idValues.hasNext(); i++) stmt.setObject(i, idValues.next());
-            } catch (SQLException e) {
-                throw new DataMapperException(e);
-            }
-        })
-                .thenCompose(preparedStatement -> {
-                    try {
-                        return getExternalObjects(repo, sqlFieldExternal.externalNames, preparedStatement.getResultSet())
-                                .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture));
-                    } catch (SQLException e) {
-                        throw new DataMapperException(e);
-                    }
-                })
+    private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlFieldExternal sqlFieldExternal, DataRepository<N, V> repo, Stream<Object> idValues) {
+        CompletableFuture<List<N>> completableFuture = SQLUtils.query(sqlFieldExternal.selectTableQuery, idValues.collect(CollectionUtils.toJsonArray()))
+                .thenCompose(resultSet ->  getExternalObjects(repo, sqlFieldExternal.externalNames, resultSet)
+                                .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
+                )
                 .exceptionally(throwable -> {
                     logger.info("Couldn't populate externals of {} due to {}", t.getClass().getSimpleName(), throwable.getMessage());
+                    throwable.printStackTrace();
                     throw new DataMapperException(throwable);
                 });
 
@@ -215,8 +207,8 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param resultSet
      * @return
      */
-    private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, ResultSet resultSet) {
-        List<V> idValues = getIds(resultSet, foreignNames, repo.getKeyType());
+    private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, io.vertx.ext.sql.ResultSet resultSet) {
+        List<V> idValues = getIds(resultSet, foreignNames).stream().map(e -> (V)e).collect(Collectors.toList());
 
         return idValues
                 .stream()
@@ -236,38 +228,25 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @return
      * @throws SQLException
      */
-    private <V> List<V> getIds(ResultSet rs, String[] foreignNames, Class<V> type) {
-        try {
-            List<V> results = new ArrayList<>();
-
-            SqlConsumer<List<V>> consumer;
-            if (primaryKeyConstructor == null)
-                consumer = list1 -> {
-                    for (String foreignName : foreignNames) {
-                        V v = rs.getObject(foreignName, type);
-                        list1.add(v);
-                    }
-                };
-            else consumer = list -> {
-                List<Object> idValues = new ArrayList<>();
-                Object newInstance = primaryKeyConstructor.newInstance();
-                for (int i = 0; i < foreignNames.length; i++) {
-                    Object object = rs.getObject(foreignNames[i]);
-                    idValues.add(object);
-                    primaryKeyDeclaredFields[i].set(newInstance, object);
-                }
-                //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
-                EmbeddedIdClass.getObjectsField().set(newInstance, idValues.toArray());
-                list.add((V) newInstance);
-            };
-
-            while (rs.next()) {
-                consumer.wrap().accept(results);
+    private List<Object> getIds(io.vertx.ext.sql.ResultSet rs, String[] foreignNames) {
+        SqlFunction<JsonObject, Stream<Object>> function;
+        if (primaryKeyConstructor == null)
+            function = jo -> Arrays.stream(foreignNames).map(jo::getValue);
+        else
+            function = jo -> {
+            List<Object> idValues = new ArrayList<>();
+            Object newInstance = primaryKeyConstructor.newInstance();
+            for (int i = 0; i < foreignNames.length; i++) {
+                Object object = jo.getValue(foreignNames[i]);
+                idValues.add(object);
+                primaryKeyDeclaredFields[i].set(newInstance, object);
             }
-            return results;
-        } catch (SQLException e) {
-            throw new DataMapperException(e);
-        }
+            //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
+            EmbeddedIdClass.getObjectsField().set(newInstance, idValues.toArray());
+            return Stream.of(newInstance);
+        };
+
+        return rs.getRows().stream().flatMap(function.wrap()).collect(Collectors.toList());
     }
 
     /**

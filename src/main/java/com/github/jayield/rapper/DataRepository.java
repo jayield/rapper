@@ -3,6 +3,7 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import com.github.jayield.rapper.utils.*;
+import io.vertx.ext.sql.SQLConnection;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +46,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
             return action.apply(current, false);
         } catch (UnitOfWorkException e) {
             ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
-            SqlSupplier<Connection> connectionSupplier = connectionManager::getConnection;
+            SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = connectionManager::getConnection;
 
             UnitOfWork unitOfWork = UnitOfWork.newCurrent(connectionSupplier.wrap());
             R r = action.apply(unitOfWork, true);
@@ -78,6 +79,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Optional<T>> findById(K k) {
         return checkUnitOfWork((current, isNewUnit) -> {
             boolean[] wasComputed = {false};
+            System.out.println("k " + k + " identitymap " + identityMap) ;
             CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(
                     k,
                     k1 -> {

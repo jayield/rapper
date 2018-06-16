@@ -3,6 +3,9 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.*;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import io.vertx.core.json.JsonArray;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.SQLConnection;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -33,9 +36,9 @@ public class UnitOfWorkTests {
     private Queue<DomainObject> clonedObjects;
     private Queue<DomainObject> dirtyObjects;
     private Queue<DomainObject> removedObjects;
-    private Connection con;
+    private SQLConnection con;
     private Map<Class, DataRepository> repositoryMap;
-    private SqlSupplier<Connection> connectionSupplier;
+    private SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier;
 
     public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
@@ -65,7 +68,7 @@ public class UnitOfWorkTests {
     }
 
     @Before
-    public void before() throws SQLException, NoSuchFieldException, IllegalAccessException {
+    public void before()throws NoSuchFieldException, IllegalAccessException {
         repositoryMap.clear();
         UnitOfWork.removeCurrent();
 
@@ -77,10 +80,10 @@ public class UnitOfWorkTests {
         UnitOfWork.newCurrent(connectionSupplier.wrap());
         UnitOfWork current = UnitOfWork.getCurrent();
 
-        con = current.getConnection();
-        con.prepareCall("{call deleteDB()}").execute();
-        con.prepareCall("{call populateDB()}").execute();
-        con.commit();
+        con = current.getConnection().join();
+        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
+        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
+        SQLUtils.<Void>callbackToPromise(ar -> con.commit(ar)).join();
 
         objectsContainer = new ObjectsContainer(con);
         setupLists();
@@ -105,7 +108,8 @@ public class UnitOfWorkTests {
                 })
                 .join();
         //Get new connection since the commit will close the current one
-        con = connectionSupplier.get();
+        System.out.println("checking connection "+ con);
+        con = connectionSupplier.get().join();
 
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
         identityMapField.setAccessible(true);
@@ -155,7 +159,7 @@ public class UnitOfWorkTests {
                 })
                 .join();
         //Get new connection since the commit will close the current one
-        con = connectionSupplier.get();
+        con = connectionSupplier.get().join();
 
         //Check if employee is in the Company's list
         Company company = companyCompletableFuture.join();
@@ -196,11 +200,12 @@ public class UnitOfWorkTests {
                 .commit()
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
-                    return null;
+                    throw new RuntimeException(throwable);
+//                    return null;
                 })
                 .join();
         //Get new connection since the commit will close the current one
-        con = connectionSupplier.get();
+        con = connectionSupplier.get().join();
 
         //Check if book is in the author's list
         Author author = authorCP.join().get(0);
@@ -243,7 +248,7 @@ public class UnitOfWorkTests {
 
         assertTrue(failed[0]);
         //Get new connection since the commit will close the current one
-        con = connectionSupplier.get();
+        con = connectionSupplier.get().join();
 
         removedObjects.remove(chat);
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
@@ -276,10 +281,10 @@ public class UnitOfWorkTests {
         Employee originalEmployee = objectsContainer.getOriginalEmployee();
 
         if(isCommit) {
-            assertNotFound(employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), con);
+            assertNotFound(employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), con);
         }
         else{
-            assertSingleRow(originalEmployee, employeeSelectQuery, getEmployeePSConsumer(originalEmployee.getName()), AssertUtils::assertEmployeeWithExternals, con);
+            assertSingleRow(originalEmployee, employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), AssertUtils::assertEmployeeWithExternals, con);
         }
     }
 
@@ -298,9 +303,9 @@ public class UnitOfWorkTests {
             topStudent = objectsContainer.getOriginalTopStudent();
         }
 
-        assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
-        assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
-        assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
+        assertSingleRow(person, personSelectQuery, new JsonArray().add(person.getNif()), AssertUtils::assertPerson, con);
+        assertSingleRow(car, carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
+        assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 
     private void assertNewObjects(boolean isCommit) {
@@ -309,14 +314,14 @@ public class UnitOfWorkTests {
         TopStudent topStudent = objectsContainer.getInsertedTopStudent();
 
         if(isCommit) {
-            assertSingleRow(person, personSelectQuery, getPersonPSConsumer(person.getNif()), AssertUtils::assertPerson, con);
-            assertSingleRow(car, carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
-            assertSingleRow(topStudent, topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), AssertUtils::assertTopStudent, con);
+            assertSingleRow(person, personSelectQuery, new JsonArray().add(person.getNif()), AssertUtils::assertPerson, con);
+            assertSingleRow(car, carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
+            assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), AssertUtils::assertTopStudent, con);
         }
         else {
-            assertNotFound(personSelectQuery, getPersonPSConsumer(person.getNif()), con);
-            assertNotFound(carSelectQuery, getCarPSConsumer(car.getIdentityKey().getOwner(), car.getIdentityKey().getPlate()), con);
-            assertNotFound(topStudentSelectQuery, getPersonPSConsumer(topStudent.getNif()), con);
+            assertNotFound(personSelectQuery, new JsonArray().add(person.getNif()), con);
+            assertNotFound(carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), con);
+            assertNotFound(topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), con);
         }
     }
 

@@ -2,67 +2,62 @@ package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.Company;
 import com.github.jayield.rapper.domainModel.Employee;
-import com.github.jayield.rapper.utils.ConnectionManager;
-import com.github.jayield.rapper.utils.DBsPath;
-import com.github.jayield.rapper.utils.MapperRegistry;
+import com.github.jayield.rapper.utils.*;
+import com.mchange.v2.sql.SqlUtils;
+import io.vertx.core.json.JsonArray;
+import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.UpdateResult;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.lang.reflect.ParameterizedType;
 import java.net.URLDecoder;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.Date;
 
-import static com.github.jayield.rapper.TestUtils.bookSelectQuery;
-import static com.github.jayield.rapper.TestUtils.executeQuery;
-import static com.github.jayield.rapper.TestUtils.getBookPSConsumer;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+
 
 public class DataBaseTests {
 
     private ConnectionManager connectionManager;
-    private Connection con;
+    private SQLConnection con;
 
     @Before
-    public void before() throws SQLException {
+    public void before() {
         connectionManager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
-        con = connectionManager.getConnection();
+        con = connectionManager.getConnection().join();
     }
 
     @Test
-    public void connectivity() throws SQLException {
-        try (Connection con = connectionManager.getConnection()) {
-            PreparedStatement stmt = con.prepareStatement("insert into Person(nif, name, birthday) values (1, 'Test', '1990-05-02')");
-            int update = stmt.executeUpdate();
-            assertEquals(1, update);
+    public void connectivity() {
+        try (SQLConnection con = connectionManager.getConnection().join()) {
+            SQLUtils.<UpdateResult>callbackToPromise(ar ->
+                    con.update("insert into Person(nif, name, birthday) values (1, 'Test', '1990-05-02')", ar))
+                    .thenApply(UpdateResult::getUpdated)
+                    .thenAccept(updated -> assertEquals(1, updated.intValue()))
+                    .join();
 
-            stmt = con.prepareStatement("select * from Person");
-            ResultSet rs = stmt.executeQuery();
-            assertTrue(rs.next());
+            SQLUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.query("select * from Person", ar))
+                    .thenApply(resultSet -> resultSet.getRows().isEmpty())
+                    .thenAccept(Assert::assertFalse)
+                    .join();
 
-            stmt = con.prepareStatement("update Person set name = 'test2' where nif = ?");
-            stmt.setInt(1, 1);
-            update = stmt.executeUpdate();
-            assertEquals(1, update);
+            SQLUtils.<UpdateResult>callbackToPromise(ar ->
+                    con.updateWithParams("update Person set name = 'test2' where nif = ?", new JsonArray().add(1), ar))
+                    .thenApply(UpdateResult::getUpdated)
+                    .thenAccept(updated -> assertEquals(1, updated.intValue()))
+                    .join();
 
-            stmt = con.prepareStatement("delete from Person where nif = ?");
-            stmt.setInt(1, 1);
-            update = stmt.executeUpdate();
-            assertEquals(1, update);
-
-            con.rollback();
+            SQLUtils.<UpdateResult>callbackToPromise(ar ->
+                    con.updateWithParams("delete from Person where nif = ?", new JsonArray().add(1), ar))
+                    .thenApply(UpdateResult::getUpdated)
+                    .thenAccept(updated -> assertEquals(1, updated.intValue()))
+                    .join();
+            SQLUtils.callbackToPromise(con::rollback)
+                    .join();
         }
     }
-
-    /*@Test
-    public void test() throws SQLException {
-        ResultSet rs = executeQuery(bookSelectQuery, getBookPSConsumer("1001 noites"), con);
-
-        Object o = rs.getObject("id", Long.class);
-    }*/
 }

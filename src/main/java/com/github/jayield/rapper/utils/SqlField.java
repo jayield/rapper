@@ -3,6 +3,7 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import io.vertx.core.json.JsonArray;
 
 import java.lang.reflect.Field;
 import java.sql.PreparedStatement;
@@ -24,14 +25,17 @@ public class SqlField {
         this.selectQueryValue = selectQueryValue;
     }
 
-    public<T> int setValueInStatement(PreparedStatement stmt, int index, T obj) {
+    public<T> void setValueInStatement(T obj, JsonArray jsonArray) {
         field.setAccessible(true);
         try {
-            stmt.setObject(index, obj != null ? field.get(obj) : null);
-        } catch (SQLException | IllegalAccessException e) {
+            Object value = obj != null ? field.get(obj) : null;
+            if(value != null)
+                jsonArray.add(value);
+            else
+                jsonArray.addNull();
+        } catch (IllegalAccessException | IllegalStateException e) {
             throw new DataMapperException(e);
         }
-        return 0;
     }
 
     public int byUpdate(){
@@ -58,7 +62,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> int setValueInStatement(PreparedStatement stmt, int index, T obj) {
+        public <T> void setValueInStatement(T obj, JsonArray jsonArray) {
             Object key = null;
             if(obj != null) {
                 if (DomainObject.class.isAssignableFrom(obj.getClass()))
@@ -66,17 +70,11 @@ public class SqlField {
                 else
                     key = obj;
             }
-
             if(embeddedId)
-                super.setValueInStatement(stmt, index, key);
+                super.setValueInStatement(key, jsonArray);
             else {
-                try {
-                    stmt.setObject(index, key);
-                } catch (SQLException e) {
-                    throw new DataMapperException(e);
-                }
+                jsonArray.add(key);
             }
-            return 0;
         }
 
         @Override
@@ -179,21 +177,18 @@ public class SqlField {
         }
 
         @Override
-        public <T> int setValueInStatement(PreparedStatement stmt, int index, T obj) {
+        public <T> void setValueInStatement(T obj, JsonArray jsonArray) { //TODO ask joao
             try {
                 field.setAccessible(true);
                 CompletableFuture<? extends DomainObject> cp = (CompletableFuture<? extends DomainObject>) field.get(obj);
                 //TODO remove join
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
                 DomainObject domainObject = cp != null ? cp.join() : null;
-                int[] i = {index};
                 MapperRegistry.getMapperSettings(domainObjectType)
                         .getIds()
                         .forEach(sqlFieldId -> {
-                            sqlFieldId.setValueInStatement(stmt, i[0], domainObject);
-                            i[0]++;
+                            sqlFieldId.setValueInStatement(domainObject, jsonArray);
                         });
-                return i[0] - index - 1;
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }

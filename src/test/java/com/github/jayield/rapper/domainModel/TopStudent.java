@@ -3,6 +3,7 @@ package com.github.jayield.rapper.domainModel;
 import com.github.jayield.rapper.Version;
 
 import java.sql.Date;
+import java.time.Instant;
 
 public class TopStudent extends Student {
     private final int topGrade;
@@ -10,7 +11,7 @@ public class TopStudent extends Student {
     @Version
     private final long version;
 
-    public TopStudent(int nif, String name, Date birthday, long studentVersion, int studentNumber, int topGrade, int year, long version, long personVersion) {
+    public TopStudent(int nif, String name, Instant birthday, long studentVersion, int studentNumber, int topGrade, int year, long version, long personVersion) {
         super(nif, name, birthday, personVersion, studentNumber, studentVersion);
         this.topGrade = topGrade;
         this.year = year;

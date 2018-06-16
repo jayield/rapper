@@ -2,12 +2,14 @@ package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.utils.*;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.TransactionIsolation;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.net.URLDecoder;
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.Assert.*;
 
@@ -30,17 +32,19 @@ public class TransactionTests {
     }
 
     @Before
-    public void before() throws SQLException {
+    public void before() {
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
-        SqlSupplier<Connection> connectionSupplier = manager::getConnection;
+        SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = manager::getConnection;
         UnitOfWork.newCurrent(connectionSupplier.wrap());
-        Connection con = UnitOfWork.getCurrent().getConnection();
+        CompletableFuture<SQLConnection> con = UnitOfWork.getCurrent().getConnection();
 
-        con.prepareCall("{call deleteDB()}").execute();
-        con.prepareCall("{call populateDB()}").execute();
-        UnitOfWork.getCurrent().commit();
+        con.thenCompose(sqlConnection ->
+                SQLUtils.<ResultSet>callbackToPromise(ar -> sqlConnection.call("{call deleteDB()}", ar))
+                    .thenAccept(v -> SQLUtils.<ResultSet>callbackToPromise(ar -> sqlConnection.call("{call populateDB()}", ar)))
+        ).join();
+        UnitOfWork.getCurrent().commit().join();
         UnitOfWork.removeCurrent();
     }
 
@@ -49,7 +53,7 @@ public class TransactionTests {
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
 
-        new Transaction(Connection.TRANSACTION_READ_COMMITTED)
+        new Transaction(TransactionIsolation.READ_COMMITTED.getType())
                 .andDo(() -> employeeRepo.deleteById(employee.getIdentityKey()))
                 .andDo(() -> employeeRepo.deleteById(employee2.getIdentityKey()))
                 .andDo(() -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
@@ -70,7 +74,7 @@ public class TransactionTests {
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
 
         final boolean[] failed = {false};
-        new Transaction(Connection.TRANSACTION_READ_COMMITTED)
+        new Transaction(TransactionIsolation.READ_COMMITTED.getType())
                 .andDo(() -> employeeRepo.deleteById(employee.getIdentityKey()))
                 .andDo(() -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
                 .commit()

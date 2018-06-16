@@ -5,17 +5,18 @@ import com.github.jayield.rapper.Id;
 import com.github.jayield.rapper.Version;
 
 import java.sql.Date;
+import java.time.Instant;
 import java.util.Objects;
 
 public class Person implements DomainObject<Integer> {
     @Id
     private final int nif;
     private final String name;
-    private final Date birthday;
+    private final Instant birthday;
     @Version
     private final long version;
 
-    public Person(int nif, String name, Date birthday, long version) {
+    public Person(int nif, String name, Instant birthday, long version) {
         this.nif = nif;
         this.name = name;
         this.birthday = birthday;
@@ -57,7 +58,7 @@ public class Person implements DomainObject<Integer> {
         return name;
     }
 
-    public Date getBirthday() {
+    public Instant getBirthday() {
         return birthday;
     }
 }

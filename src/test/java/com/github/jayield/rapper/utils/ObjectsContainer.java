@@ -1,60 +1,72 @@
 package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.domainModel.*;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.SQLConnection;
 
-import java.sql.Connection;
-import java.sql.Date;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 
 import static com.github.jayield.rapper.TestUtils.*;
-import static com.github.jayield.rapper.TestUtils.getEmployeePSConsumer;
+
 
 class ObjectsContainer {
-    private final Person originalPerson;
-    private final Person insertedPerson;
-    private final Car insertedCar;
-    private final TopStudent insertedTopStudent;
-    private final Person updatedPerson;
-    private final Car updatedCar;
-    private final TopStudent updatedTopStudent;
-    private final Car originalCar;
-    private final Employee originalEmployee;
-    private final TopStudent originalTopStudent;
+    private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+    private Person originalPerson;
+    private Person insertedPerson;
+    private Car insertedCar;
+    private TopStudent insertedTopStudent;
+    private Person updatedPerson;
+    private Car updatedCar;
+    private TopStudent updatedTopStudent;
+    private Car originalCar;
+    private Employee originalEmployee;
+    private TopStudent originalTopStudent;
 
-    ObjectsContainer(Connection con) throws SQLException {
-        insertedPerson = new Person(123, "abc", new Date(1969, 6, 9), 0);
-        insertedCar = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        insertedTopStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1), 0, 1, 20, 2016, 0, 0);
+    ObjectsContainer(SQLConnection con) {
+        try {
+            insertedPerson = new Person(123, "abc", new Date(1969, 6, 9).toInstant(), 0);
+            insertedCar = new Car(1, "58en60", "Mercedes", "ES1", 0);
+            insertedTopStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1).toInstant(), 0, 1, 20, 2016, 0, 0);
 
-        ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", getPersonPSConsumer(321), con);
-        updatedPerson = new Person(321, "Maria", new Date(2010, 2, 3), rs.getLong(1));
+            ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", new JsonArray().add(321), con);
+            updatedPerson = new Person(321, "Maria", new Date(2010, 2, 3).toInstant(), rs.getResults().get(0).getLong(0));
 
-        rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", getCarPSConsumer(2, "23we45"), con);
-        updatedCar = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getLong(1));
+            rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", new JsonArray().add(2).add("23we45"), con);
+            updatedCar = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getResults().get(0).getLong(0));
 
-        rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
-                "inner join Student S2 on P.nif = S2.nif " +
-                "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", getPersonPSConsumer(454), con);
-        updatedTopStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3), rs.getLong(2),
-                4, 6, 7, rs.getLong(3), rs.getLong(1));
+            rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
+                    "inner join Student S2 on P.nif = S2.nif " +
+                    "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", new JsonArray().add(454), con);
+            updatedTopStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3).toInstant(), rs.getResults().get(0).getLong(1),
+                    4, 6, 7, rs.getResults().get(0).getLong(2), rs.getResults().get(0).getLong(0));
 
-        rs = executeQuery(personSelectQuery, getPersonPSConsumer(321), con);
-        originalPerson = new Person(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), rs.getLong("version"));
+            rs = executeQuery(personSelectQuery, new JsonArray().add(321), con);
+            originalPerson = new Person(rs.getRows(true).get(0).getInteger("nif"), rs.getRows(true).get(0).getString("name"), sdf.parse(rs.getRows(true).get(0).getString("birthday")).toInstant(), rs.getRows(true).get(0).getLong("version"));
 
-        rs = executeQuery(carSelectQuery, getCarPSConsumer(2, "23we45"), con);
-        originalCar = new Car(rs.getInt("owner"), rs.getString("plate"), rs.getString("brand"), rs.getString("model"), rs.getLong("version"));
+            rs = executeQuery(carSelectQuery, new JsonArray().add(2).add("23we45"), con);
+            JsonObject first = rs.getRows(true).get(0);
+            originalCar = new Car(first.getInteger("owner"), first.getString("plate"), first.getString("brand"), first.getString("model"), first.getLong("version"));
 
-        rs = executeQuery(topStudentSelectQuery, getPersonPSConsumer(454), con);
-        originalTopStudent = new TopStudent(rs.getInt("nif"), rs.getString("name"), rs.getDate("birthday"), rs.getLong("P1version"), rs.getInt("studentNumber"),
-                rs.getInt("topGrade"), rs.getInt("year"), rs.getLong("Cversion"), rs.getLong("P2version"));
+            rs = executeQuery(topStudentSelectQuery, new JsonArray().add(454), con);
+            first = rs.getRows(true).get(0);
+            originalTopStudent = new TopStudent(first.getInteger("nif"), first.getString("name"), sdf.parse(first.getString("birthday")).toInstant(), first.getLong("P1version"), first.getInteger("studentNumber"),
+                    first.getInteger("topGrade"), first.getInteger("year"), first.getLong("Cversion"), first.getLong("P2version"));
 
-        rs = executeQuery(companySelectQuery, getCompanyPSConsumer(1, 1), con);
-        Company originalCompany = new Company(new Company.PrimaryKey(rs.getInt("id"), rs.getInt("cid")), rs.getString("motto"), null, rs.getLong("Cversion"));
+            rs = executeQuery(companySelectQuery, new JsonArray().add(1).add(1), con);
+            first = rs.getRows(true).get(0);
+            Company originalCompany = new Company(new Company.PrimaryKey(first.getInteger("id"), first.getInteger("cid")), first.getString("motto"), null, first.getLong("Cversion"));
 
-        rs = executeQuery(employeeSelectQuery, getEmployeePSConsumer("Charles"), con);
-        originalEmployee = new Employee(rs.getInt("id"), rs.getString("name"), rs.getLong("version"), CompletableFuture.completedFuture(originalCompany));
+            rs = executeQuery(employeeSelectQuery, new JsonArray().add("Charles"), con);
+            first = rs.getRows(true).get(0);
+            originalEmployee = new Employee(first.getInteger("id"), first.getString("name"), first.getLong("version"), CompletableFuture.completedFuture(originalCompany));
+        } catch (ParseException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public TopStudent getOriginalTopStudent() {
