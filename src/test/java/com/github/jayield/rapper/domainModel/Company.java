@@ -74,4 +74,14 @@ public class Company implements DomainObject<Company.PrimaryKey> {
             return cid;
         }
     }
+
+    @Override
+    public String toString() {
+        return "Company{" +
+                "primaryKey=" + primaryKey +
+                ", motto='" + motto + '\'' +
+                ", employees=" + employees +
+                ", version=" + version +
+                '}';
+    }
 }

@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.github.jayield.rapper.utils.SqlField.*;
+import static java.lang.System.out;
 
 public class ExternalsHandler<T extends DomainObject<K>, K> {
 
@@ -159,7 +160,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      */
     private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlFieldExternal sqlFieldExternal, DataRepository<N, V> repo, Stream<Object> idValues) {
         CompletableFuture<List<N>> completableFuture = SQLUtils.query(sqlFieldExternal.selectTableQuery, idValues.collect(CollectionUtils.toJsonArray()))
-                .thenCompose(resultSet ->  getExternalObjects(repo, sqlFieldExternal.externalNames, resultSet)
+                .thenCompose(resultSet -> getExternalObjects(repo, sqlFieldExternal.externalNames, resultSet)
                                 .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
                 )
                 .exceptionally(throwable -> {
@@ -209,7 +210,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      */
     private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, io.vertx.ext.sql.ResultSet resultSet) {
         List<V> idValues = getIds(resultSet, foreignNames).stream().map(e -> (V)e).collect(Collectors.toList());
-
+        out.println(idValues);
         return idValues
                 .stream()
                 .map(repo::findById)
@@ -230,23 +231,29 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      */
     private List<Object> getIds(io.vertx.ext.sql.ResultSet rs, String[] foreignNames) {
         SqlFunction<JsonObject, Stream<Object>> function;
+
         if (primaryKeyConstructor == null)
-            function = jo -> Arrays.stream(foreignNames).map(jo::getValue);
+            function = jo -> Arrays.stream(foreignNames).map(n -> {
+                System.out.println(jo);
+                Object o = jo.getValue(n);
+                System.out.println(o);
+                return o;
+            });
         else
             function = jo -> {
-            List<Object> idValues = new ArrayList<>();
-            Object newInstance = primaryKeyConstructor.newInstance();
-            for (int i = 0; i < foreignNames.length; i++) {
-                Object object = jo.getValue(foreignNames[i]);
-                idValues.add(object);
-                primaryKeyDeclaredFields[i].set(newInstance, object);
-            }
-            //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
-            EmbeddedIdClass.getObjectsField().set(newInstance, idValues.toArray());
-            return Stream.of(newInstance);
-        };
+                List<Object> idValues = new ArrayList<>();
+                Object newInstance = primaryKeyConstructor.newInstance();
+                for (int i = 0; i < foreignNames.length; i++) {
+                    Object object = jo.getValue(foreignNames[i]);
+                    idValues.add(object);
+                    primaryKeyDeclaredFields[i].set(newInstance, object);
+                }
+                //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDED ID CLASS !!>
+                EmbeddedIdClass.getObjectsField().set(newInstance, idValues.toArray());
+                return Stream.of(newInstance);
+            };
 
-        return rs.getRows().stream().flatMap(function.wrap()).collect(Collectors.toList());
+        return rs.getRows(true).stream().flatMap(function.wrap()).collect(Collectors.toList());
     }
 
     /**

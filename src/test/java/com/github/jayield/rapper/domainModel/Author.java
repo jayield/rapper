@@ -35,4 +35,14 @@ public class Author implements DomainObject<Long> {
     public long getVersion() {
         return version;
     }
+
+    @Override
+    public String toString() {
+        return "Author{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", version=" + version +
+                ", books=" + books +
+                '}';
+    }
 }

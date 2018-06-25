@@ -79,7 +79,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Optional<T>> findById(K k) {
         return checkUnitOfWork((current, isNewUnit) -> {
             boolean[] wasComputed = {false};
-            System.out.println("k " + k + " identitymap " + identityMap) ;
+            System.out.println("k " + k + " identitymap " + identityMap);
             CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(
                     k,
                     k1 -> {
@@ -297,17 +297,25 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     private CompletableFuture<T> computeNewValue(boolean[] wasComputed, T newT, CompletableFuture<T> actualFuture) {
         CompletableFuture<T> newFuture = CompletableFuture.completedFuture(newT);
 
+
         if (actualFuture == null) {
             wasComputed[0] = true;
             return newFuture;
         }
+        return actualFuture.thenApply(t -> {
+            if(comparator.compare(t, newT) < 0){
+                wasComputed[0] = true;
+                return newT;
+            }
+            return t;
+        });
         //TODO remove join
-        T actualT = actualFuture.join();
-        if (comparator.compare(actualT, newT) < 0) {
-            wasComputed[0] = true;
-            return newFuture;
-        }
-        return actualFuture;
+//        T actualT = actualFuture.join();
+//        if (comparator.compare(actualT, newT) < 0) {
+//            wasComputed[0] = true;
+//            return newFuture;
+//        }
+//        return actualFuture;
     }
 
     Class<K> getKeyType() {

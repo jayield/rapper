@@ -101,7 +101,7 @@ public class AssertUtils {
         assertEquals((int) employee.getIdentityKey(), rs.getInteger("id").intValue());
         assertEquals(employee.getName(), rs.getString("name"));
         assertEquals(employee.getVersion(), rs.getLong("version").longValue());
-
+        System.out.println(rs);
         CompletableFuture<Company> companyCompletableFuture = employee.getCompany();
         if(companyCompletableFuture != null){
             Company company = companyCompletableFuture.join();
@@ -109,8 +109,8 @@ public class AssertUtils {
             assertEquals(company.getIdentityKey().getCid(), rs.getInteger("companyCid").intValue());
         }
         else {
-            assertEquals(0, rs.getInteger("companyId").intValue());
-            assertEquals(0, rs.getInteger("companyCid").intValue());
+            assertNull(rs.getInteger("companyId".toUpperCase()));
+            assertNull(rs.getInteger("companyCid".toUpperCase()));
         }
     }
 

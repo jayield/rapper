@@ -192,6 +192,8 @@ public class UnitOfWorkTests {
 
         CompletableFuture<List<Author>> authorCP = authorContainer.getDataRepository().findWhere(new Pair<>("name", "Ze"));
         authorCP.join();
+        System.out.println(authorCP.join());
+        System.out.println(authorCP.join().get(0).getBooks().join());
         Book book = new Book(0, "Harry Potter", 0, authorCP);
 
         newObjects.add(book);

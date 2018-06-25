@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SqlField {
     public final Field field;
@@ -25,14 +27,14 @@ public class SqlField {
         this.selectQueryValue = selectQueryValue;
     }
 
-    public<T> void setValueInStatement(T obj, JsonArray jsonArray) {
+    public<T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
         field.setAccessible(true);
         try {
-            Object value = obj != null ? field.get(obj) : null;
-            if(value != null)
-                jsonArray.add(value);
-            else
-                jsonArray.addNull();
+            return CompletableFuture.completedFuture(Stream.of( obj != null ? field.get(obj) : null));
+//            if(value != null)
+//                jsonArray.add(value);
+//            else
+//                jsonArray.addNull();
         } catch (IllegalAccessException | IllegalStateException e) {
             throw new DataMapperException(e);
         }
@@ -62,7 +64,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> void setValueInStatement(T obj, JsonArray jsonArray) {
+        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
             Object key = null;
             if(obj != null) {
                 if (DomainObject.class.isAssignableFrom(obj.getClass()))
@@ -71,9 +73,9 @@ public class SqlField {
                     key = obj;
             }
             if(embeddedId)
-                super.setValueInStatement(key, jsonArray);
+                return super.setValueInStatement(key);
             else {
-                jsonArray.add(key);
+                return CompletableFuture.completedFuture(Stream.of(key));
             }
         }
 
@@ -177,18 +179,25 @@ public class SqlField {
         }
 
         @Override
-        public <T> void setValueInStatement(T obj, JsonArray jsonArray) { //TODO ask joao
+        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
             try {
                 field.setAccessible(true);
                 CompletableFuture<? extends DomainObject> cp = (CompletableFuture<? extends DomainObject>) field.get(obj);
                 //TODO remove join
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
-                DomainObject domainObject = cp != null ? cp.join() : null;
-                MapperRegistry.getMapperSettings(domainObjectType)
-                        .getIds()
-                        .forEach(sqlFieldId -> {
-                            sqlFieldId.setValueInStatement(domainObject, jsonArray);
-                        });
+                return cp.thenCompose(domainObject ->
+                        CollectionUtils.listToCompletableFuture(MapperRegistry.getMapperSettings(domainObjectType)
+                            .getIds()
+                                .stream()
+                                .map(sqlFieldId -> sqlFieldId.setValueInStatement(domainObject)).collect(Collectors.toList()))
+                        .thenApply(list -> list.stream().flatMap(s -> s))
+                );
+//                DomainObject domainObject = cp != null ? cp.join() : null;
+//                MapperRegistry.getMapperSettings(domainObjectType)
+//                        .getIds()
+//                        .forEach(sqlFieldId -> {
+//                            sqlFieldId.setValueInStatement(domainObject);
+//                        });
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }

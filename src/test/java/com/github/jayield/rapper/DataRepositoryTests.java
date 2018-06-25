@@ -54,6 +54,7 @@ public class DataRepositoryTests {
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
+
         con = manager.getConnection().join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
@@ -106,6 +107,13 @@ public class DataRepositoryTests {
         repositoryMap.put(Employee.class, new MapperRegistry.Container<>(employeeSettings, employeeExternal, employeeRepo, employeeMapper));
         repositoryMap.put(Company.class, new MapperRegistry.Container<>(companySettings, companyExternal, companyRepo, companyMapper));
         repositoryMap.put(Author.class, new MapperRegistry.Container<>(authorSettings, authorExternal, authorRepo, authorMapper));
+    }
+
+    @After
+    public void after(){
+        if(con != null){
+            con.close();
+        }
     }
 
     @Test
@@ -246,7 +254,7 @@ public class DataRepositoryTests {
     @Test
     public void testSameReferenceUpdate() {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
-        JsonObject firstRes = rs.getRows().get(0);
+        JsonObject firstRes = rs.getRows(true).get(0);
         CompletableFuture<Company> companyRepoById = companyRepo.findById(new Company.PrimaryKey(firstRes.getInteger("companyId"), firstRes.getInteger("companyCid")))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException("Company not found")));
 
@@ -272,17 +280,17 @@ public class DataRepositoryTests {
 
     @Test
     public void testRemoveReferenceUpdate() {
-        ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray("Bob"), con);
-        JsonObject firstRes = rs.getRows().get(0);
+        ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
+        JsonObject firstRes = rs.getRows(true).get(0);
         Employee employee = new Employee(firstRes.getInteger("id"),"Boba", firstRes.getLong("version"), null);
 
         Company company = companyRepo.findById(new Company.PrimaryKey(1, 1)).join().orElseThrow(() -> new DataMapperException("Company not found"));
-
+        System.out.println(company.getEmployees().join());
         employeeRepo.update(employee)
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
+//                .exceptionally(throwable -> {
+//                    fail();
+//                    return null;
+//                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployeeWithExternals, con);
@@ -300,7 +308,7 @@ public class DataRepositoryTests {
         ResultSet rs = executeQuery(bookSelectQuery, new JsonArray().add("1001 noites"), con);
 
         Author author = authorRepo.findWhere(new Pair<>("name", "Ze")).join().get(0);
-        JsonObject firstRes = rs.getRows().get(0);
+        JsonObject firstRes = rs.getRows(true).get(0);
         assertTrue(author.getBooks().join().stream().anyMatch(book ->
                 book.getIdentityKey().equals(firstRes.getLong("id"))));
 
@@ -328,7 +336,7 @@ public class DataRepositoryTests {
     @Test
     public void testUpdateReferenceUpdate() {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
-        JsonObject firstRes = rs.getRows().get(0);
+        JsonObject firstRes = rs.getRows(true).get(0);
         Company company = companyRepo.findById(new Company.PrimaryKey(1, 1))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Company not found"));
@@ -356,8 +364,8 @@ public class DataRepositoryTests {
 
         employeeRepo.update(employee)
                 .exceptionally(throwable -> {
-                    fail();
-                    return null;
+                    throw new RuntimeException(throwable);
+                    //fail();
                 })
                 .join();
 
@@ -417,11 +425,11 @@ public class DataRepositoryTests {
     public void testdeleteAll() {
         List<Integer> list = new ArrayList<>(2);
         ResultSet rs = executeQuery("select id from Employee where name = ?", new JsonArray().add("Bob"), con);
-        JsonObject firstRes = rs.getRows().get(0);
+        JsonObject firstRes = rs.getRows(true).get(0);
         list.add(firstRes.getInteger("id"));
 
         rs = executeQuery("select id from Employee where name = ?", new JsonArray().add("Charles"), con);
-        firstRes = rs.getRows().get(0);
+        firstRes = rs.getRows(true).get(0);
         list.add(firstRes.getInteger("id"));
 
         employeeRepo.deleteAll(list)
