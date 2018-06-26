@@ -363,10 +363,10 @@ public class DataRepositoryTests {
         assertTrue(failed);
 
         employeeRepo.update(employee)
-                .exceptionally(throwable -> {
-                    throw new RuntimeException(throwable);
-                    //fail();
-                })
+//                .exceptionally(throwable -> {
+//                    throw new RuntimeException(throwable);
+//                    //fail();
+//                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployeeWithExternals, con);

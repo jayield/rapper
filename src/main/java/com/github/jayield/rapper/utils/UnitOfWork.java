@@ -209,7 +209,7 @@ public class UnitOfWork {
 
     private void proceedCommit(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
                                List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
-        try {
+//        try {
             //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
             Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator();
             Iterator<DataRepository<? extends DomainObject<?>, ?>> updatedReposIterator = updateRepos.iterator();
@@ -244,15 +244,15 @@ public class UnitOfWork {
 //                    .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()))
 //                    .join();
 
-        } catch (Exception e) {
-            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
-            rollback();
-        } finally {
-            newObjects.clear();
-            clonedObjects.clear();
-            dirtyObjects.clear();
-            removedObjects.clear();
-        }
+//        } catch (Exception e) {
+//            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
+//            rollback();
+//        } finally {
+//            newObjects.clear();
+//            clonedObjects.clear();
+//            dirtyObjects.clear();
+//            removedObjects.clear();
+//        }
     }
 
     private <V> void iterate(Iterator<DataRepository<? extends DomainObject<?>, ?>> repoIterator, Iterator<DomainObject> domainObjectIterator,

@@ -45,6 +45,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
             UnitOfWork current = UnitOfWork.getCurrent();
             return action.apply(current, false);
         } catch (UnitOfWorkException e) {
+            logger.info("new unit");
             ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
             SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = connectionManager::getConnection;
 

@@ -357,10 +357,10 @@ public class DataMapperTests {
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
 
         employeeMapper.update(employee)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
+//                .exceptionally(throwable -> {
+//                    fail(throwable.getMessage());
+//                    return null;
+//                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployee, con);
