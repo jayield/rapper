@@ -18,6 +18,7 @@ import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
@@ -252,10 +253,10 @@ public class DataMapperTests {
 
         Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
         employeeMapper.create(employee)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
+//                .exceptionally(throwable -> {
+//                    fail(throwable.getMessage());
+//                    return null;
+//                })
                 .join();
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Hugo"), AssertUtils::assertEmployee, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -376,10 +377,10 @@ public class DataMapperTests {
                 first.getLong("version"), null);
 
         employeeMapper.update(employee)
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
+//                .exceptionally(throwable -> {
+//                    fail();
+//                    return null;
+//                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployee, con);
@@ -519,5 +520,26 @@ public class DataMapperTests {
                 .join();
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
+    }
+
+    @Test
+    public void test(){
+        JsonArray jsonArray = new JsonArray();
+        jsonArray.add("a").add("b").addNull();
+
+        System.out.println(jsonArray);
+
+        JsonArray jsonArray1 = new JsonArray();
+        jsonArray1.add("c").addNull().add("d");
+
+        System.out.println(jsonArray1);
+
+        jsonArray.addAll(jsonArray1);
+
+        System.out.println(jsonArray);
+
+        System.out.println(Stream.of("a", "b", null, "c", null, "d")
+                .collect(CollectionUtils.toJsonArray())
+        );
     }
 }

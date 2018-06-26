@@ -87,7 +87,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public CompletableFuture<Optional<T>> findById(K id) {
         UnitOfWork current = UnitOfWork.getCurrent();
         String selectByIdQuery = mapperSettings.getSelectByIdQuery();
-        return SQLUtils.query(selectByIdQuery, SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), id))
+        return SQLUtils.queryAsyncParams(selectByIdQuery, SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), id))
                 .thenApply(rs -> {
                     log.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, current.hashCode());
                     return stream(rs).findFirst();
@@ -149,7 +149,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Void> deleteById(K k) {
         UnitOfWork unit = UnitOfWork.getCurrent();
-        return SQLUtils.update(mapperSettings.getDeleteQuery(), SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), k))
+        return SQLUtils.updateAsyncParams(mapperSettings.getDeleteQuery(), SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), k))
                 .thenCompose(updateResult -> UnitOfWork.executeActionWithinUnit(unit, () -> {
                     log.info("Deleted {} with id {}", type.getSimpleName(), k);
                     return getParentMapper()
@@ -165,7 +165,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Void> delete(T obj) {
         UnitOfWork unit = UnitOfWork.getCurrent();
-        return SQLUtils.update(mapperSettings.getDeleteQuery(), SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), obj))
+        return SQLUtils.updateAsyncParams(mapperSettings.getDeleteQuery(), SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), obj))
                 .thenCompose(updateResult -> UnitOfWork.executeActionWithinUnit(unit, () -> {
                     log.info("Deleted {} with id {}", type.getSimpleName(), obj.getIdentityKey());
                     return getParentMapper()
@@ -229,7 +229,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private CompletableFuture<Void> createAux(T obj, UnitOfWork current) {
         return UnitOfWork.executeActionWithinUnit(current, () ->
-                SQLUtils.update(mapperSettings.getInsertQuery(), prepareCreate(obj))
+                SQLUtils.updateAsyncParams(mapperSettings.getInsertQuery(), prepareCreate(obj))
                         .thenCompose(updateResult -> processCreate(obj, current, updateResult))
                         .thenAccept(result -> {
                             result.ifPresent(item -> setVersion(obj, item.getVersion()));
@@ -249,7 +249,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         });
     }
 
-    private JsonArray prepareCreate(T obj) {
+    private CompletableFuture<JsonArray> prepareCreate(T obj) {
         Stream<SqlFieldId> ids = mapperSettings
                 .getIds()
                 .stream()
@@ -270,7 +270,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private CompletableFuture<Void> updateAux(T obj, UnitOfWork current) {
         return UnitOfWork.executeActionWithinUnit(current, () ->
-                SQLUtils.update(mapperSettings.getUpdateQuery(), prepareUpdate(obj))
+                SQLUtils.updateAsyncParams(mapperSettings.getUpdateQuery(), prepareUpdate(obj))
                         .thenCompose(updateResult -> processUpdate(obj, current, updateResult))
                         .thenAccept(result -> {
                             result.ifPresent(item -> setVersion(obj, item.getVersion()));
@@ -291,7 +291,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         });
     }
 
-    private JsonArray prepareUpdate(T obj) {
+    private CompletableFuture<JsonArray> prepareUpdate(T obj) {
         try {
             Stream<SqlFieldId> ids = mapperSettings.getIds().stream();
             Stream<SqlField> columns = mapperSettings.getColumns().stream();
@@ -303,7 +303,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
                     .sorted(Comparator.comparing(SqlField::byUpdate));
 
-            JsonArray jsonArray = SQLUtils.setValuesInStatement(fields, obj);
+            CompletableFuture<JsonArray> jsonArray = SQLUtils.setValuesInStatement(fields, obj);
 
             //Since each object has its own version, we want the version from type not from the subClass
             SqlFieldVersion versionField = mapperSettings.getVersionField();
@@ -311,7 +311,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 Field f = versionField.field;
                 f.setAccessible(true);
                 long version = (long) f.get(obj);
-                jsonArray.add(version);
+                jsonArray = jsonArray.thenApply(ja -> {ja.add(version); return ja;});
             }
             return jsonArray;
         } catch ( IllegalAccessException e) {

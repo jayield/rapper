@@ -185,6 +185,8 @@ public class SqlField {
                 CompletableFuture<? extends DomainObject> cp = (CompletableFuture<? extends DomainObject>) field.get(obj);
                 //TODO remove join
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
+                cp = cp == null ? CompletableFuture.completedFuture(null) : cp;
+
                 return cp.thenCompose(domainObject ->
                         CollectionUtils.listToCompletableFuture(MapperRegistry.getMapperSettings(domainObjectType)
                             .getIds()

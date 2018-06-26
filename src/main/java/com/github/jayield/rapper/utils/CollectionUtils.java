@@ -16,7 +16,12 @@ public class CollectionUtils {
     }
 
     public static <T> Collector<T, JsonArray, JsonArray> toJsonArray(){
-        return Collector.of(JsonArray::new, JsonArray::add, JsonArray::addAll);
+        return Collector.of(JsonArray::new, (prev, curr) -> {
+            if(curr == null)
+                prev.addNull();
+            else
+                prev.add(curr);
+        }, JsonArray::addAll);
     }
 
     public static <T> Collector<T, JsonArray, JsonArray> toJsonArray(BiConsumer<T, JsonArray> action){
