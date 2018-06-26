@@ -164,8 +164,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                                 .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
                 )
                 .exceptionally(throwable -> {
-                    logger.info("Couldn't populate externals of {} due to {}", t.getClass().getSimpleName(), throwable.getMessage());
-                    throwable.printStackTrace();
+                    logger.warn("Couldn't populate externals of {} due to {}", t.getClass().getSimpleName(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
 
@@ -210,7 +209,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      */
     private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, io.vertx.ext.sql.ResultSet resultSet) {
         List<V> idValues = getIds(resultSet, foreignNames).stream().map(e -> (V)e).collect(Collectors.toList());
-        out.println(idValues);
         return idValues
                 .stream()
                 .map(repo::findById)

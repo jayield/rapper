@@ -50,8 +50,7 @@ public class UnitOfWork {
         return connection;
     }
 
-    private void closeConnection(){
-        System.out.println("closing the connection " + connection + " ...");
+    private void closeConnection(){ //TODO remove join
         connection.thenAccept(SQLConnection::close).join(); // Not sure of this join maybe close connection should return CF<Void>
         connection = null;
     }
@@ -139,13 +138,14 @@ public class UnitOfWork {
     }
 
     public static <R> R executeActionWithNewUnit(Supplier<R> action) {
-        ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
+        ConnectionManager connectionManager = getConnectionManager();
         SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = connectionManager::getConnection;
         try {
             UnitOfWork current = UnitOfWork.getCurrent();
 
             UnitOfWork.newCurrent(connectionSupplier.wrap());
             R r = action.get();
+
             UnitOfWork.setCurrent(current);
             return r;
         } catch (UnitOfWorkException e) {
