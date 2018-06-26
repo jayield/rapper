@@ -6,6 +6,7 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.TransactionIsolation;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -279,7 +280,7 @@ public class UnitOfWorkTests {
     @Test
     public void testTransaction() {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
-        SqlSupplier<Connection> connectionSqlSupplier = () -> connectionManager.getConnection(Connection.TRANSACTION_READ_COMMITTED);
+        SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_COMMITTED.getType());
 
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);

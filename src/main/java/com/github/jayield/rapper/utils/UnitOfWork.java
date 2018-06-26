@@ -50,9 +50,9 @@ public class UnitOfWork {
         return connection;
     }
 
-    private void closeConnection(){ //TODO remove join
-        connection.thenAccept(SQLConnection::close).join(); // Not sure of this join maybe close connection should return CF<Void>
-        connection = null;
+    private CompletableFuture<Void> closeConnection(){ //TODO remove join
+        return connection.thenAccept(SQLConnection::close)
+                .thenAccept(v -> connection = null); // Not sure of this join maybe close connection should return CF<Void>
     }
 
     /**
@@ -169,7 +169,7 @@ public class UnitOfWork {
                 CompletableFuture<Void> toRet = CompletableFuture.completedFuture(null);
                 if (connection != null) {
                     toRet = connection.thenCompose(con -> SQLUtils.callbackToPromise(con::commit))
-                            .thenAccept(v -> closeConnection())
+                            .thenCompose(v -> closeConnection())
                             .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()));
                 }
                 return toRet;
@@ -193,7 +193,7 @@ public class UnitOfWork {
                                 connection.thenCompose(con ->
                                         SQLUtils.callbackToPromise(con::commit)
                                                 .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode()))))
-                        .thenAccept(v -> closeConnection())
+                        .thenCompose(v -> closeConnection())
                         .exceptionally(throwable -> {
                             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
                             rollback();
@@ -304,7 +304,7 @@ public class UnitOfWork {
             System.out.println("connection in rollbak " + connection);
             if(connection != null) {
                 return connection.thenCompose(con -> SQLUtils.callbackToPromise(con::rollback))
-                        .thenAccept(v -> closeConnection());
+                        .thenCompose(v -> closeConnection());
             }
 
             newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));

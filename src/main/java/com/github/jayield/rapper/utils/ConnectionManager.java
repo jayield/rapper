@@ -5,6 +5,7 @@ import io.vertx.core.VertxOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.TransactionIsolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,12 +83,11 @@ public class ConnectionManager {
                         .thenApply(v -> con));
     }
 
-    public Connection getConnection(int transactionLevel) throws SQLException {
-        Connection connection = poolDataSource.getPooledConnection().getConnection();
-        connection.setAutoCommit(false);
-        connection.setTransactionIsolation(transactionLevel);
-
-        return connection;
+    public CompletableFuture<SQLConnection> getConnection(int transactionLevel){
+        return getConnection().thenCompose(con ->
+            SQLUtils.<Void>callbackToPromise(ar -> con.setTransactionIsolation(TransactionIsolation.from(transactionLevel), ar))
+                .thenApply(v -> con)
+        );
     }
 
     public String getUrl() {
