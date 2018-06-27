@@ -31,7 +31,7 @@ public class Transaction {
      * @return Transaction
      */
     public Transaction andDo(Supplier<CompletableFuture> action) {
-        actionsQueue.add(() -> UnitOfWork.executeActionWithinUnit(customUnitOfWork, action));
+        actionsQueue.add(action);
         return this;
     }
 

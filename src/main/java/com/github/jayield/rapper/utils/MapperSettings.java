@@ -28,6 +28,7 @@ public class MapperSettings {
     private List<SqlField> allFields = new ArrayList<>();
 
     private String selectQuery;
+    private String selectCountQuery;
     private String insertQuery;
     private String updateQuery;
     private String deleteQuery;
@@ -151,6 +152,8 @@ public class MapperSettings {
                 .stream()
                 .collect(Collectors.joining(", ", "select ", suffix));
 
+        selectCountQuery = "select COUNT(*) as c " + suffix;
+
         selectByIdQuery = selectQuery +
                 idName.stream()
                         .map(id -> id + " = ?")
@@ -267,6 +270,10 @@ public class MapperSettings {
 
     public String getSelectQuery() {
         return selectQuery;
+    }
+
+    public String getSelectCountQuery() {
+        return selectCountQuery;
     }
 
     public String getInsertQuery() {

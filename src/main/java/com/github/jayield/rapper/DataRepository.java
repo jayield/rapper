@@ -40,227 +40,174 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         return mapper;
     }
 
-    private <R> R checkUnitOfWork(BiFunction<UnitOfWork, Boolean, R> action) {
-        try {
-            UnitOfWork current = UnitOfWork.getCurrent();
-            return action.apply(current, false);
-        } catch (UnitOfWorkException e) {
-            logger.info("new unit");
-            ConnectionManager connectionManager = getConnectionManager(DBsPath.DEFAULTDB);
-            SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = connectionManager::getConnection;
-
-            UnitOfWork unitOfWork = UnitOfWork.newCurrent(connectionSupplier.wrap());
-            R r = action.apply(unitOfWork, true);
-            UnitOfWork.removeCurrent();
-            return r;
-        }
+    @Override
+    public <R> CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit, Pair<String, R>... values) {
+        return mapper.getNumberOfEntries(unit, values);
     }
 
     @Override
-    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) ->  mapper.getNumberOfEntries(values));
+    public CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit) {
+        return mapper.getNumberOfEntries(unit);
     }
 
     @Override
-    public CompletableFuture<Long> getNumberOfEntries() {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> mapper.getNumberOfEntries());
+    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, Pair<String, R>... values) {
+        return find(() -> mapper.findWhere(unit, values));
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        return find(() -> mapper.findWhere(values));
+    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, int page, int numberOfItems, Pair<String, R>... values) {
+        return find(() -> mapper.findWhere(unit, page, numberOfItems, values));
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfitems, Pair<String, R>... values) {
-        return find(() -> mapper.findWhere(page, numberOfitems, values));
+    public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K k) {
+        boolean[] wasComputed = {false};
+        //System.out.println("k " + k + " identitymap " + identityMap);
+        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(k, k1 -> {
+            wasComputed[0] = true;
+            return mapper.findById(unit, k)
+                    .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")));
+        });
+        if (wasComputed[0])
+            completableFuture = completableFuture.thenApply(t1 -> {
+                externalsHandler.populateExternals(t1);
+                return t1;
+            });
+
+        else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
+
+        return completableFuture
+                .thenApply(Optional::of)
+                .exceptionally(throwable -> {
+                    logger.warn("Removing CompletableFuture of {} from identityMap due to {}", type.getSimpleName(), throwable.getMessage());
+                    identityMap.remove(k);
+                    return Optional.empty();
+                });
     }
 
     @Override
-    public CompletableFuture<Optional<T>> findById(K k) {
-        return checkUnitOfWork((current, isNewUnit) -> {
-            boolean[] wasComputed = {false};
-            System.out.println("k " + k + " identitymap " + identityMap);
-            CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(
-                    k,
-                    k1 -> {
-                        wasComputed[0] = true;
-                        return mapper
-                                .findById(k)
-                                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")));
-                    }
-            );
-            if (wasComputed[0])
-                completableFuture = completableFuture.thenApply(t1 -> UnitOfWork.executeActionWithNewUnit(() -> {
-                            externalsHandler.populateExternals(t1);
-                            return t1;
-                        })
-                );
+    public CompletableFuture<List<T>> findAll(UnitOfWork unit) {
+        return find(() -> mapper.findAll(unit));
+    }
 
-            else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
+    @Override
+    public CompletableFuture<List<T>> findAll(UnitOfWork unit, int page, int numberOfItems) {
+        return find(() -> mapper.findAll(unit, page, numberOfItems));
+    }
 
-            return completableFuture
-                    .thenCompose(t -> isNewUnit ? current.commit().thenApply(aVoid -> Optional.of(t)) : CompletableFuture.completedFuture(Optional.of(t)))
-                    .exceptionally(throwable -> {
-                        logger.warn("Removing CompletableFuture of {} from identityMap due to {}", type.getSimpleName(), throwable.getMessage());
-                        identityMap.remove(k);
-                        return Optional.empty();
+    @Override
+    public CompletableFuture<Void> create(UnitOfWork unit, T t) {
+        t.markNew(unit);
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> createAll(UnitOfWork unit, Iterable<T> t) {
+        t.forEach(t1 -> t1.markNew(unit));
+        return CompletableFuture.completedFuture(null);
+    }
+
+    @Override
+    public CompletableFuture<Void> update(UnitOfWork unit, T t) {
+        CompletableFuture<T> future = identityMap.computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
+                tCompletableFuture.thenApply(t2 -> {
+                    t2.markToBeDirty(unit);
+                    return t2;
+                })
+        );
+
+        if (future != null) {
+            return future.thenApply(t1 -> {
+                t.markDirty(unit);
+                return null;
+            });
+        } else {
+            return findById(unit, t.getIdentityKey())
+                    .thenApply(t1 -> t1.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
+                    .thenApply(t1 -> {
+                        t1.markToBeDirty(unit);
+                        t.markDirty(unit);
+                        return null;
                     });
-        });
+        }
 
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll() {
-        return find(mapper::findAll);
-    }
-
-    @Override
-    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
-        return find(() -> mapper.findAll(page, numberOfItems));
-    }
-
-    @Override
-    public CompletableFuture<Void> create(T t) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            t.markNew();
-            return checkCommit(unitOfWork, isNewUnit);
-        });
-    }
-
-    @Override
-    public CompletableFuture<Void> createAll(Iterable<T> t) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            t.forEach(DomainObject::markNew);
-            return checkCommit(unitOfWork, isNewUnit);
-        });
-    }
-
-    @Override
-    public CompletableFuture<Void> update(T t) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            CompletableFuture<T> future = identityMap.computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
-                    tCompletableFuture.thenApply(t2 -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                        t2.markToBeDirty();
+    public CompletableFuture<Void> updateAll(UnitOfWork unit, Iterable<T> t) {
+        List<CompletableFuture<T>> completableFutures = new ArrayList<>();
+        t.forEach(t1 -> {
+            CompletableFuture<T> future = identityMap.computeIfPresent(t1.getIdentityKey(), (k, tCompletableFuture) ->
+                    tCompletableFuture.thenApply(t2 -> {
+                        t2.markToBeDirty(unit);
                         return t2;
-                    }))
-            );
+                    }));
 
             if (future != null) {
-                return future.thenCompose(t1 -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                    t.markDirty();
-                    return checkCommit(unitOfWork, isNewUnit);
-                }));
+                completableFutures.add(future);
             } else {
-                return findById(t.getIdentityKey())
-                        .thenApply(t1 -> t1.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
-                        .thenCompose(t1 -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                            t1.markToBeDirty();
-                            t.markDirty();
-                            return checkCommit(unitOfWork, isNewUnit);
-                        }));
-            }
-        });
-
-    }
-
-    @Override
-    public CompletableFuture<Void> updateAll(Iterable<T> t) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            assert(isNewUnit);
-            List<CompletableFuture<T>> completableFutures = new ArrayList<>();
-            t.forEach(t1 -> {
-                CompletableFuture<T> future = identityMap.computeIfPresent(t1.getIdentityKey(), (k, tCompletableFuture) ->
-                        tCompletableFuture.thenApply(t2 -> {
-                            t2.markToBeDirty();
+                CompletableFuture<T> objectCompletableFuture = findById(unit, t1.getIdentityKey())
+                        .thenApply(t2 -> t2.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
+                        .thenApply(t2 -> {
+                            t2.markToBeDirty(unit);
                             return t2;
-                        }));
-
-                if (future != null) {
-                    completableFutures.add(future);
-                }
-                else {
-                    CompletableFuture<T> objectCompletableFuture = findById(t1.getIdentityKey())
-                            .thenApply(t2 -> t2.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found")))
-                            .thenApply(t2 -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                                t2.markToBeDirty();
-                                return t2;
-                            }));
-                    completableFutures.add(objectCompletableFuture);
-                }
-                t1.markDirty();
-            });
-            return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                    .thenCompose(aVoid -> checkCommit(unitOfWork, isNewUnit));
+                        });
+                completableFutures.add(objectCompletableFuture);
+            }
+            t1.markDirty(unit);
         });
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
     @Override
-    public CompletableFuture<Void> deleteById(K k) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
-                t.markRemoved();
-                return t;
-            }));
+    public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
+        CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
+            t.markRemoved(unit);
+            return t;
+        }));
 
-            return future != null
-                    ? future.thenCompose(t -> checkCommit(unitOfWork, isNewUnit))
-                    : findById(k)
-                    .thenCompose(t -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                        T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
-                        t1.markRemoved();
-                        return checkCommit(unitOfWork, isNewUnit);
-                    }));
-        });
+        return future != null
+                ? CompletableFuture.completedFuture(null)
+                : findById(unit, k)
+                .thenApply(t -> {
+                    T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
+                    t1.markRemoved(unit);
+                    return null;
+                });
     }
 
     @Override
-    public CompletableFuture<Void> delete(T t) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            t.markRemoved();
-            return checkCommit(unitOfWork, isNewUnit);
-        });
+    public CompletableFuture<Void> delete(UnitOfWork unit, T t) {
+        t.markRemoved(unit);
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override
-    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> {
-            List<CompletableFuture> completableFutures = new ArrayList<>();
-            keys.forEach(k -> {
-                CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture
-                        .thenApply(t -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                            t.markRemoved();
-                            return t;
-                        }))
-                );
+    public CompletableFuture<Void> deleteAll(UnitOfWork unit, Iterable<K> keys) {
+        List<CompletableFuture> completableFutures = new ArrayList<>();
+        keys.forEach(k -> {
+            CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture
+                    .thenApply(t -> {
+                        t.markRemoved(unit);
+                        return t;
+                    })
+            );
 
-                completableFutures.add(future == null
-                        ?
-                        findById(k)
-                                .thenAccept(t -> t.ifPresent(t1 -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> {
-                                            t1.markRemoved();
-                                            return null;
-                                        }))
-                                )
-                        :
-                        future);
-            });
-
-            return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                    .thenCompose(aVoid -> checkCommit(unitOfWork, isNewUnit));
+            completableFutures.add(future == null
+                    ?
+                    findById(unit, k).thenAccept(t -> t.ifPresent(t1 -> t1.markRemoved(unit)))
+                    :
+                    future);
         });
-    }
 
-    private CompletableFuture<Void> checkCommit(UnitOfWork unitOfWork, Boolean isNewUnit) {
-        return isNewUnit ? unitOfWork.commit() : CompletableFuture.completedFuture(null);
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
     private CompletableFuture<List<T>> find(Supplier<CompletableFuture<List<T>>> supplier){
-        return checkUnitOfWork((unitOfWork, isNewUnit) -> supplier.get()
-                .thenApply(ts -> processNewObjects(ts))
-                .thenCompose(CollectionUtils::listToCompletableFuture)
-                .thenCompose(ts -> isNewUnit ? unitOfWork.commit().thenApply(aVoid -> ts) : CompletableFuture.completedFuture(ts))
-        );
+        return supplier.get()
+                .thenApply(this::processNewObjects)
+                .thenCompose(CollectionUtils::listToCompletableFuture);
     }
 
     public void invalidate(K identityKey) {
@@ -286,10 +233,10 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                     boolean[] wasComputed = {false};
                     CompletableFuture<T> future = identityMap.compute(t.getIdentityKey(), (k, tCompletableFuture) -> computeNewValue(wasComputed, t, tCompletableFuture));
                     if (wasComputed[0])
-                        return future.thenApply(t1 -> UnitOfWork.executeActionWithNewUnit(() ->  {
+                        return future.thenApply(t1 -> {
                             externalsHandler.populateExternals(t1);
                             return t1;
-                        }));
+                        });
                     return future;
                 })
                 .collect(Collectors.toList());

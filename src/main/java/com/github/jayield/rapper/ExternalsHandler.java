@@ -9,17 +9,15 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.github.jayield.rapper.utils.SqlField.*;
-import static java.lang.System.out;
+import static com.github.jayield.rapper.utils.SqlField.SqlFieldExternal;
+import static com.github.jayield.rapper.utils.SqlField.SqlFieldId;
 
 public class ExternalsHandler<T extends DomainObject<K>, K> {
 
@@ -121,8 +119,10 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             }
         }
 
+        UnitOfWork unit = new UnitOfWork(ConnectionManager.getConnectionManager()::getConnection);
+
         CompletableFuture<? extends DomainObject> domainObjects = externalRepo
-                .findById((V) id)
+                .findById(unit, (V) id)
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
         setExternal(t, domainObjects, sqlFieldExternal.field, sqlFieldExternal.type);
@@ -141,7 +141,9 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 .map(str -> new Pair<>(str, idValues.next()))
                 .toArray(Pair[]::new);
 
-        CompletableFuture<? extends List<? extends DomainObject>> objects = repo.findWhere(pairs);
+        UnitOfWork unit = new UnitOfWork(ConnectionManager.getConnectionManager()::getConnection);
+
+        CompletableFuture<? extends List<? extends DomainObject>> objects = repo.findWhere(unit, pairs);
 
         setExternal(t, objects, sqlFieldExternal.field, sqlFieldExternal.type);
     }
@@ -159,7 +161,9 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param idValues
      */
     private <N extends DomainObject<V>, V> void populateWithExternalTable(T t, SqlFieldExternal sqlFieldExternal, DataRepository<N, V> repo, Stream<Object> idValues) {
-        CompletableFuture<List<N>> completableFuture = SQLUtils.query(sqlFieldExternal.selectTableQuery, idValues.collect(CollectionUtils.toJsonArray()))
+        UnitOfWork unit = new UnitOfWork(ConnectionManager.getConnectionManager()::getConnection);
+
+        CompletableFuture<List<N>> completableFuture = SQLUtils.query(sqlFieldExternal.selectTableQuery, unit, idValues.collect(CollectionUtils.toJsonArray()))
                 .thenCompose(resultSet -> getExternalObjects(repo, sqlFieldExternal.externalNames, resultSet)
                                 .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
                 )
@@ -208,10 +212,15 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @return
      */
     private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, io.vertx.ext.sql.ResultSet resultSet) {
-        List<V> idValues = getIds(resultSet, foreignNames).stream().map(e -> (V)e).collect(Collectors.toList());
+
+
+        List<V> idValues = getIds(resultSet, foreignNames)
+                .stream()
+                .map(e -> (V)e)
+                .collect(Collectors.toList());
         return idValues
                 .stream()
-                .map(repo::findById)
+                .map(v -> repo.findById(unit, v))
                 .map(optionalCompletableFuture -> optionalCompletableFuture
                         .thenApply(optional -> optional.orElseThrow(
                                 () -> new DataMapperException("Couldn't get external object. Its ID was found in the external table, but not on its table"))
@@ -232,9 +241,9 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
 
         if (primaryKeyConstructor == null)
             function = jo -> Arrays.stream(foreignNames).map(n -> {
-                System.out.println(jo);
+                //System.out.println(jo);
                 Object o = jo.getValue(n);
-                System.out.println(o);
+                //System.out.println(o);
                 return o;
             });
         else

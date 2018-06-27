@@ -22,26 +22,22 @@ public class SQLUtils {
 
     private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
 
-    public static CompletableFuture<ResultSet> query(String sql, JsonArray params){
-        UnitOfWork current = UnitOfWork.getCurrent();
-        CompletableFuture<SQLConnection> con = current.getConnection();
+    public static CompletableFuture<ResultSet> query(String sql, UnitOfWork unit, JsonArray params){
+        CompletableFuture<SQLConnection> con = unit.getConnection();
         return con.thenCompose(connection -> callbackToPromise(ar -> connection.queryWithParams(sql, params, ar)));
     }
 
-    public static CompletableFuture<ResultSet> queryAsyncParams(String sql, CompletableFuture<JsonArray> params){
-        UnitOfWork curr = UnitOfWork.getCurrent();
-        return params.thenCompose(jsonArray -> UnitOfWork.executeActionWithinUnit(curr, () -> query(sql, jsonArray)));
+    public static CompletableFuture<ResultSet> queryAsyncParams(String sql, UnitOfWork unit, CompletableFuture<JsonArray> params){
+        return params.thenCompose(jsonArray -> query(sql, unit, jsonArray));
     }
 
-    public static CompletableFuture<UpdateResult> update(String sql, JsonArray params){
-        UnitOfWork current = UnitOfWork.getCurrent();
-        CompletableFuture<SQLConnection> con = current.getConnection();
+    public static CompletableFuture<UpdateResult> update(String sql, UnitOfWork unit, JsonArray params){
+        CompletableFuture<SQLConnection> con = unit.getConnection();
         return con.thenCompose(connection -> callbackToPromise(ar -> connection.updateWithParams(sql, params, ar)));
     }
 
-    public static CompletableFuture<UpdateResult> updateAsyncParams(String sql, CompletableFuture<JsonArray> params){
-        UnitOfWork curr = UnitOfWork.getCurrent();
-        return params.thenCompose(jsonArray -> UnitOfWork.executeActionWithinUnit(curr, () -> update(sql, jsonArray)));
+    public static CompletableFuture<UpdateResult> updateAsyncParams(String sql, UnitOfWork unit, CompletableFuture<JsonArray> params){
+        return params.thenCompose(jsonArray -> update(sql, unit, jsonArray));
     }
 
     public static CompletableFuture<JsonArray> setValuesInStatement(Stream<? extends SqlField> fields, Object obj) {

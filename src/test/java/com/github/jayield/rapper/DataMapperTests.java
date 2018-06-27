@@ -36,13 +36,14 @@ public class DataMapperTests {
     private final DataMapper<Employee, Integer> employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class).getMapper();
     private final DataMapper<Dog, Dog.DogPK> dogMapper = (DataMapper<Dog, Dog.DogPK>) MapperRegistry.getRepository(Dog.class).getMapper();
 
+    private UnitOfWork unit;
+
     @Before
     public void start() {
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
                 "SA", "");
         Supplier<CompletableFuture<SQLConnection>> connectionSupplier = manager::getConnection;
-        UnitOfWork.removeCurrent();
 
         CompletableFuture<SQLConnection> con = connectionSupplier.get();
         con.thenCompose(sqlConnection ->
@@ -51,27 +52,27 @@ public class DataMapperTests {
                 .thenAccept(v -> SQLUtils.callbackToPromise(sqlConnection::commit))
                 .thenAccept(v -> sqlConnection.close())
         ).join();
-        UnitOfWork.newCurrent(connectionSupplier);
+        unit = new UnitOfWork(connectionSupplier);
     }
 
     @Test
     public void testGetNumberOfEntriesWhere(){
-        long numberOfEntries = companyMapper.getNumberOfEntries(new Pair<>("id", 1)).join();
+        long numberOfEntries = companyMapper.getNumberOfEntries(unit, new Pair<>("id", 1)).join();
         assertEquals(11, numberOfEntries);
     }
 
     @Test
     public void testGetNumberOfEntries(){
-        long numberOfEntries = companyMapper.getNumberOfEntries().join();
+        long numberOfEntries = companyMapper.getNumberOfEntries(unit).join();
         assertEquals(11, numberOfEntries);
     }
 
     //-----------------------------------FindWhere-----------------------------------//
     @Test
     public void testSimpleFindWhere() {
-        List<Person> people = personMapper.findWhere(new Pair<>("name", "Jose")).join();
+        List<Person> people = personMapper.findWhere(unit, new Pair<>("name", "Jose")).join();
 
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         SQLUtils.<ResultSet>callbackToPromise(ar ->
                 con.queryWithParams("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?",
                         new JsonArray().add("Jose"), ar))
@@ -84,9 +85,9 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedIdFindWhere() {
-        List<Car> cars = carMapper.findWhere(new Pair<>("brand", "Mitsubishi")).join();
+        List<Car> cars = carMapper.findWhere(unit, new Pair<>("brand", "Mitsubishi")).join();
 
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
 
         SQLUtils.<ResultSet>callbackToPromise(ar ->
                 con.queryWithParams("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?",
@@ -102,28 +103,28 @@ public class DataMapperTests {
 
     @Test
     public void testNNExternalFindWhere(){
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
-        Book book = bookMapper.findWhere(new Pair<>("name", "1001 noites")).join().get(0);
+        SQLConnection con = unit.getConnection().join();
+        Book book = bookMapper.findWhere(unit, new Pair<>("name", "1001 noites")).join().get(0);
         assertSingleRow(book, bookSelectQuery, new JsonArray().add(book.getName()), (book1, rs) -> AssertUtils.assertBook(book1, rs, con ), con);
     }
 
     @Test
     public void testParentExternalFindWhere(){
-        Employee employee = employeeMapper.findWhere(new Pair<>("name", "Bob")).join().get(0);
-        assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Bob"), AssertUtils::assertEmployee, UnitOfWork.getCurrent().getConnection().join());
+        Employee employee = employeeMapper.findWhere(unit, new Pair<>("name", "Bob")).join().get(0);
+        assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Bob"), AssertUtils::assertEmployee, unit.getConnection().join());
     }
 
     @Test
     public void testPaginationFindWhere() {
-        List<Company> companies = companyMapper.findWhere(0, 10, new Pair<>("id", 1)).join();
-        assertMultipleRows(UnitOfWork.getCurrent().getConnection().join(), companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
+        List<Company> companies = companyMapper.findWhere(unit, 0, 10, new Pair<>("id", 1)).join();
+        assertMultipleRows(unit.getConnection().join(), companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
     }
 
     @Test
     public void testSecondPageFindWhere() {
-        List<Company> companies = companyMapper.findWhere(1, 10, new Pair<>("id", 1)).join();
+        List<Company> companies = companyMapper.findWhere(unit, 1, 10, new Pair<>("id", 1)).join();
         assertEquals(1, companies.size());
-        assertSingleRow(companies.get(0), companySelectQuery, new JsonArray().add(1).add(11), AssertUtils::assertCompany, UnitOfWork.getCurrent().getConnection().join());
+        assertSingleRow(companies.get(0), companySelectQuery, new JsonArray().add(1).add(11), AssertUtils::assertCompany, unit.getConnection().join());
     }
 
     //-----------------------------------FindById-----------------------------------//
@@ -131,18 +132,18 @@ public class DataMapperTests {
     public void testSimpleFindById(){
         int nif = 321;
         Person person = personMapper
-                .findById(nif)
+                .findById(unit, nif)
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
-        assertSingleRow(person, personSelectQuery, new JsonArray().add(nif), AssertUtils::assertPerson, UnitOfWork.getCurrent().getConnection().join());
+        assertSingleRow(person, personSelectQuery, new JsonArray().add(nif), AssertUtils::assertPerson, unit.getConnection().join());
     }
 
     @Test
     public void testEmbeddedIdFindById() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         int owner = 2; String plate = "23we45";
         Car car = carMapper
-                .findById(new CarKey(owner, plate))
+                .findById(unit, new CarKey(owner, plate))
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
         assertSingleRow(car, carSelectQuery, new JsonArray().add(owner).add(plate), AssertUtils::assertCar, con);
@@ -151,9 +152,9 @@ public class DataMapperTests {
 
     @Test
     public void testHierarchyFindById() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         TopStudent topStudent = topStudentMapper
-                .findById(454)
+                .findById(unit, 454)
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
         assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(454), AssertUtils::assertTopStudent, con);
@@ -162,10 +163,10 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedIdExternalFindById(){
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         int companyId = 1, companyCid = 1;
         Company company = companyMapper
-                .findById(new Company.PrimaryKey(companyId, companyCid))
+                .findById(unit, new Company.PrimaryKey(companyId, companyCid))
                 .join()
                 .orElseThrow(() -> new AssertionError(detailMessage));
         assertSingleRow(company, "select id, cid, motto, CAST(version as bigint) Cversion from Company where id = ? and cid = ?",
@@ -175,28 +176,28 @@ public class DataMapperTests {
     //-----------------------------------FindAll-----------------------------------//
     @Test
     public void testSimpleFindAll(){
-        List<Person> people = personMapper.findAll().join();
-        assertMultipleRows(UnitOfWork.getCurrent().getConnection().join(), people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2);
+        List<Person> people = personMapper.findAll(unit).join();
+        assertMultipleRows(unit.getConnection().join(), people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2);
     }
 
     @Test
     public void testEmbeddedIdFindAll() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
-        List<Car> cars = carMapper.findAll().join();
+        SQLConnection con = unit.getConnection().join();
+        List<Car> cars = carMapper.findAll(unit).join();
         assertMultipleRows(con, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
 
     @Test
     public void testHierarchyFindAll(){
-        List<TopStudent> topStudents = topStudentMapper.findAll().join();
-        assertMultipleRows(UnitOfWork.getCurrent().getConnection().join(), topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
+        List<TopStudent> topStudents = topStudentMapper.findAll(unit).join();
+        assertMultipleRows(unit.getConnection().join(), topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
     }
 
     @Test
     public void testPaginationFindAll() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
-        List<Company> companies = companyMapper.findAll(0, 10).join();
+        SQLConnection con = unit.getConnection().join();
+        List<Company> companies = companyMapper.findAll(unit, 0, 10).join();
         assertMultipleRows(con, companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -204,9 +205,9 @@ public class DataMapperTests {
     //-----------------------------------Create-----------------------------------//
     @Test
     public void testSimpleCreate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         Person person = new Person(123, "abc", new Date(1969, 6, 9).toInstant(), 0);
-        personMapper.create(person)
+        personMapper.create(unit, person)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -218,9 +219,9 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedIdCreate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        carMapper.create(car)
+        carMapper.create(unit, car)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -232,9 +233,9 @@ public class DataMapperTests {
 
     @Test
     public void testHierarchyCreate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1).toInstant(), 0, 1, 20, 2016, 0, 0);
-        topStudentMapper.create(topStudent)
+        topStudentMapper.create(unit, topStudent)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -246,13 +247,13 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalCreate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         CompletableFuture<Company> companyCompletableFuture = companyMapper
-                .findById(new Company.PrimaryKey(1, 1))
+                .findById(unit, new Company.PrimaryKey(1, 1))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
 
         Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
-        employeeMapper.create(employee)
+        employeeMapper.create(unit, employee)
 //                .exceptionally(throwable -> {
 //                    fail(throwable.getMessage());
 //                    return null;
@@ -264,9 +265,9 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalNullCreate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         Employee employee = new Employee(0, "Hugo", 0, null);
-        employeeMapper.create(employee)
+        employeeMapper.create(unit, employee)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -278,9 +279,9 @@ public class DataMapperTests {
 
     @Test
     public void testNoVersionCreate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         Dog dog = new Dog(new Dog.DogPK("Bobby", "Pitbull"), 5);
-        dogMapper.create(dog)
+        dogMapper.create(unit, dog)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -293,11 +294,11 @@ public class DataMapperTests {
     //-----------------------------------Update-----------------------------------//
     @Test
     public void testSimpleUpdate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", new JsonArray().add(321), con);
         Person person = new Person(321, "Maria", new Date(2010, 2, 3).toInstant(), rs.getResults().get(0).getLong(0));
 
-        personMapper.update(person)
+        personMapper.update(unit, person)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -310,11 +311,11 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedIdUpdate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", new JsonArray().add(2).add( "23we45"), con);
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getResults().get(0).getLong(0));
 
-        carMapper.update(car)
+        carMapper.update(unit, car)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -327,7 +328,7 @@ public class DataMapperTests {
 
     @Test
     public void testHierarchyUpdate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery("select CAST(P.version as bigint), CAST(S2.version as bigint), CAST(TS.version as bigint) version from Person P " +
                 "inner join Student S2 on P.nif = S2.nif " +
                 "inner join TopStudent TS on S2.nif = TS.nif where P.nif = ?", new JsonArray().add(454), con);
@@ -335,7 +336,7 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3).toInstant(), first.getLong(1),
                 4, 6, 7, first.getLong(2), first.getLong(0));
 
-        topStudentMapper.update(topStudent)
+        topStudentMapper.update(unit, topStudent)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -348,15 +349,15 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalUpdate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(first.getInteger("id"),"Boba", first.getLong("version"),
                 companyMapper
-                        .findById(new Company.PrimaryKey(1, 2))
+                        .findById(unit, new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
 
-        employeeMapper.update(employee)
+        employeeMapper.update(unit, employee)
 //                .exceptionally(throwable -> {
 //                    fail(throwable.getMessage());
 //                    return null;
@@ -369,14 +370,14 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalNullUpdate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(
                 first.getInteger("id"),"Boba",
                 first.getLong("version"), null);
 
-        employeeMapper.update(employee)
+        employeeMapper.update(unit, employee)
 //                .exceptionally(throwable -> {
 //                    fail();
 //                    return null;
@@ -389,14 +390,14 @@ public class DataMapperTests {
 
     @Test
     public void testNoVersionUpdate() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery(dogSelectQuery, new JsonArray().add("Doggy").add("Bulldog"), con);
         JsonObject first = rs.getRows(true).get(0);
         Dog dog = new Dog(
                 new Dog.DogPK(
                         first.getString("name"),
                         first.getString("race")), 6);
-        dogMapper.update(dog)
+        dogMapper.update(unit, dog)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -409,8 +410,8 @@ public class DataMapperTests {
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testSimpleDeleteById() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
-        personMapper.deleteById(321)
+        SQLConnection con = unit.getConnection().join();
+        personMapper.deleteById(unit, 321)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -422,8 +423,8 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedDeleteById() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
-        carMapper.deleteById(new CarKey(2, "23we45"))
+        SQLConnection con = unit.getConnection().join();
+        carMapper.deleteById(unit, new CarKey(2, "23we45"))
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -435,8 +436,8 @@ public class DataMapperTests {
 
     @Test
     public void testHierarchyDeleteById() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
-        topStudentMapper.deleteById(454)
+        SQLConnection con = unit.getConnection().join();
+        topStudentMapper.deleteById(unit, 454)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -448,9 +449,9 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalDeleteById() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
-        employeeMapper.deleteById(rs.getRows(true).get(0).getInteger("id"))
+        employeeMapper.deleteById(unit, rs.getRows(true).get(0).getInteger("id"))
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -463,9 +464,9 @@ public class DataMapperTests {
     //-----------------------------------Delete-----------------------------------//
     @Test
     public void testSimpleDelete() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         Person person = new Person(321, null, null, 0);
-        personMapper.delete(person)
+        personMapper.delete(unit, person)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -477,9 +478,9 @@ public class DataMapperTests {
 
     @Test
     public void testEmbeddedDelete() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         Car car = new Car(2, "23we45", null, null, 0);
-        carMapper.delete(car)
+        carMapper.delete(unit, car)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -491,9 +492,9 @@ public class DataMapperTests {
 
     @Test
     public void testHierarchyDelete() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
-        topStudentMapper.delete(topStudent)
+        topStudentMapper.delete(unit, topStudent)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -505,14 +506,14 @@ public class DataMapperTests {
 
     @Test
     public void testSingleExternalDelete() {
-        SQLConnection con = UnitOfWork.getCurrent().getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(first.getInteger("id"), first.getString("name"), first.getLong("version"),
                 companyMapper
-                        .findById(new Company.PrimaryKey(1, 2))
+                        .findById(unit, new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
-        employeeMapper.delete(employee)
+        employeeMapper.delete(unit, employee)
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;

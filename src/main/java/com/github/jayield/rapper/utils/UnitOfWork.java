@@ -38,7 +38,7 @@ public class UnitOfWork {
     private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
 
-    protected UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
+    public UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
     }
 
@@ -101,68 +101,6 @@ public class UnitOfWork {
             removedObjects.add(obj);
     }
 
-    private static ThreadLocal<UnitOfWork> current = new ThreadLocal<>();
-
-    /**
-     * Each Thread will have its own UnitOfWork
-     */
-    public static UnitOfWork newCurrent(Supplier<CompletableFuture<SQLConnection>> supplier) {
-        UnitOfWork uow = new UnitOfWork(supplier);
-        setCurrent(uow);
-
-        logger.info("New Unit of Work {}", uow.hashCode());
-
-        return uow;
-    }
-
-    private static void setCurrent(UnitOfWork uow) {
-        current.set(uow);
-    }
-
-    public static void removeCurrent(){
-        UnitOfWork unitOfWork = current.get();
-        if(unitOfWork!= null) logger.info("{} - Unit of Work removed", unitOfWork.hashCode());
-        current.remove();
-    }
-
-    public static <R> R executeActionWithinUnit(UnitOfWork unitOfWork, Supplier<R> action) {
-        try {
-            UnitOfWork.getCurrent();
-            return action.get();
-        } catch (UnitOfWorkException e) {
-            UnitOfWork.setCurrent(unitOfWork);
-            R r = action.get();
-            UnitOfWork.removeCurrent();
-            return r;
-        }
-    }
-
-    public static <R> R executeActionWithNewUnit(Supplier<R> action) {
-        ConnectionManager connectionManager = getConnectionManager();
-        SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier = connectionManager::getConnection;
-        try {
-            UnitOfWork current = UnitOfWork.getCurrent();
-
-            UnitOfWork.newCurrent(connectionSupplier.wrap());
-            R r = action.get();
-
-            UnitOfWork.setCurrent(current);
-            return r;
-        } catch (UnitOfWorkException e) {
-            UnitOfWork.newCurrent(connectionSupplier.wrap());
-            R r = action.get();
-            UnitOfWork.removeCurrent();
-            return r;
-        }
-    }
-
-    public static UnitOfWork getCurrent() {
-        UnitOfWork unitOfWork = current.get();
-        if(unitOfWork == null)
-            throw new UnitOfWorkException("The Unit of Work you're trying to access is currently NULL. You must create or set it first.");
-        return unitOfWork;
-    }
-
     public CompletableFuture<Void> commit() {
         try {
             if (newObjects.isEmpty() && clonedObjects.isEmpty() && dirtyObjects.isEmpty() && removedObjects.isEmpty()) {
@@ -175,13 +113,13 @@ public class UnitOfWork {
                 return toRet;
             } else {
                 Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                        List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList(Mapper::create, newObjects, domainObject -> true);
+                        List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList((mapper, domainObject) -> mapper.create(this, domainObject), newObjects, domainObject -> true);
 
                 Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                        List<CompletableFuture<Void>>> updatePair = executeFilteredBiFunctionInList(Mapper::update, dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
+                        List<CompletableFuture<Void>>> updatePair = executeFilteredBiFunctionInList((mapper, domainObject) -> mapper.update(this, domainObject), dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
 
                 Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                        List<CompletableFuture<Void>>> deletePair = executeFilteredBiFunctionInList(Mapper::delete, removedObjects, domainObject -> true);
+                        List<CompletableFuture<Void>>> deletePair = executeFilteredBiFunctionInList((mapper, domainObject) -> mapper.delete(this, domainObject), removedObjects, domainObject -> true);
 
                 List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
                 completableFutures.addAll(updatePair.getValue());
@@ -287,7 +225,7 @@ public class UnitOfWork {
                 .filter(predicate)
                 .forEach(domainObject -> {
                     DataRepository repository = getRepository(domainObject.getClass());
-                    completableFutures.add(UnitOfWork.executeActionWithinUnit(this, () -> biFunction.apply(repository.getMapper(), domainObject)));
+                    completableFutures.add(biFunction.apply(repository.getMapper(), domainObject));
                     mappers.add(repository);
                 });
 
