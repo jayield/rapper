@@ -8,6 +8,7 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -53,6 +54,11 @@ public class DataMapperTests {
                 .thenAccept(v -> sqlConnection.close())
         ).join();
         unit = new UnitOfWork(connectionSupplier);
+    }
+
+    @After
+    public void after() {
+        unit.rollback();
     }
 
     @Test

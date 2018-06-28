@@ -3,6 +3,7 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.sql.ResultSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,6 +124,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
 
         CompletableFuture<? extends DomainObject> domainObjects = externalRepo
                 .findById(unit, (V) id)
+                .thenCompose(domainObject -> unit.commit().thenApply(aVoid -> domainObject))
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
         setExternal(t, domainObjects, sqlFieldExternal.field, sqlFieldExternal.type);
@@ -143,7 +145,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
 
         UnitOfWork unit = new UnitOfWork(ConnectionManager.getConnectionManager()::getConnection);
 
-        CompletableFuture<? extends List<? extends DomainObject>> objects = repo.findWhere(unit, pairs);
+        CompletableFuture<? extends List<? extends DomainObject>> objects = repo.findWhere(unit, pairs).thenCompose(domainObjects -> unit.commit().thenApply(aVoid -> domainObjects));
 
         setExternal(t, objects, sqlFieldExternal.field, sqlFieldExternal.type);
     }
@@ -164,11 +166,13 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         UnitOfWork unit = new UnitOfWork(ConnectionManager.getConnectionManager()::getConnection);
 
         CompletableFuture<List<N>> completableFuture = SQLUtils.query(sqlFieldExternal.selectTableQuery, unit, idValues.collect(CollectionUtils.toJsonArray()))
-                .thenCompose(resultSet -> getExternalObjects(repo, sqlFieldExternal.externalNames, resultSet)
-                                .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
-                )
+                .thenCompose(resultSet -> getExternalObjects(repo, sqlFieldExternal.externalNames, resultSet, unit)
+                        .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture)))
+                .thenCompose(nList -> unit.commit().thenApply(aVoid -> nList))
                 .exceptionally(throwable -> {
                     logger.warn("Couldn't populate externals of {} due to {}", t.getClass().getSimpleName(), throwable.getMessage());
+                    //TODO Is join necessary here?
+                    unit.rollback().join();
                     throw new DataMapperException(throwable);
                 });
 
@@ -209,11 +213,10 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param repo
      * @param foreignNames
      * @param resultSet
+     * @param unit
      * @return
      */
-    private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, io.vertx.ext.sql.ResultSet resultSet) {
-
-
+    private <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, ResultSet resultSet, UnitOfWork unit) {
         List<V> idValues = getIds(resultSet, foreignNames)
                 .stream()
                 .map(e -> (V)e)

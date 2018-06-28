@@ -8,6 +8,7 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -25,6 +26,7 @@ public class DomainObjectComparatorTests {
     private final Comparator<Car> carComparator;
     private final DomainObjectComparator<Employee> employeeComparator;
     private final Map<Class, MapperRegistry.Container> repositoryMap;
+    private UnitOfWork unit;
 
     public DomainObjectComparatorTests() throws NoSuchFieldException, IllegalAccessException {
         MapperSettings carSettings = new MapperSettings(Car.class);
@@ -47,7 +49,7 @@ public class DomainObjectComparatorTests {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
-        UnitOfWork.newCurrent(connectionManager::getConnection);
+        unit = new UnitOfWork(connectionManager::getConnection);
         SQLConnection con = connectionManager.getConnection().join();
 
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
@@ -55,15 +57,20 @@ public class DomainObjectComparatorTests {
         SQLUtils.callbackToPromise(con::commit).join();
     }
 
+    @After
+    public void after() {
+        unit.rollback();
+    }
+
     @Test
     public void testCompareCars() {
         Mapper<Car, CarKey> carMapper = MapperRegistry.getMapper(Car.class);
 
-        Car car1 = carMapper.findById(new CarKey(2, "23we45"))
+        Car car1 = carMapper.findById(unit, new CarKey(2, "23we45"))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Car not found"));
 
-        Car car2 = carMapper.findById(new CarKey(2, "23we45"))
+        Car car2 = carMapper.findById(unit, new CarKey(2, "23we45"))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Car not found"));
 
@@ -76,11 +83,11 @@ public class DomainObjectComparatorTests {
     public void testCompareBooks(){
         Mapper<Book, Long> bookMapper = MapperRegistry.getMapper(Book.class);
 
-        Book book1 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
+        Book book1 = bookMapper.findWhere(unit, new Pair<>("name", "1001 noites"))
                 .join()
                 .get(0);
 
-        Book book2 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
+        Book book2 = bookMapper.findWhere(unit, new Pair<>("name", "1001 noites"))
                 .join()
                 .get(0);
 
@@ -93,11 +100,11 @@ public class DomainObjectComparatorTests {
     public void testCompareEmployees() {
         Mapper<Employee, Integer> bookMapper = MapperRegistry.getMapper(Employee.class);
 
-        Employee employee1 = bookMapper.findWhere(new Pair<>("name", "Charles"))
+        Employee employee1 = bookMapper.findWhere(unit, new Pair<>("name", "Charles"))
                 .join()
                 .get(0);
 
-        Employee employee2 = bookMapper.findWhere(new Pair<>("name", "Bob"))
+        Employee employee2 = bookMapper.findWhere(unit, new Pair<>("name", "Bob"))
                 .join()
                 .get(0);
 

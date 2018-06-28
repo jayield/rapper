@@ -40,6 +40,8 @@ public class DataRepositoryTests {
     private Map<Class, MapperRegistry.Container> repositoryMap;
 
     private SQLConnection con;
+    private UnitOfWork unit;
+
     public DataRepositoryTests() throws NoSuchFieldException, IllegalAccessException {
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
         repositoryMapField.setAccessible(true);
@@ -48,12 +50,13 @@ public class DataRepositoryTests {
 
     @Before
     public void before() {
-        UnitOfWork.removeCurrent();
         repositoryMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
+
+        unit = new UnitOfWork(manager::getConnection);
 
         con = manager.getConnection().join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
@@ -118,13 +121,13 @@ public class DataRepositoryTests {
 
     @Test
     public void testGetNumberOfEntriesWhere(){
-        long numberOfEntries = companyRepo.getNumberOfEntries(new Pair<>("id", 1)).join();
+        long numberOfEntries = companyRepo.getNumberOfEntries(unit, new Pair<>("id", 1)).join();
         assertEquals(11, numberOfEntries);
     }
 
     @Test
     public void testGetNumberOfEntries(){
-        long numberOfEntries = companyRepo.getNumberOfEntries().join();
+        long numberOfEntries = companyRepo.getNumberOfEntries(unit).join();
         assertEquals(11, numberOfEntries);
     }
 
@@ -132,10 +135,10 @@ public class DataRepositoryTests {
 
     @Test
     public void testfindById() {
-        Optional<TopStudent> first = topStudentRepo.findById(454).join();
+        Optional<TopStudent> first = topStudentRepo.findById(unit, 454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
 
-        Optional<TopStudent> second = topStudentRepo.findById(454).join();
+        Optional<TopStudent> second = topStudentRepo.findById(unit, 454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), second.get());
@@ -145,10 +148,10 @@ public class DataRepositoryTests {
 
     @Test
     public void testfindAll() {
-        topStudentRepo.findAll().join();
+        topStudentRepo.findAll(unit).join();
         assertEquals(1, topStudentMapperify.getIfindAll().getCount());
 
-        List<TopStudent> second = topStudentRepo.findAll().join();
+        List<TopStudent> second = topStudentRepo.findAll(unit).join();
         assertEquals(2, topStudentMapperify.getIfindAll().getCount());
 
         assertMultipleRows(con, second, topStudentSelectQuery.substring(0, topStudentSelectQuery.length()-16), AssertUtils::assertTopStudent, second.size());
@@ -162,7 +165,8 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1).toInstant(), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        topStudentRepo.create(topStudent)
+        topStudentRepo.create(unit, topStudent)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -170,7 +174,7 @@ public class DataRepositoryTests {
                 .join();
 
         //Assert
-        Optional<TopStudent> first = topStudentRepo.findById(456).join();
+        Optional<TopStudent> first = topStudentRepo.findById(unit, 456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), topStudent);
@@ -184,7 +188,8 @@ public class DataRepositoryTests {
         list.add(new TopStudent(457, "Maria", null, 0, 2, 18, 2010, 0, 0));
 
         //Act
-        topStudentRepo.createAll(list)
+        topStudentRepo.createAll(unit, list)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -192,9 +197,9 @@ public class DataRepositoryTests {
                 .join();
 
         //Assert
-        Optional<TopStudent> first = topStudentRepo.findById(456).join();
+        Optional<TopStudent> first = topStudentRepo.findById(unit, 456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
-        Optional<TopStudent> second = topStudentRepo.findById(457).join();
+        Optional<TopStudent> second = topStudentRepo.findById(unit, 457).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), list.get(0));
@@ -211,16 +216,17 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3).toInstant(), firstRes.getLong(1),
                 4, 6, 7, firstRes.getLong(2), firstRes.getLong(0));
 
-        topStudentRepo.update(topStudent)
+        topStudentRepo.update(unit, topStudent)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
                 })
                 .join();
 
-        Optional<TopStudent> first = topStudentRepo.findById(454).join();
+        Optional<TopStudent> first = topStudentRepo.findById(unit, 454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
-        topStudentRepo.findById(454).join();
+        topStudentRepo.findById(unit, 454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), topStudent);
@@ -235,16 +241,17 @@ public class DataRepositoryTests {
         rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", new JsonArray().add(454), con);
         list.add(new Person(454, "Ze Miguens", new Date(1080, 2, 4).toInstant(), rs.getResults().get(0).getLong(0)));
 
-        personRepo.updateAll(list)
+        personRepo.updateAll(unit, list)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail();
                     return null;
                 })
                 .join();
 
-        Optional<Person> first = personRepo.findById(321).join();
+        Optional<Person> first = personRepo.findById(unit, 321).join();
         assertEquals(2, personMapperify.getIfindById().getCount());
-        Optional<Person> second = personRepo.findById(454).join();
+        Optional<Person> second = personRepo.findById(unit, 454).join();
         assertEquals(2, personMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), list.get(0));
@@ -255,12 +262,13 @@ public class DataRepositoryTests {
     public void testSameReferenceUpdate() {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject firstRes = rs.getRows(true).get(0);
-        CompletableFuture<Company> companyRepoById = companyRepo.findById(new Company.PrimaryKey(firstRes.getInteger("companyId"), firstRes.getInteger("companyCid")))
+        CompletableFuture<Company> companyRepoById = companyRepo.findById(unit, new Company.PrimaryKey(firstRes.getInteger("companyId"), firstRes.getInteger("companyCid")))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException("Company not found")));
 
         Employee employee = new Employee(firstRes.getInteger("id"),"Boba", firstRes.getLong("version"), companyRepoById);
 
-        employeeRepo.update(employee)
+        employeeRepo.update(unit, employee)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail();
                     return null;
@@ -284,9 +292,10 @@ public class DataRepositoryTests {
         JsonObject firstRes = rs.getRows(true).get(0);
         Employee employee = new Employee(firstRes.getInteger("id"),"Boba", firstRes.getLong("version"), null);
 
-        Company company = companyRepo.findById(new Company.PrimaryKey(1, 1)).join().orElseThrow(() -> new DataMapperException("Company not found"));
+        Company company = companyRepo.findById(unit, new Company.PrimaryKey(1, 1)).join().orElseThrow(() -> new DataMapperException("Company not found"));
         System.out.println(company.getEmployees().join());
-        employeeRepo.update(employee)
+        employeeRepo.update(unit, employee)
+                .thenCompose(aVoid -> unit.commit())
 //                .exceptionally(throwable -> {
 //                    fail();
 //                    return null;
@@ -307,14 +316,15 @@ public class DataRepositoryTests {
     public void testRemoveNNReferenceUpdate() {
         ResultSet rs = executeQuery(bookSelectQuery, new JsonArray().add("1001 noites"), con);
 
-        Author author = authorRepo.findWhere(new Pair<>("name", "Ze")).join().get(0);
+        Author author = authorRepo.findWhere(unit, new Pair<>("name", "Ze")).join().get(0);
         JsonObject firstRes = rs.getRows(true).get(0);
         assertTrue(author.getBooks().join().stream().anyMatch(book ->
                 book.getIdentityKey().equals(firstRes.getLong("id"))));
 
         Book book = new Book(firstRes.getInteger("id"), firstRes.getString("name"), firstRes.getLong("version"), null);
 
-        bookRepo.update(book)
+        bookRepo.update(unit, book)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail();
                     return null;
@@ -337,32 +347,33 @@ public class DataRepositoryTests {
     public void testUpdateReferenceUpdate() {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject firstRes = rs.getRows(true).get(0);
-        Company company = companyRepo.findById(new Company.PrimaryKey(1, 1))
+        Company company = companyRepo.findById(unit, new Company.PrimaryKey(1, 1))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Company not found"));
 
-        boolean failed = false;
+        /*boolean failed = false;
         try {
             UnitOfWork.getCurrent();
         } catch (UnitOfWorkException e){
             failed = true;
         }
-        assertTrue(failed);
+        assertTrue(failed);*/
 
-        CompletableFuture<Company> company1 = companyRepo.findById(new Company.PrimaryKey(1, 2))
+        CompletableFuture<Company> company1 = companyRepo.findById(unit, new Company.PrimaryKey(1, 2))
                 .thenApply(optionalCompany -> optionalCompany.orElseThrow(() -> new DataMapperException("Company not found")));
 
         Employee employee = new Employee(firstRes.getInteger("id"),"Boba", firstRes.getLong("version"), company1);
 
-        failed = false;
+        /*failed = false;
         try {
             UnitOfWork.getCurrent();
         } catch (UnitOfWorkException e){
             failed = true;
         }
-        assertTrue(failed);
+        assertTrue(failed);*/
 
-        employeeRepo.update(employee)
+        employeeRepo.update(unit, employee)
+                .thenCompose(aVoid -> unit.commit())
 //                .exceptionally(throwable -> {
 //                    throw new RuntimeException(throwable);
 //                    //fail();
@@ -391,14 +402,15 @@ public class DataRepositoryTests {
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testdeleteById() {
-        topStudentRepo.deleteById(454)
+        topStudentRepo.deleteById(unit, 454)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail();
                     return null;
                 })
                 .join();
 
-        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(454).join();
+        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(unit, 454).join();
         assertEquals(2, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
         assertNotFound(topStudentSelectQuery, new JsonArray().add(454), con);
@@ -408,14 +420,15 @@ public class DataRepositoryTests {
     public void testdelete() {
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
 
-        topStudentRepo.delete(topStudent)
+        topStudentRepo.delete(unit, topStudent)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
                 })
                 .join();
 
-        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(454).join();
+        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(unit, 454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
         assertNotFound(topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), con);
@@ -432,7 +445,8 @@ public class DataRepositoryTests {
         firstRes = rs.getRows(true).get(0);
         list.add(firstRes.getInteger("id"));
 
-        employeeRepo.deleteAll(list)
+        employeeRepo.deleteAll(unit, list)
+                .thenCompose(aVoid -> unit.commit())
                 .exceptionally(throwable -> {
                     fail();
                     return null;
@@ -442,11 +456,11 @@ public class DataRepositoryTests {
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
         assertNotFound(employeeSelectQuery, new JsonArray().add("Charles"), con);
 
-        Optional<Employee> optionalPerson = employeeRepo.findById(list.remove(0)).join();
+        Optional<Employee> optionalPerson = employeeRepo.findById(unit, list.remove(0)).join();
         assertTrue(3 >= employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson.isPresent());
 
-        Optional<Employee> optionalPerson2 = employeeRepo.findById(list.remove(0)).join();
+        Optional<Employee> optionalPerson2 = employeeRepo.findById(unit, list.remove(0)).join();
         assertTrue(4 >= employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson2.isPresent());
     }

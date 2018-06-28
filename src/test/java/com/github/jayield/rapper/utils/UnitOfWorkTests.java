@@ -42,6 +42,7 @@ public class UnitOfWorkTests {
     private SQLConnection con;
     private Map<Class, DataRepository> repositoryMap;
     private SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier;
+    private UnitOfWork unit;
 
     public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
@@ -63,32 +64,31 @@ public class UnitOfWorkTests {
             Field removedObjectsField = UnitOfWork.class.getDeclaredField("removedObjects");
             removedObjectsField.setAccessible(true);
 
-            this.newObjects = (Queue<DomainObject>) newObjectsField.get(UnitOfWork.getCurrent());
-            this.clonedObjects = (Queue<DomainObject>) clonedObjectsField.get(UnitOfWork.getCurrent());
-            this.dirtyObjects = (Queue<DomainObject>) dirtyObjectsField.get(UnitOfWork.getCurrent());
-            this.removedObjects = (Queue<DomainObject>) removedObjectsField.get(UnitOfWork.getCurrent());
+            this.newObjects = (Queue<DomainObject>) newObjectsField.get(unit);
+            this.clonedObjects = (Queue<DomainObject>) clonedObjectsField.get(unit);
+            this.dirtyObjects = (Queue<DomainObject>) dirtyObjectsField.get(unit);
+            this.removedObjects = (Queue<DomainObject>) removedObjectsField.get(unit);
         }
     }
 
     @Before
     public void before()throws NoSuchFieldException, IllegalAccessException {
         repositoryMap.clear();
-        UnitOfWork.removeCurrent();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
         connectionSupplier = manager::getConnection;
 
-        UnitOfWork.newCurrent(connectionSupplier.wrap());
-        UnitOfWork current = UnitOfWork.getCurrent();
+        unit = new UnitOfWork(manager::getConnection);
 
-        con = current.getConnection().join();
+        con = manager.getConnection().join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
         SQLUtils.<Void>callbackToPromise(ar -> con.commit(ar)).join();
 
         objectsContainer = new ObjectsContainer(con);
+        con.close();
         setupLists();
 
         employeeRepo = MapperRegistry.getRepository(Employee.class);
@@ -106,8 +106,7 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        UnitOfWork.getCurrent()
-                .commit()
+        unit.commit()
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -150,15 +149,14 @@ public class UnitOfWorkTests {
 
         //Create an Employee
         CompletableFuture<Company> companyCompletableFuture = companyRepo
-                .findById(new Company.PrimaryKey(1, 1))
+                .findById(unit, new Company.PrimaryKey(1, 1))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
 
         Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
 
         newObjects.add(employee);
 
-        UnitOfWork.getCurrent()
-                .commit()
+        unit.commit()
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     return null;
@@ -196,7 +194,7 @@ public class UnitOfWorkTests {
         repositoryMap.put(Author.class, authorContainer);
         repositoryMap.put(Book.class, bookContainer);
 
-        CompletableFuture<List<Author>> authorCP = authorContainer.getDataRepository().findWhere(new Pair<>("name", "Ze"));
+        CompletableFuture<List<Author>> authorCP = authorContainer.getDataRepository().findWhere(unit, new Pair<>("name", "Ze"));
         authorCP.join();
         System.out.println(authorCP.join());
         System.out.println(authorCP.join().get(0).getBooks().join());
@@ -204,8 +202,7 @@ public class UnitOfWorkTests {
 
         newObjects.add(book);
 
-        UnitOfWork.getCurrent()
-                .commit()
+        unit.commit()
                 .exceptionally(throwable -> {
                     fail(throwable.getMessage());
                     throw new RuntimeException(throwable);
@@ -246,8 +243,7 @@ public class UnitOfWorkTests {
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
         final boolean[] failed = {false};
-        UnitOfWork.getCurrent()
-                .commit()
+        unit.commit()
                 .exceptionally(throwable -> {
                     failed[0] = true;
                     return null;
@@ -282,26 +278,25 @@ public class UnitOfWorkTests {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
         SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_COMMITTED.getType());
 
-        Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
-        Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
+        Employee employee = employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().get(0);
+        Employee employee2 = employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().get(0);
 
-        UnitOfWork unitOfWork = UnitOfWork.newCurrent(connectionSqlSupplier.wrap());
-        CompletableFuture<Void> future1 = employeeRepo.deleteById(employee.getIdentityKey());
-        CompletableFuture<Void> future = employeeRepo.deleteById(employee2.getIdentityKey());
+        UnitOfWork unitOfWork = new UnitOfWork(connectionSqlSupplier.wrap());
+        CompletableFuture<Void> future1 = employeeRepo.deleteById(unitOfWork, employee.getIdentityKey());
+        CompletableFuture<Void> future = employeeRepo.deleteById(unitOfWork, employee2.getIdentityKey());
 
         CompletableFuture.allOf(future, future1)
-                .thenApply(aVoid -> UnitOfWork.executeActionWithinUnit(unitOfWork, () -> companyRepo.deleteById(new Company.PrimaryKey(1, 1))))
+                .thenCompose(aVoid -> companyRepo.deleteById(unitOfWork, new Company.PrimaryKey(1, 1)))
                 .thenCompose(voidCompletableFuture -> unitOfWork.commit())
                 .exceptionally(throwable -> {
                     fail();
                     return null;
                 })
                 .join();
-        UnitOfWork.removeCurrent();
 
-        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Bob")).join().isEmpty());
-        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Charles")).join().isEmpty());
-        assertTrue(!companyRepo.findById(new Company.PrimaryKey(1, 1)).join().isPresent());
+        assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().isEmpty());
+        assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().isEmpty());
+        assertTrue(!companyRepo.findById(unit, new Company.PrimaryKey(1, 1)).join().isPresent());
     }
 
     private void assertIdentityMaps(Field identityMapField, List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {

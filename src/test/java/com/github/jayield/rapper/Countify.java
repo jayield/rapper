@@ -17,6 +17,9 @@
 
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.utils.UnitOfWork;
+
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -27,9 +30,9 @@ public class Countify {
 
     static class Counter<T, R> implements ICounter<T, R> {
         private int count=0;
-        private final Function<T, R> inner;
+        private final BiFunction<UnitOfWork, T, R> inner;
 
-        public Counter(Function<T, R> inner) {
+        public Counter(BiFunction<UnitOfWork, T, R> inner) {
             this.inner = inner;
         }
 
@@ -39,13 +42,13 @@ public class Countify {
         }
 
         @Override
-        public R apply(T arg) {
+        public R apply(UnitOfWork unit, T arg) {
             count++;
-            return inner.apply(arg);
+            return inner.apply(unit, arg);
         }
     }
 
-    public static <T,R> ICounter of(Function<T,R> inner) {
+    public static <T,R> ICounter of(BiFunction<UnitOfWork, T, R> inner) {
         return new Counter<>(inner);
     }
 }

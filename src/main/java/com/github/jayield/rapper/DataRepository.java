@@ -168,7 +168,7 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         }));
 
         return future != null
-                ? CompletableFuture.completedFuture(null)
+                ? future.thenApply(t -> null)
                 : findById(unit, k)
                 .thenApply(t -> {
                     T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
@@ -194,10 +194,8 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                     })
             );
 
-            completableFutures.add(future == null
-                    ?
-                    findById(unit, k).thenAccept(t -> t.ifPresent(t1 -> t1.markRemoved(unit)))
-                    :
+            completableFutures.add(future == null ?
+                    findById(unit, k).thenAccept(t -> t.ifPresent(t1 -> t1.markRemoved(unit))) :
                     future);
         });
 
