@@ -106,12 +106,7 @@ public class UnitOfWorkTests {
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        unit.commit()
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        unit.commit().join();
         //Get new connection since the commit will close the current one
         System.out.println("checking connection "+ con);
         con = connectionSupplier.get().join();
@@ -156,12 +151,7 @@ public class UnitOfWorkTests {
 
         newObjects.add(employee);
 
-        unit.commit()
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        unit.commit().join();
         //Get new connection since the commit will close the current one
         con = connectionSupplier.get().join();
 
@@ -202,13 +192,7 @@ public class UnitOfWorkTests {
 
         newObjects.add(book);
 
-        unit.commit()
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    throw new RuntimeException(throwable);
-//                    return null;
-                })
-                .join();
+        unit.commit().join();
         //Get new connection since the commit will close the current one
         con = connectionSupplier.get().join();
 
@@ -280,6 +264,7 @@ public class UnitOfWorkTests {
 
         Employee employee = employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().get(0);
+        unit.commit().join();
 
         UnitOfWork unitOfWork = new UnitOfWork(connectionSqlSupplier.wrap());
         CompletableFuture<Void> future1 = employeeRepo.deleteById(unitOfWork, employee.getIdentityKey());
@@ -288,10 +273,6 @@ public class UnitOfWorkTests {
         CompletableFuture.allOf(future, future1)
                 .thenCompose(aVoid -> companyRepo.deleteById(unitOfWork, new Company.PrimaryKey(1, 1)))
                 .thenCompose(voidCompletableFuture -> unitOfWork.commit())
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
                 .join();
 
         assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().isEmpty());

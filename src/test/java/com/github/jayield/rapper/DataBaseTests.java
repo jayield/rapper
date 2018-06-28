@@ -21,14 +21,14 @@ import static org.junit.Assert.assertEquals;
 public class DataBaseTests {
 
     private ConnectionManager connectionManager;
-    private SQLConnection con;
 
     @Before
     public void before() {
         connectionManager = ConnectionManager.getConnectionManager(
-                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
-                "SA", "");
-        con = connectionManager.getConnection().join();
+                "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
+                "SA",
+                ""
+        );
     }
 
     @Test

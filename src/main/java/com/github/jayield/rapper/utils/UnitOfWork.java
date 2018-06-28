@@ -4,14 +4,15 @@ import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.Mapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import com.github.jayield.rapper.exceptions.UnitOfWorkException;
 import io.vertx.ext.sql.SQLConnection;
+import io.vertx.ext.sql.TransactionIsolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.BiConsumer;
@@ -19,7 +20,6 @@ import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-import static com.github.jayield.rapper.utils.ConnectionManager.getConnectionManager;
 import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 
 public class UnitOfWork {
@@ -42,6 +42,14 @@ public class UnitOfWork {
         this.connectionSupplier = connectionSupplier;
     }
 
+    public UnitOfWork() {
+        this.connectionSupplier = ConnectionManager.getConnectionManager()::getConnection;
+    }
+
+    public UnitOfWork(TransactionIsolation isolation) {
+        this.connectionSupplier = () -> ConnectionManager.getConnectionManager().getConnection(isolation.getType());
+    }
+
     public CompletableFuture<SQLConnection> getConnection() {
         if(connection == null) {
             connection = connectionSupplier.get();
@@ -50,9 +58,9 @@ public class UnitOfWork {
         return connection;
     }
 
-    private CompletableFuture<Void> closeConnection(){ //TODO remove join
+    private CompletableFuture<Void> closeConnection(){
         return connection.thenAccept(SQLConnection::close)
-                .thenAccept(v -> connection = null); // Not sure of this join maybe close connection should return CF<Void>
+                .thenAccept(v -> connection = null);
     }
 
     /**

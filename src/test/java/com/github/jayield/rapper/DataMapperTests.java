@@ -86,7 +86,8 @@ public class DataMapperTests {
                     if(resultSet.getRows(true).isEmpty())
                         fail("Database has no data");
                     assertPerson(people.remove(0), resultSet.getRows(true).get(0));
-                }).join();
+                })
+                .join();
     }
 
     @Test
@@ -104,7 +105,7 @@ public class DataMapperTests {
                     assertCar(cars.remove(0), resultSet.getRows(true).get(0));
                 })
                 .thenAccept(v -> SQLUtils.callbackToPromise(con::rollback))
-                .thenAccept(v -> con.close()).join();
+                .join();
     }
 
     @Test
@@ -213,12 +214,7 @@ public class DataMapperTests {
     public void testSimpleCreate() {
         SQLConnection con = unit.getConnection().join();
         Person person = new Person(123, "abc", new Date(1969, 6, 9).toInstant(), 0);
-        personMapper.create(unit, person)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        personMapper.create(unit, person).join();
         assertSingleRow(person, personSelectQuery, new JsonArray().add(person.getNif()), AssertUtils::assertPerson, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -227,12 +223,7 @@ public class DataMapperTests {
     public void testEmbeddedIdCreate() {
         SQLConnection con = unit.getConnection().join();
         Car car = new Car(1, "58en60", "Mercedes", "ES1", 0);
-        carMapper.create(unit, car)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        carMapper.create(unit, car).join();
         assertSingleRow(car, carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -242,10 +233,6 @@ public class DataMapperTests {
         SQLConnection con = unit.getConnection().join();
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1).toInstant(), 0, 1, 20, 2016, 0, 0);
         topStudentMapper.create(unit, topStudent)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
         assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), AssertUtils::assertTopStudent, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -260,10 +247,6 @@ public class DataMapperTests {
 
         Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
         employeeMapper.create(unit, employee)
-//                .exceptionally(throwable -> {
-//                    fail(throwable.getMessage());
-//                    return null;
-//                })
                 .join();
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Hugo"), AssertUtils::assertEmployee, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -274,10 +257,6 @@ public class DataMapperTests {
         SQLConnection con = unit.getConnection().join();
         Employee employee = new Employee(0, "Hugo", 0, null);
         employeeMapper.create(unit, employee)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Hugo"), AssertUtils::assertEmployee, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -288,10 +267,6 @@ public class DataMapperTests {
         SQLConnection con = unit.getConnection().join();
         Dog dog = new Dog(new Dog.DogPK("Bobby", "Pitbull"), 5);
         dogMapper.create(unit, dog)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
         assertSingleRow(dog, dogSelectQuery, new JsonArray().add("Bobby").add("Pitbull"), AssertUtils::assertDog, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -304,12 +279,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Person where nif = ?", new JsonArray().add(321), con);
         Person person = new Person(321, "Maria", new Date(2010, 2, 3).toInstant(), rs.getResults().get(0).getLong(0));
 
-        personMapper.update(unit, person)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        personMapper.update(unit, person).join();
 
         assertSingleRow(person, personSelectQuery, new JsonArray().add(person.getNif()), AssertUtils::assertPerson, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -321,12 +291,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery("select CAST(version as bigint) version from Car where owner = ? and plate = ?", new JsonArray().add(2).add( "23we45"), con);
         Car car = new Car(2, "23we45", "Mitsubishi", "lancer evolution", rs.getResults().get(0).getLong(0));
 
-        carMapper.update(unit, car)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        carMapper.update(unit, car).join();
 
         assertSingleRow(car, carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -342,12 +307,7 @@ public class DataMapperTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3).toInstant(), first.getLong(1),
                 4, 6, 7, first.getLong(2), first.getLong(0));
 
-        topStudentMapper.update(unit, topStudent)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        topStudentMapper.update(unit, topStudent).join();
 
         assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), AssertUtils::assertTopStudent, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -363,12 +323,7 @@ public class DataMapperTests {
                         .findById(unit, new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
 
-        employeeMapper.update(unit, employee)
-//                .exceptionally(throwable -> {
-//                    fail(throwable.getMessage());
-//                    return null;
-//                })
-                .join();
+        employeeMapper.update(unit, employee).join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployee, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -383,12 +338,7 @@ public class DataMapperTests {
                 first.getInteger("id"),"Boba",
                 first.getLong("version"), null);
 
-        employeeMapper.update(unit, employee)
-//                .exceptionally(throwable -> {
-//                    fail();
-//                    return null;
-//                })
-                .join();
+        employeeMapper.update(unit, employee).join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployee, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
@@ -403,12 +353,7 @@ public class DataMapperTests {
                 new Dog.DogPK(
                         first.getString("name"),
                         first.getString("race")), 6);
-        dogMapper.update(unit, dog)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        dogMapper.update(unit, dog).join();
         assertSingleRow(dog, dogSelectQuery, new JsonArray().add("Doggy").add("Bulldog"), AssertUtils::assertDog, con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -417,12 +362,7 @@ public class DataMapperTests {
     @Test
     public void testSimpleDeleteById() {
         SQLConnection con = unit.getConnection().join();
-        personMapper.deleteById(unit, 321)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        personMapper.deleteById(unit, 321).join();
         assertNotFound(personSelectQuery, new JsonArray().add(321), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -430,12 +370,7 @@ public class DataMapperTests {
     @Test
     public void testEmbeddedDeleteById() {
         SQLConnection con = unit.getConnection().join();
-        carMapper.deleteById(unit, new CarKey(2, "23we45"))
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        carMapper.deleteById(unit, new CarKey(2, "23we45")).join();
         assertNotFound(carSelectQuery, new JsonArray().add(2).add("23we45"), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -443,12 +378,7 @@ public class DataMapperTests {
     @Test
     public void testHierarchyDeleteById() {
         SQLConnection con = unit.getConnection().join();
-        topStudentMapper.deleteById(unit, 454)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        topStudentMapper.deleteById(unit, 454).join();
         assertNotFound(topStudentSelectQuery, new JsonArray().add(454), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -457,12 +387,7 @@ public class DataMapperTests {
     public void testSingleExternalDeleteById() {
         SQLConnection con = unit.getConnection().join();
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
-        employeeMapper.deleteById(unit, rs.getRows(true).get(0).getInteger("id"))
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        employeeMapper.deleteById(unit, rs.getRows(true).get(0).getInteger("id")).join();
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -472,12 +397,7 @@ public class DataMapperTests {
     public void testSimpleDelete() {
         SQLConnection con = unit.getConnection().join();
         Person person = new Person(321, null, null, 0);
-        personMapper.delete(unit, person)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        personMapper.delete(unit, person).join();
         assertNotFound(personSelectQuery, new JsonArray().add(321), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -486,12 +406,7 @@ public class DataMapperTests {
     public void testEmbeddedDelete() {
         SQLConnection con = unit.getConnection().join();
         Car car = new Car(2, "23we45", null, null, 0);
-        carMapper.delete(unit, car)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        carMapper.delete(unit, car).join();
         assertNotFound(carSelectQuery, new JsonArray().add(2).add( "23we45"), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -500,12 +415,7 @@ public class DataMapperTests {
     public void testHierarchyDelete() {
         SQLConnection con = unit.getConnection().join();
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
-        topStudentMapper.delete(unit, topStudent)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        topStudentMapper.delete(unit, topStudent).join();
         assertNotFound(topStudentSelectQuery, new JsonArray().add(454), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }
@@ -519,12 +429,7 @@ public class DataMapperTests {
                 companyMapper
                         .findById(unit, new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
-        employeeMapper.delete(unit, employee)
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
-                .join();
+        employeeMapper.delete(unit, employee).join();
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
         SQLUtils.callbackToPromise(con::rollback).thenAccept(v -> con.close());
     }

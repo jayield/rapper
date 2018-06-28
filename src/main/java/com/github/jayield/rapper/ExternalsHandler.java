@@ -4,17 +4,14 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
-import io.vertx.ext.sql.ResultSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,8 +56,6 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                     populate.execute(t, sqlFieldExternal);
                 });
     }
-
-
 
     /**
      * It will get the external object's Ids and call its mapper to obtain all external objects
@@ -135,35 +130,35 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         externals.stream()
                 .filter(sqlFieldExternal -> sqlFieldExternal.getPopulateStrategy() == PopulateMultiReference.class)
                 .forEach(sqlFieldExternal -> {
-            try {
-                sqlFieldExternal.field.setAccessible(true);
-                CompletableFuture prevExternalCF = (CompletableFuture) sqlFieldExternal.field.get(prevDomainObj);
-                CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
+                    try {
+                        sqlFieldExternal.field.setAccessible(true);
+                        CompletableFuture prevExternalCF = (CompletableFuture) sqlFieldExternal.field.get(prevDomainObj);
+                        CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
 
-                List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
+                        List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
 
-                //external might be a list, in case of externalTable or a DomainObject in case a singleReference
+                        //external might be a list, in case of externalTable or a DomainObject in case a singleReference
 
-                /*
-                 * Cases:
-                 * 1º New Reference - prevExternalCF = null && externalCF = newValue
-                 * 2º Update Reference - prevExternalCF = value && externalCF = newValue
-                 * 3º Remove Reference - prevExternalCF = value && externalCF = null
-                 * 4º Do nothing - prevExternalCF = null && externalCF = null
-                 */
+                        /*
+                         * Cases:
+                         * 1º New Reference - prevExternalCF = null && externalCF = newValue
+                         * 2º Update Reference - prevExternalCF = value && externalCF = newValue
+                         * 3º Remove Reference - prevExternalCF = value && externalCF = null
+                         * 4º Do nothing - prevExternalCF = null && externalCF = null
+                         */
 
-                if(prevExternalCF == null && externalCF != null){
-                    changeCFReferences(obj, externalCF, domainObjectExternals, true);
-                } else if (prevExternalCF != null && externalCF != null) {
-                    changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
-                    changeCFReferences(obj, externalCF, domainObjectExternals, true);
-                } else if (prevExternalCF != null) {
-                    changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
-                }
-            } catch (IllegalAccessException e) {
-                throw new DataMapperException(e);
-            }
-        });
+                        if (prevExternalCF == null && externalCF != null) {
+                            changeCFReferences(obj, externalCF, domainObjectExternals, true);
+                        } else if (prevExternalCF != null && externalCF != null) {
+                            changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
+                            changeCFReferences(obj, externalCF, domainObjectExternals, true);
+                        } else if (prevExternalCF != null) {
+                            changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
+                        }
+                    } catch (IllegalAccessException e) {
+                        throw new DataMapperException(e);
+                    }
+                });
     }
 
     public void removeReferences(T obj) {
@@ -185,18 +180,18 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         externals.stream()
                 .filter(sqlFieldExternal -> sqlFieldExternal.getPopulateStrategy() == PopulateMultiReference.class)
                 .forEach(sqlFieldExternal -> {
-            try {
-                sqlFieldExternal.field.setAccessible(true);
-                CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
+                    try {
+                        sqlFieldExternal.field.setAccessible(true);
+                        CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
 
-                List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
+                        List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
 
-                //external might be a list, in case of externalTable or a DomainObject in case a singleReference
-                if (externalCF != null) changeCFReferences(obj, externalCF, domainObjectExternals, isToStore);
-            } catch (IllegalAccessException e) {
-                throw new DataMapperException(e);
-            }
-        });
+                        //external might be a list, in case of externalTable or a DomainObject in case a singleReference
+                        if (externalCF != null) changeCFReferences(obj, externalCF, domainObjectExternals, isToStore);
+                    } catch (IllegalAccessException e) {
+                        throw new DataMapperException(e);
+                    }
+                });
     }
 
     /**

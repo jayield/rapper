@@ -53,8 +53,10 @@ public class DataRepositoryTests {
         repositoryMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
-                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
-                "SA", "");
+                "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
+                "SA",
+                ""
+        );
 
         unit = new UnitOfWork(manager::getConnection);
 
@@ -114,9 +116,8 @@ public class DataRepositoryTests {
 
     @After
     public void after(){
-        if(con != null){
-            con.close();
-        }
+        SQLUtils.callbackToPromise(con::rollback).join();
+        con.close();
     }
 
     @Test
@@ -167,10 +168,6 @@ public class DataRepositoryTests {
         //Act
         topStudentRepo.create(unit, topStudent)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
 
         //Assert
@@ -190,10 +187,6 @@ public class DataRepositoryTests {
         //Act
         topStudentRepo.createAll(unit, list)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
 
         //Assert
@@ -218,10 +211,6 @@ public class DataRepositoryTests {
 
         topStudentRepo.update(unit, topStudent)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
 
         Optional<TopStudent> first = topStudentRepo.findById(unit, 454).join();
@@ -243,10 +232,6 @@ public class DataRepositoryTests {
 
         personRepo.updateAll(unit, list)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
                 .join();
 
         Optional<Person> first = personRepo.findById(unit, 321).join();
@@ -269,10 +254,6 @@ public class DataRepositoryTests {
 
         employeeRepo.update(unit, employee)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployeeWithExternals, con);
@@ -296,10 +277,6 @@ public class DataRepositoryTests {
         System.out.println(company.getEmployees().join());
         employeeRepo.update(unit, employee)
                 .thenCompose(aVoid -> unit.commit())
-//                .exceptionally(throwable -> {
-//                    fail();
-//                    return null;
-//                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployeeWithExternals, con);
@@ -325,10 +302,6 @@ public class DataRepositoryTests {
 
         bookRepo.update(unit, book)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
                 .join();
 
         assertEquals(0, authorMapperify.getIfindById().getCount());
@@ -351,33 +324,13 @@ public class DataRepositoryTests {
                 .join()
                 .orElseThrow(() -> new DataMapperException("Company not found"));
 
-        /*boolean failed = false;
-        try {
-            UnitOfWork.getCurrent();
-        } catch (UnitOfWorkException e){
-            failed = true;
-        }
-        assertTrue(failed);*/
-
         CompletableFuture<Company> company1 = companyRepo.findById(unit, new Company.PrimaryKey(1, 2))
                 .thenApply(optionalCompany -> optionalCompany.orElseThrow(() -> new DataMapperException("Company not found")));
 
         Employee employee = new Employee(firstRes.getInteger("id"),"Boba", firstRes.getLong("version"), company1);
 
-        /*failed = false;
-        try {
-            UnitOfWork.getCurrent();
-        } catch (UnitOfWorkException e){
-            failed = true;
-        }
-        assertTrue(failed);*/
-
         employeeRepo.update(unit, employee)
                 .thenCompose(aVoid -> unit.commit())
-//                .exceptionally(throwable -> {
-//                    throw new RuntimeException(throwable);
-//                    //fail();
-//                })
                 .join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployeeWithExternals, con);
@@ -404,10 +357,6 @@ public class DataRepositoryTests {
     public void testdeleteById() {
         topStudentRepo.deleteById(unit, 454)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
                 .join();
 
         Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(unit, 454).join();
@@ -422,10 +371,6 @@ public class DataRepositoryTests {
 
         topStudentRepo.delete(unit, topStudent)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail(throwable.getMessage());
-                    return null;
-                })
                 .join();
 
         Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(unit, 454).join();
@@ -447,10 +392,6 @@ public class DataRepositoryTests {
 
         employeeRepo.deleteAll(unit, list)
                 .thenCompose(aVoid -> unit.commit())
-                .exceptionally(throwable -> {
-                    fail();
-                    return null;
-                })
                 .join();
 
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
