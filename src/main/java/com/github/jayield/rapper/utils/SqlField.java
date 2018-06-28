@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -113,7 +115,7 @@ public class SqlField {
         public final String[] externalNames;
         public final String selectTableQuery;
         public final Object mon = new Object();
-        private final List<Integer> values;
+        private final Class<? extends Populate> populateStrategy;
         private Object[] idValues;
 
         //TODO if name defined check if type == CompletableFuture<DomainObject>, else check type == CompletableFuture<List<DomainObject>>
@@ -126,7 +128,7 @@ public class SqlField {
             foreignNames = annotation.foreignName();
             externalNames = annotation.externalName();
             selectTableQuery = buildSelectQuery(annotation.table());
-            values = getBytes(annotation);
+            populateStrategy = getStrategy(annotation);
         }
 
         private static String buildSelectQueryValue(Field field, String pref) {
@@ -141,12 +143,16 @@ public class SqlField {
             return sb.toString();
         }
 
+
+
         /**
          * Used for ExternalsHandler mapper to know what to execute, depending on ColumnName values
          * @param annotation ColumnName annotation
          * @return
          */
-        private ArrayList<Integer> getBytes(ColumnName annotation) {
+
+
+        private Class<? extends Populate> getStrategy(ColumnName annotation) {
             try {
                 String[] nameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("name").getDefaultValue();
                 String[] foreignNameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("foreignName").getDefaultValue();
@@ -157,12 +163,19 @@ public class SqlField {
                 if (!nameEqualsDefaultValue && !foreignNameEqualsDefaultValue)
                     throw new DataMapperException("The annotation ColumnName shouldn't have both name and foreignName defined!");
 
-                ArrayList<Integer> bytes = new ArrayList<>(4);
-                bytes.add(Arrays.equals(annotation.name(), nameDefaultValue) ? 0 : 1);
-                bytes.add(Arrays.equals(annotation.foreignName(), foreignNameDefaultValue) ? 0 : 1);
-                bytes.add(annotation.table().equals(tableDefaultValue) ? 0 : 1);
-                bytes.add(Arrays.equals(annotation.externalName(), nameDefaultValue) ? 0 : 1);
-                return bytes;
+                boolean p1 = Arrays.equals(annotation.name(), nameDefaultValue);
+                boolean p2 = Arrays.equals(annotation.foreignName(), foreignNameDefaultValue);
+                boolean p3 = p2 && annotation.table().equals(tableDefaultValue) && Arrays.equals(annotation.externalName(), nameDefaultValue);
+
+                return Stream.of(
+                        new Pair<>(PopulateSingleReference.class, p1),
+                        new Pair<>(PopulateWithExternalTable.class, p3),
+                        new Pair<>(PopulateMultiReference.class, p2))
+                        .filter(Pair::getValue)
+                        .findFirst()
+                        .map(Pair::getKey)
+                        .orElseThrow(() -> new DataMapperException("The annotation is invalid " + annotation));
+
             } catch (NoSuchMethodException e) {
                 throw new DataMapperException(e);
             }
@@ -183,7 +196,6 @@ public class SqlField {
             try {
                 field.setAccessible(true);
                 CompletableFuture<? extends DomainObject> cp = (CompletableFuture<? extends DomainObject>) field.get(obj);
-                //TODO remove join
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
                 cp = cp == null ? CompletableFuture.completedFuture(null) : cp;
 
@@ -194,20 +206,11 @@ public class SqlField {
                                 .map(sqlFieldId -> sqlFieldId.setValueInStatement(domainObject)).collect(Collectors.toList()))
                         .thenApply(list -> list.stream().flatMap(s -> s))
                 );
-//                DomainObject domainObject = cp != null ? cp.join() : null;
-//                MapperRegistry.getMapperSettings(domainObjectType)
-//                        .getIds()
-//                        .forEach(sqlFieldId -> {
-//                            sqlFieldId.setValueInStatement(domainObject);
-//                        });
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }
         }
 
-        public List<Integer> getValues() {
-            return values;
-        }
 
         public Object[] getIdValues() {
             return idValues;
@@ -215,6 +218,10 @@ public class SqlField {
 
         public void setIdValues(Object[] idValues) {
             this.idValues = idValues;
+        }
+
+        public Class<? extends Populate> getPopulateStrategy() {
+            return populateStrategy;
         }
     }
 }

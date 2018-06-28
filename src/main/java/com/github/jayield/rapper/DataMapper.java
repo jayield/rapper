@@ -11,6 +11,9 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigDecimal;
+import java.sql.*;
+import java.sql.Date;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
@@ -108,13 +111,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public CompletableFuture<Void> create(UnitOfWork unit, T obj) {
         Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
 
-        if (parentMapper.isPresent()) {
-            return parentMapper
-                    .get()
-                    .create(unit, obj)
-                    .thenCompose(ignored -> createAux(unit, obj));
-        } else
-            return createAux(unit, obj);
+        return parentMapper.map(parent -> parent.create(unit, obj))
+                .orElse(CompletableFuture.completedFuture(null))
+                .thenCompose(ignored -> createAux(unit, obj));
     }
 
     @Override

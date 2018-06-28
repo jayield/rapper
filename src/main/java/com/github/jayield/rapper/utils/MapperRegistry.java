@@ -12,7 +12,7 @@ public class MapperRegistry {
 
     private static Map<Class, Container> repositoryMap = new HashMap<>();
 
-    private static<T extends DomainObject<K>, K> Container<T, K> getContainer(Class<T> type) {
+    public static<T extends DomainObject<K>, K> Container<T, K> getContainer(Class<T> type) {
         return repositoryMap.computeIfAbsent(type, aClass -> {
             MapperSettings mapperSettings = new MapperSettings(aClass);
             ExternalsHandler<T, K> externalHandler = new ExternalsHandler<>(mapperSettings);
