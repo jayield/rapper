@@ -423,21 +423,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .filter(f -> f.identity && !f.isFromParent())
                 .forEach(field -> {
                     try {
-
                         field.field.setAccessible(true);
-                        field.field.set(obj, keys.getValue(0));
-//                        String url = ConnectionManager.getConnectionManager().getUrl()
-//                        if (url.toLowerCase().contains("sqlserver")) {
-//                            BigDecimal bigDecimal = rs.getBigDecimal(1);
-//                            Object key;
-//
-//                            if (field.field.getType() == Integer.class)
-//                                key = bigDecimal.intValue();
-//                            else key = bigDecimal.longValue();
-//
-//                            field.field.set(obj, key);
-//                        } else
-//                            field.field.set(obj, rs.getObject(1, field.field.getType()));   //Doesn't work on sqlServer, the type of GeneratedKey is bigDecimal always
+                        String url = ConnectionManager.getConnectionManager().getUrl();
+                        field.field.set(obj,
+                                url.toLowerCase().contains("sqlserver")
+                                        ? field.field.getType() == Integer.class
+                                            ?  keys.getInteger(0) : keys.getLong(0)
+                                        : keys.getValue(0) //Doesn't work on sqlServer, the type of GeneratedKey is bigDecimal always
+                        );
                     } catch (IllegalAccessException e) {
                         throw new DataMapperException(e);
                     }

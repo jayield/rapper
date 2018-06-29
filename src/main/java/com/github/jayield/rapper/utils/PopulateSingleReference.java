@@ -38,7 +38,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
         Object id;
         Constructor<?> externalPrimaryKeyConstructor = container.getMapperSettings().getPrimaryKeyConstructor();
         if (externalPrimaryKeyConstructor == null){
-            id = idValues.findFirst().get();
+            id = idValues.findFirst().orElse(null);
         }
         else {
             try {
