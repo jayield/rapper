@@ -59,7 +59,7 @@ public class DomainObjectComparatorTests {
 
     @After
     public void after() {
-        unit.rollback();
+        unit.rollback().join();
     }
 
     @Test

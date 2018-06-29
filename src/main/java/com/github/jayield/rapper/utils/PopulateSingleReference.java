@@ -1,6 +1,5 @@
 package com.github.jayield.rapper.utils;
 
-import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.ExternalsHandler;
 import com.github.jayield.rapper.exceptions.DataMapperException;
@@ -9,7 +8,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
@@ -20,13 +18,13 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
 
     @Override
     public Stream<Object> idValues(T t, SqlField.SqlFieldExternal sqlFieldExternal) {
-        return Arrays.stream(sqlFieldExternal.getIdValues());
+        return Arrays.stream(sqlFieldExternal.getForeignKey());
     }
 
     /**
      * This method will populate the CompletableFuture<DomainObject> belonging to T. This shall be called only when T has a single reference to the external.
      * This method will call th external's mapper findById. The id value(s) will be given by when making a query on T, when converting it to in-memory object (mapper method in DataMapper), it will
-     * assign the id value(s) to the SqlFieldExternal, that will later be retrieved by sqlFieldExternal.getIdValues()
+     * assign the id value(s) to the SqlFieldExternal, that will later be retrieved by sqlFieldExternal.getForeignKey()
      *
      * @param sqlFieldExternal
      * @param container
@@ -43,7 +41,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
         else {
             try {
                 id = externalPrimaryKeyConstructor.newInstance();
-                Object[] idValues1 = sqlFieldExternal.getIdValues();
+                Object[] idValues1 = sqlFieldExternal.getForeignKey();
                 Field[] declaredFields = container.getMapperSettings()
                         .getPrimaryKeyType()
                         .getDeclaredFields();

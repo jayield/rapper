@@ -120,16 +120,16 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
     // Go to externals check if they have a SingleExternalReference,
     // if they do, go to that reference, check if they have the same reference in opposite way
     // and if they do, add on that list the object
-    public void insertReferences(T obj) {
-        changeReferences(obj, true);
+    public CompletableFuture<Void> insertReferences(T obj) {
+        return changeReferences(obj, true);
     }
 
-    public void updateReferences(T prevDomainObj, T obj) {
-        if (externals == null) return;
+    public CompletableFuture<Void> updateReferences(T prevDomainObj, T obj) {
+        if (externals == null) return CompletableFuture.completedFuture(null);
 
-        externals.stream()
-                .filter(sqlFieldExternal -> sqlFieldExternal.getPopulateStrategy() == PopulateMultiReference.class)
-                .forEach(sqlFieldExternal -> {
+        return CompletableFuture.allOf(externals.stream()
+                .filter(sqlFieldExternal -> sqlFieldExternal.getPopulateStrategy() != PopulateMultiReference.class)
+                .map(sqlFieldExternal -> {
                     try {
                         sqlFieldExternal.field.setAccessible(true);
                         CompletableFuture prevExternalCF = (CompletableFuture) sqlFieldExternal.field.get(prevDomainObj);
@@ -147,26 +147,33 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                          * 4º Do nothing - prevExternalCF = null && externalCF = null
                          */
 
-                        if (prevExternalCF == null && externalCF != null) {
+                        /*if (prevExternalCF == null && externalCF != null) {
                             changeCFReferences(obj, externalCF, domainObjectExternals, true);
                         } else if (prevExternalCF != null && externalCF != null) {
                             changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
                             changeCFReferences(obj, externalCF, domainObjectExternals, true);
                         } else if (prevExternalCF != null) {
                             changeCFReferences(obj, prevExternalCF, domainObjectExternals, false);
-                        }
+                        }*/
+                        List<CompletableFuture> futures = new ArrayList<>();
+
+                        if (externalCF != null) futures.add(changeCFReferences(obj, externalCF, domainObjectExternals, true));
+                        if (prevExternalCF != null) futures.add(changeCFReferences(obj, prevExternalCF, domainObjectExternals, false));
+
+                        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
                     } catch (IllegalAccessException e) {
                         throw new DataMapperException(e);
                     }
-                });
+                })
+                .toArray(CompletableFuture[]::new));
     }
 
-    public void removeReferences(T obj) {
-        changeReferences(obj, false);
+    public CompletableFuture<Void> removeReferences(T obj) {
+        return changeReferences(obj, false);
     }
 
-    private void changeCFReferences(T obj, CompletableFuture externalCF, List<SqlFieldExternal> externals, boolean isToStore) {
-        externalCF.thenAccept(external -> {
+    private CompletableFuture<Void> changeCFReferences(T obj, CompletableFuture externalCF, List<SqlFieldExternal> externals, boolean isToStore) {
+        return externalCF.thenAccept(external -> {
             if (List.class.isAssignableFrom(external.getClass()))
                 ((List<Object>) external).forEach(e -> modifyList(obj, isToStore, e, externals));
             else
@@ -174,12 +181,12 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
         });
     }
 
-    private void changeReferences(T obj, boolean isToStore) {
-        if (externals == null) return;
+    private CompletableFuture<Void> changeReferences(T obj, boolean isToStore) {
+        if (externals == null) return CompletableFuture.completedFuture(null);
 
-        externals.stream()
-                .filter(sqlFieldExternal -> sqlFieldExternal.getPopulateStrategy() == PopulateMultiReference.class)
-                .forEach(sqlFieldExternal -> {
+        return CompletableFuture.allOf(externals.stream()
+                .filter(sqlFieldExternal -> sqlFieldExternal.getPopulateStrategy() != PopulateMultiReference.class)
+                .map(sqlFieldExternal -> {
                     try {
                         sqlFieldExternal.field.setAccessible(true);
                         CompletableFuture externalCF = (CompletableFuture) sqlFieldExternal.field.get(obj);
@@ -187,11 +194,13 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                         List<SqlFieldExternal> domainObjectExternals = MapperRegistry.getMapperSettings(sqlFieldExternal.domainObjectType).getExternals();
 
                         //external might be a list, in case of externalTable or a DomainObject in case a singleReference
-                        if (externalCF != null) changeCFReferences(obj, externalCF, domainObjectExternals, isToStore);
+                        if (externalCF != null) return changeCFReferences(obj, externalCF, domainObjectExternals, isToStore);
+                        return CompletableFuture.completedFuture(null);
                     } catch (IllegalAccessException e) {
                         throw new DataMapperException(e);
                     }
-                });
+                })
+                .toArray(CompletableFuture[]::new));
     }
 
     /**
@@ -216,14 +225,17 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 * To avoid only having a monitor for all fields, each field will have its own monitor.
                 */
                 synchronized (sqlFieldExternal.mon){
-                    CompletableFuture<? extends List<T>> future = ((CompletableFuture<? extends List<T>>) field.get(external))
-                            .thenApply(list -> {
-                                list.removeIf(t -> t.getIdentityKey().equals(obj.getIdentityKey()));
-                                if (isToStore) list.add(obj);
-                                return list;
-                            });
+                    CompletableFuture<? extends List<T>> completableFuture = (CompletableFuture<? extends List<T>>) field.get(external);
+                    if (completableFuture != null) {
+                        CompletableFuture<? extends List<T>> future = completableFuture
+                                .thenApply(list -> {
+                                    list.removeIf(t -> t.getIdentityKey().equals(obj.getIdentityKey()));
+                                    if (isToStore) list.add(obj);
+                                    return list;
+                                });
 
-                    field.set(external, future);
+                        field.set(external, future);
+                    }
                 }
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);

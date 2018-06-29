@@ -109,6 +109,7 @@ begin atomic
   insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1);
   insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1);
 
+  insert into Author(name) values ('Manel');
   insert into Author(name) values ('Ze');
   insert into Book(name) values ('1001 noites');
 

@@ -3,17 +3,10 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import io.vertx.core.json.JsonArray;
 
 import java.lang.reflect.Field;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -116,7 +109,7 @@ public class SqlField {
         public final String selectTableQuery;
         public final Object mon = new Object();
         private final Class<? extends Populate> populateStrategy;
-        private Object[] idValues;
+        private Object[] foreignKey;
 
         //TODO if name defined check if type == CompletableFuture<DomainObject>, else check type == CompletableFuture<List<DomainObject>>
         public SqlFieldExternal(Field field, String pref) {
@@ -143,15 +136,11 @@ public class SqlField {
             return sb.toString();
         }
 
-
-
         /**
          * Used for ExternalsHandler mapper to know what to execute, depending on ColumnName values
          * @param annotation ColumnName annotation
          * @return
          */
-
-
         private Class<? extends Populate> getStrategy(ColumnName annotation) {
             try {
                 String[] nameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("name").getDefaultValue();
@@ -163,14 +152,11 @@ public class SqlField {
                 if (!nameEqualsDefaultValue && !foreignNameEqualsDefaultValue)
                     throw new DataMapperException("The annotation ColumnName shouldn't have both name and foreignName defined!");
 
-                boolean p1 = Arrays.equals(annotation.name(), nameDefaultValue);
-                boolean p2 = Arrays.equals(annotation.foreignName(), foreignNameDefaultValue);
-                boolean p3 = p2 && annotation.table().equals(tableDefaultValue) && Arrays.equals(annotation.externalName(), nameDefaultValue);
+                boolean p1 = !Arrays.equals(annotation.name(), nameDefaultValue);
+                boolean p2 = !Arrays.equals(annotation.foreignName(), foreignNameDefaultValue);
+                boolean p3 = p2 && !annotation.table().equals(tableDefaultValue) && !Arrays.equals(annotation.externalName(), nameDefaultValue);
 
-                return Stream.of(
-                        new Pair<>(PopulateSingleReference.class, p1),
-                        new Pair<>(PopulateWithExternalTable.class, p3),
-                        new Pair<>(PopulateMultiReference.class, p2))
+                return Stream.of(new Pair<>(PopulateSingleReference.class, p1), new Pair<>(PopulateWithExternalTable.class, p3), new Pair<>(PopulateMultiReference.class, p2))
                         .filter(Pair::getValue)
                         .findFirst()
                         .map(Pair::getKey)
@@ -195,11 +181,11 @@ public class SqlField {
         public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
             try {
                 field.setAccessible(true);
-                CompletableFuture<? extends DomainObject> cp = (CompletableFuture<? extends DomainObject>) field.get(obj);
+                CompletableFuture<? extends DomainObject> future = (CompletableFuture<? extends DomainObject>) field.get(obj);
                 //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
-                cp = cp == null ? CompletableFuture.completedFuture(null) : cp;
+                future = future == null ? CompletableFuture.completedFuture(null) : future;
 
-                return cp.thenCompose(domainObject ->
+                return future.thenCompose(domainObject ->
                         CollectionUtils.listToCompletableFuture(MapperRegistry.getMapperSettings(domainObjectType)
                             .getIds()
                                 .stream()
@@ -211,13 +197,12 @@ public class SqlField {
             }
         }
 
-
-        public Object[] getIdValues() {
-            return idValues;
+        public Object[] getForeignKey() {
+            return foreignKey;
         }
 
-        public void setIdValues(Object[] idValues) {
-            this.idValues = idValues;
+        public void setForeignKey(Object[] foreignKey) {
+            this.foreignKey = foreignKey;
         }
 
         public Class<? extends Populate> getPopulateStrategy() {

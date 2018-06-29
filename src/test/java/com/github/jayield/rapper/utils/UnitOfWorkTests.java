@@ -39,9 +39,7 @@ public class UnitOfWorkTests {
     private Queue<DomainObject> clonedObjects;
     private Queue<DomainObject> dirtyObjects;
     private Queue<DomainObject> removedObjects;
-    private SQLConnection con;
     private Map<Class, DataRepository> repositoryMap;
-    private SqlSupplier<CompletableFuture<SQLConnection>> connectionSupplier;
     private UnitOfWork unit;
 
     public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
@@ -73,30 +71,35 @@ public class UnitOfWorkTests {
 
     @Before
     public void before()throws NoSuchFieldException, IllegalAccessException {
+        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
         repositoryMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
-        connectionSupplier = manager::getConnection;
 
         unit = new UnitOfWork(manager::getConnection);
 
-        con = manager.getConnection().join();
+        SQLConnection con = unit.getConnection().join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
-        SQLUtils.<Void>callbackToPromise(ar -> con.commit(ar)).join();
+        //SQLUtils.<Void>callbackToPromise(con::commit).join();
 
         objectsContainer = new ObjectsContainer(con);
-        con.close();
+        unit.commit().join();
         setupLists();
 
         employeeRepo = MapperRegistry.getRepository(Employee.class);
         companyRepo = MapperRegistry.getRepository(Company.class);
     }
 
+    @After
+    public void after() {
+        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+    }
+
     @Test
-    public void testCommit() throws NoSuchFieldException, IllegalAccessException, SQLException {
+    public void testCommit() throws NoSuchFieldException, IllegalAccessException {
         populateIdentityMaps();
         addNewObjects();
         addDirtyAndClonedObjects();
@@ -107,9 +110,6 @@ public class UnitOfWorkTests {
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
         unit.commit().join();
-        //Get new connection since the commit will close the current one
-        System.out.println("checking connection "+ con);
-        con = connectionSupplier.get().join();
 
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
         identityMapField.setAccessible(true);
@@ -121,94 +121,6 @@ public class UnitOfWorkTests {
         assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
         assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
         assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
-    }
-
-    @Test
-    public void testUpdateReference() throws NoSuchFieldException, IllegalAccessException, SQLException {
-        DataRepository<Company, Company.PrimaryKey> companyRepo = MapperRegistry.getRepository(Company.class);
-
-        MapperSettings mapperSettings = new MapperSettings(Employee.class);
-        ExternalsHandler<Employee, Integer> externalHandler = new ExternalsHandler<>(mapperSettings);
-        DataMapper<Employee, Integer> dataMapper = new DataMapper<>(Employee.class, mapperSettings);
-        Mapperify<Employee, Integer> mapperify = new Mapperify<>(dataMapper);
-        Comparator<Employee> comparator = new DomainObjectComparator<>(mapperSettings);
-        DataRepository<Employee, Integer> employeeRepo = new DataRepository<>(Employee.class, Integer.class, mapperify, externalHandler, comparator);
-
-        MapperRegistry.Container<Employee, Integer> container = new MapperRegistry.Container<>(mapperSettings, externalHandler, employeeRepo, mapperify);
-
-        //Place employeeRepo on MapperRegistry
-        Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
-        repositoryMapField.setAccessible(true);
-        HashMap<Class, MapperRegistry.Container> repositoryMap = (HashMap<Class, MapperRegistry.Container>) repositoryMapField.get(null);
-        repositoryMap.put(Employee.class, container);
-
-        //Create an Employee
-        CompletableFuture<Company> companyCompletableFuture = companyRepo
-                .findById(unit, new Company.PrimaryKey(1, 1))
-                .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
-
-        Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
-
-        newObjects.add(employee);
-
-        unit.commit().join();
-        //Get new connection since the commit will close the current one
-        con = connectionSupplier.get().join();
-
-        //Check if employee is in the Company's list
-        Company company = companyCompletableFuture.join();
-        List<Employee> employees = company.getEmployees().join();
-        assertTrue(employees.contains(employee));
-
-        Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
-        identityMapField.setAccessible(true);
-
-        ConcurrentMap employeeIdentityMap = (ConcurrentMap) identityMapField.get(employeeRepo);
-
-        CompletableFuture<Employee> employeeCP = (CompletableFuture<Employee>) employeeIdentityMap.get(employee.getIdentityKey());
-
-        assertEquals(employeeCP.join(), employee);
-        assertEquals(1, mapperify.getIfindWhere().getCount());
-    }
-
-    @Test
-    public void testMultipleReference() throws NoSuchFieldException, IllegalAccessException, SQLException {
-        MapperRegistry.Container<Author, Long> authorContainer = getContainer(Author.class);
-        MapperRegistry.Container<Book, Long> bookContainer = getContainer(Book.class);
-
-        //Place employeeRepo on MapperRegistry
-        Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
-        repositoryMapField.setAccessible(true);
-
-        HashMap<Class, MapperRegistry.Container> repositoryMap = (HashMap<Class, MapperRegistry.Container>) repositoryMapField.get(null);
-        repositoryMap.put(Author.class, authorContainer);
-        repositoryMap.put(Book.class, bookContainer);
-
-        CompletableFuture<List<Author>> authorCP = authorContainer.getDataRepository().findWhere(unit, new Pair<>("name", "Ze"));
-        authorCP.join();
-        System.out.println(authorCP.join());
-        System.out.println(authorCP.join().get(0).getBooks().join());
-        Book book = new Book(0, "Harry Potter", 0, authorCP);
-
-        newObjects.add(book);
-
-        unit.commit().join();
-        //Get new connection since the commit will close the current one
-        con = connectionSupplier.get().join();
-
-        //Check if book is in the author's list
-        Author author = authorCP.join().get(0);
-        List<Book> books = author.getBooks().join();
-        assertTrue(books.contains(book));
-
-        Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
-        identityMapField.setAccessible(true);
-
-        ConcurrentMap bookIdentityMap = (ConcurrentMap) identityMapField.get(bookContainer.getDataRepository());
-
-        CompletableFuture<Book> bookCP = (CompletableFuture<Book>) bookIdentityMap.get(book.getIdentityKey());
-
-        assertEquals(bookCP.join(), book);
     }
 
     @Test
@@ -235,8 +147,6 @@ public class UnitOfWorkTests {
                 .join();
 
         assertTrue(failed[0]);
-        //Get new connection since the commit will close the current one
-        con = connectionSupplier.get().join();
 
         removedObjects.remove(chat);
         Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
@@ -259,8 +169,9 @@ public class UnitOfWorkTests {
 
     @Test
     public void testTransaction() {
+        logger.info("Number of Openned connections - {}", UnitOfWork.numberOfOpenConnections.get());
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
-        SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_COMMITTED.getType());
+        SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_UNCOMMITTED.getType());
 
         Employee employee = employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().get(0);
@@ -290,13 +201,15 @@ public class UnitOfWorkTests {
 
     private void assertRemovedObjects(boolean isCommit) {
         Employee originalEmployee = objectsContainer.getOriginalEmployee();
-
+        UnitOfWork unit = new UnitOfWork();
+        SQLConnection con = unit.getConnection().join();
         if(isCommit) {
             assertNotFound(employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), con);
         }
         else{
             assertSingleRow(originalEmployee, employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), AssertUtils::assertEmployeeWithExternals, con);
         }
+        unit.rollback().join();
     }
 
     private void assertDirtyObjects(boolean isCommit) {
@@ -314,15 +227,23 @@ public class UnitOfWorkTests {
             topStudent = objectsContainer.getOriginalTopStudent();
         }
 
+        UnitOfWork unit = new UnitOfWork();
+        SQLConnection con = unit.getConnection().join();
+
         assertSingleRow(person, personSelectQuery, new JsonArray().add(person.getNif()), AssertUtils::assertPerson, con);
         assertSingleRow(car, carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), AssertUtils::assertCar, con);
         assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), AssertUtils::assertTopStudent, con);
+
+        unit.rollback().join();
     }
 
     private void assertNewObjects(boolean isCommit) {
         Person person = objectsContainer.getInsertedPerson();
         Car car = objectsContainer.getInsertedCar();
         TopStudent topStudent = objectsContainer.getInsertedTopStudent();
+
+        UnitOfWork unit = new UnitOfWork();
+        SQLConnection con = unit.getConnection().join();
 
         if(isCommit) {
             assertSingleRow(person, personSelectQuery, new JsonArray().add(person.getNif()), AssertUtils::assertPerson, con);
@@ -334,6 +255,8 @@ public class UnitOfWorkTests {
             assertNotFound(carSelectQuery, new JsonArray().add(car.getIdentityKey().getOwner()).add(car.getIdentityKey().getPlate()), con);
             assertNotFound(topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), con);
         }
+
+        unit.rollback().join();
     }
 
     private void populateIdentityMaps() {

@@ -7,6 +7,7 @@ import com.mchange.v2.sql.SqlUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
+import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -29,6 +30,13 @@ public class DataBaseTests {
                 "SA",
                 ""
         );
+
+        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+    }
+
+    @After
+    public void after() {
+        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
     }
 
     @Test

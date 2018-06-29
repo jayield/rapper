@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
@@ -25,6 +26,7 @@ import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 public class UnitOfWork {
     private static final String UNSUCCESSFUL_COMMIT_MESSAGE = "{} - Rolling back changes due to {}";
     private static final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
+    public static final AtomicInteger numberOfOpenConnections = new AtomicInteger(0);
 
     /**
      * Private for each transaction
@@ -53,12 +55,14 @@ public class UnitOfWork {
     public CompletableFuture<SQLConnection> getConnection() {
         if(connection == null) {
             connection = connectionSupplier.get();
+            numberOfOpenConnections.incrementAndGet();
             logger.info("{} - New connection opened", this.hashCode());
         }
         return connection;
     }
 
     private CompletableFuture<Void> closeConnection(){
+        numberOfOpenConnections.decrementAndGet();
         return connection.thenAccept(SQLConnection::close)
                 .thenAccept(v -> connection = null);
     }
@@ -134,27 +138,38 @@ public class UnitOfWork {
                 completableFutures.addAll(deletePair.getValue());
 
                 return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                        .thenAccept(aVoid -> proceedCommit(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
+                        .thenCompose(aVoid -> proceedCommit(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
                         .thenCompose(v ->
                                 connection.thenCompose(con ->
                                         SQLUtils.callbackToPromise(con::commit)
                                                 .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode()))))
                         .thenCompose(v -> closeConnection())
-                        .exceptionally(throwable -> {
+                        .handleAsync((aVoid, throwable) -> {
+                            if (throwable != null) {
+                                logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
+                                return rollback().thenAccept(aVoid1 -> {
+                                    throw new DataMapperException(throwable);
+                                });
+                            }
+                            return CompletableFuture.<Void>completedFuture(null);
+                        })
+                        .thenCompose(voidCompletableFuture -> voidCompletableFuture)
+                        /*.exceptionally(throwable -> {
                             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
                             rollback();
                             throw new DataMapperException(throwable);
-                        });
+                        })*/;
             }
         } catch (DataMapperException e){
             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
-            rollback();
-            throw new DataMapperException(e);
+            return rollback().thenAccept(aVoid -> {
+                throw new DataMapperException(e);
+            });
         }
     }
 
-    private void proceedCommit(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
-                               List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
+    private CompletableFuture<Void> proceedCommit(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
+                                                  List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
 //        try {
             //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
             Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator();
@@ -164,11 +179,13 @@ public class UnitOfWork {
             Iterator<DomainObject> updatedObjectsIterator = dirtyObjects.iterator();
             Iterator<DomainObject> deletedObjectsIterator = removedObjects.iterator();
 
+            List<CompletableFuture> futures = new ArrayList<>();
+
             //Will iterate through insert, update and delete iterators at the same time
             while (insertedReposIterator.hasNext() || updatedReposIterator.hasNext() || deletedReposIterator.hasNext()) {
                 iterate(insertedReposIterator, insertedObjectsIterator, (repo, domainObject) -> {
                     repo.validate(domainObject.getIdentityKey(), domainObject);
-                    MapperRegistry.getExternal(domainObject.getClass()).insertReferences(domainObject);
+                    futures.add(MapperRegistry.getExternal(domainObject.getClass()).insertReferences(domainObject));
                 });
                 iterate(updatedReposIterator, updatedObjectsIterator, (repo, domainObject) -> {
                     repo.validate(domainObject.getIdentityKey(), domainObject);
@@ -177,14 +194,15 @@ public class UnitOfWork {
                             .filter(domainObject1 -> domainObject1.getIdentityKey().equals(domainObject.getIdentityKey()))
                             .findFirst()
                             .orElseThrow(() -> new DataMapperException("Previous state of the updated domainObject not found"));
-                    MapperRegistry.getExternal(domainObject.getClass()).updateReferences(prevDomainObj, domainObject);
+                    futures.add(MapperRegistry.getExternal(domainObject.getClass()).updateReferences(prevDomainObj, domainObject));
                 });
                 iterate(deletedReposIterator, deletedObjectsIterator, (repo, domainObject) -> {
                     repo.invalidate(domainObject.getIdentityKey());
-                    MapperRegistry.getExternal(domainObject.getClass()).removeReferences(domainObject);
+                    futures.add(MapperRegistry.getExternal(domainObject.getClass()).removeReferences(domainObject));
                 });
             }
 
+            return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
 //            SQLUtils.<Void>callbackToPromise(ar -> connection.commit(ar))
 //                    .thenAccept(v -> closeConnection())
 //                    .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()))

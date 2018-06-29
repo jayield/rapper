@@ -11,9 +11,6 @@ import org.slf4j.LoggerFactory;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
-import java.math.BigDecimal;
-import java.sql.*;
-import java.sql.Date;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Instant;
@@ -368,7 +365,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     objects[i] = rs.getValue(s);
                 }
 
-                sqlFieldExternal.setIdValues(objects);
+                sqlFieldExternal.setForeignKey(objects);
             }
             else
                 field.set(t, rs.getValue(name));
@@ -383,7 +380,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 else
                     field.set(t, field.getType() == Instant.class ?  sdf.parse(rs.getString(name)).toInstant() : rs.getValue(name));
                 /*
-                 * This "if else" is done because jdbc might not convert to the right type in the first rs.getObject, but in the second it will
+                 * This "if else" is done because sql server jdbc might not convert to the right type in the first rs.getObject, but in the second it will
                  * Ex: for a field of type "short" rs.getObject(name, field.getType()) will return null, but rs.getObject(name) will return an Integer
                  * if we execute first rs.getObject(name) and then rs.getObject(name, field.getType()), it will return a "short" value...
                  */
