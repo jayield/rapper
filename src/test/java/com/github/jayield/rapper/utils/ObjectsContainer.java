@@ -13,7 +13,6 @@ import java.util.concurrent.CompletableFuture;
 
 import static com.github.jayield.rapper.TestUtils.*;
 
-
 class ObjectsContainer {
     private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
     private Person originalPerson;

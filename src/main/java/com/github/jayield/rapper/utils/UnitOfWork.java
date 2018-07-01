@@ -1,8 +1,6 @@
 package com.github.jayield.rapper.utils;
 
-import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.Mapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.TransactionIsolation;
@@ -10,16 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Predicate;
-import java.util.function.Supplier;
+import java.util.function.*;
 
 import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 
@@ -39,6 +33,9 @@ public class UnitOfWork {
     private final Queue<DomainObject> clonedObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
+    private final CreateHelper createHelper = new CreateHelper(newObjects);
+    private final UpdateHelper updateHelper = new UpdateHelper(dirtyObjects, clonedObjects, removedObjects);
+    private final DeleteHelper deleteHelper = new DeleteHelper(removedObjects);
 
     public UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
@@ -56,13 +53,16 @@ public class UnitOfWork {
         if(connection == null) {
             connection = connectionSupplier.get();
             numberOfOpenConnections.incrementAndGet();
-            logger.info("{} - New connection opened", this.hashCode());
+            String string = Thread.currentThread().getStackTrace()[2].toString();
+            logger.info("{} - New connection opened from {}", this.hashCode(), string);
         }
         return connection;
     }
 
     private CompletableFuture<Void> closeConnection(){
         numberOfOpenConnections.decrementAndGet();
+        String string = Thread.currentThread().getStackTrace()[2].toString();
+        logger.info("{} - Closing connection from {}", this.hashCode(), string);
         return connection.thenAccept(SQLConnection::close)
                 .thenAccept(v -> connection = null);
     }
@@ -124,21 +124,13 @@ public class UnitOfWork {
                 }
                 return toRet;
             } else {
-                Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                        List<CompletableFuture<Void>>> insertPair = executeFilteredBiFunctionInList((mapper, domainObject) -> mapper.create(this, domainObject), newObjects, domainObject -> true);
-
-                Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                        List<CompletableFuture<Void>>> updatePair = executeFilteredBiFunctionInList((mapper, domainObject) -> mapper.update(this, domainObject), dirtyObjects, domainObject -> !removedObjects.contains(domainObject));
-
-                Pair<List<DataRepository<? extends DomainObject<?>, ?>>,
-                        List<CompletableFuture<Void>>> deletePair = executeFilteredBiFunctionInList((mapper, domainObject) -> mapper.delete(this, domainObject), removedObjects, domainObject -> true);
-
-                List<CompletableFuture<Void>> completableFutures = insertPair.getValue();
-                completableFutures.addAll(updatePair.getValue());
-                completableFutures.addAll(deletePair.getValue());
+                List<CompletableFuture<Void>> completableFutures = iterateMultipleLists(abstractCommitHelper -> abstractCommitHelper.commitNext(this));
+                createHelper.reset();
+                updateHelper.reset();
+                deleteHelper.reset();
 
                 return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                        .thenCompose(aVoid -> proceedCommit(insertPair.getKey(), updatePair.getKey(), deletePair.getKey()))
+                        .thenCompose(aVoid -> proceedCommit())
                         .thenCompose(v ->
                                 connection.thenCompose(con ->
                                         SQLUtils.callbackToPromise(con::commit)
@@ -153,109 +145,38 @@ public class UnitOfWork {
                             }
                             return CompletableFuture.<Void>completedFuture(null);
                         })
-                        .thenCompose(voidCompletableFuture -> voidCompletableFuture)
-                        /*.exceptionally(throwable -> {
-                            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
-                            rollback();
-                            throw new DataMapperException(throwable);
-                        })*/;
+                        .thenCompose(voidCompletableFuture -> voidCompletableFuture);
             }
         } catch (DataMapperException e){
             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
-            return rollback().thenAccept(aVoid -> {
-                throw new DataMapperException(e);
-            });
+            return rollback().thenAccept(aVoid -> { throw e; });
         }
     }
 
-    private CompletableFuture<Void> proceedCommit(List<DataRepository<? extends DomainObject<?>, ?>> insertRepos, List<DataRepository<? extends DomainObject<?>, ?>> updateRepos,
-                                                  List<DataRepository<? extends DomainObject<?>, ?>> deleteRepos) {
-//        try {
-            //The different iterators will have the same size (eg. insertedReposIterator.size() == insertedObjectsIterator.size()
-            Iterator<DataRepository<? extends DomainObject<?>, ?>> insertedReposIterator = insertRepos.iterator();
-            Iterator<DataRepository<? extends DomainObject<?>, ?>> updatedReposIterator = updateRepos.iterator();
-            Iterator<DataRepository<? extends DomainObject<?>, ?>> deletedReposIterator = deleteRepos.iterator();
-            Iterator<DomainObject> insertedObjectsIterator = newObjects.iterator();
-            Iterator<DomainObject> updatedObjectsIterator = dirtyObjects.iterator();
-            Iterator<DomainObject> deletedObjectsIterator = removedObjects.iterator();
-
-            List<CompletableFuture> futures = new ArrayList<>();
-
-            //Will iterate through insert, update and delete iterators at the same time
-            while (insertedReposIterator.hasNext() || updatedReposIterator.hasNext() || deletedReposIterator.hasNext()) {
-                iterate(insertedReposIterator, insertedObjectsIterator, (repo, domainObject) -> {
-                    repo.validate(domainObject.getIdentityKey(), domainObject);
-                    futures.add(MapperRegistry.getExternal(domainObject.getClass()).insertReferences(domainObject));
-                });
-                iterate(updatedReposIterator, updatedObjectsIterator, (repo, domainObject) -> {
-                    repo.validate(domainObject.getIdentityKey(), domainObject);
-                    DomainObject prevDomainObj = clonedObjects
-                            .stream()
-                            .filter(domainObject1 -> domainObject1.getIdentityKey().equals(domainObject.getIdentityKey()))
-                            .findFirst()
-                            .orElseThrow(() -> new DataMapperException("Previous state of the updated domainObject not found"));
-                    futures.add(MapperRegistry.getExternal(domainObject.getClass()).updateReferences(prevDomainObj, domainObject));
-                });
-                iterate(deletedReposIterator, deletedObjectsIterator, (repo, domainObject) -> {
-                    repo.invalidate(domainObject.getIdentityKey());
-                    futures.add(MapperRegistry.getExternal(domainObject.getClass()).removeReferences(domainObject));
-                });
-            }
-
-            return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
-//            SQLUtils.<Void>callbackToPromise(ar -> connection.commit(ar))
-//                    .thenAccept(v -> closeConnection())
-//                    .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()))
-//                    .join();
-
-//        } catch (Exception e) {
-//            logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
-//            rollback();
-//        } finally {
-//            newObjects.clear();
-//            clonedObjects.clear();
-//            dirtyObjects.clear();
-//            removedObjects.clear();
-//        }
+    private CompletableFuture<Void> proceedCommit() {
+        List<CompletableFuture<Void>> futures = iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
+        createHelper.reset();
+        updateHelper.reset();
+        deleteHelper.reset();
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
     }
 
-    private <V> void iterate(Iterator<DataRepository<? extends DomainObject<?>, ?>> repoIterator, Iterator<DomainObject> domainObjectIterator,
-                             BiConsumer<DataRepository<DomainObject<V>, V>, DomainObject<V>> biConsumer) {
-        if (repoIterator.hasNext()) {
-            DataRepository<DomainObject<V>, V> repo = (DataRepository<DomainObject<V>, V>) repoIterator.next();
-            DomainObject<V> domainObject = domainObjectIterator.next();
-            biConsumer.accept(repo, domainObject);
-        }
-    }
+    public List<CompletableFuture<Void>> iterateMultipleLists(Function<AbstractCommitHelper, CompletableFuture<Void>> function) {
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
 
-    /**
-     * It will iterate over {@code list} and call {@code biFunction} passing the mapper and the domainObject
-     *
-     * @param biFunction the biFunction to be called for each iteration
-     * @param list the list to iterate
-     * @param predicate the predicate to filter the elements to iterate
-     * @return a Pair whose key contains an ordered List of the object's mappers inside {@code list}, meaning, for example,
-     * for object located at index 4 in {@code list}, its mapper is located at the same index in this List.
-     *
-     * The value of the Pair is a List containing the completableFutures of the calls of the mapper
-     */
-    private<V> Pair<List<DataRepository<? extends DomainObject<?>, ?>>, List<CompletableFuture<Void>>> executeFilteredBiFunctionInList(
-            BiFunction<Mapper<DomainObject<V>, V>, DomainObject<V>, CompletableFuture<Void>> biFunction,
-            Queue<DomainObject> list,
-            Predicate<DomainObject> predicate
-    ) {
-        List<DataRepository<? extends DomainObject<?>, ?>> mappers = new ArrayList<>();
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        list
-                .stream()
-                .filter(predicate)
-                .forEach(domainObject -> {
-                    DataRepository repository = getRepository(domainObject.getClass());
-                    completableFutures.add(biFunction.apply(repository.getMapper(), domainObject));
-                    mappers.add(repository);
-                });
+        CompletableFuture<Void> createFuture;
+        CompletableFuture<Void> updateFuture;
+        CompletableFuture<Void> deleteFuture;
+        do {
+            createFuture = function.apply(createHelper);
+            updateFuture = function.apply(updateHelper);
+            deleteFuture = function.apply(deleteHelper);
 
-        return new Pair<>(mappers, completableFutures);
+            if (createFuture != null) futures.add(createFuture);
+            if (updateFuture != null) futures.add(updateFuture);
+            if (deleteFuture != null) futures.add(deleteFuture);
+        } while (createFuture != null || updateFuture != null || deleteFuture != null);
+        return futures;
     }
 
     /**
@@ -265,7 +186,7 @@ public class UnitOfWork {
      */
     public CompletableFuture<Void> rollback() {
         try {
-            System.out.println("connection in rollbak " + connection);
+            //System.out.println("connection in rollbak " + connection);
             if(connection != null) {
                 return connection.thenCompose(con -> SQLUtils.callbackToPromise(con::rollback))
                         .thenCompose(v -> closeConnection());
@@ -274,8 +195,7 @@ public class UnitOfWork {
             newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
 
             for (DomainObject obj : dirtyObjects) {
-                clonedObjects
-                        .stream()
+                clonedObjects.stream()
                         .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                         .findFirst()
                         .ifPresent(
@@ -283,8 +203,7 @@ public class UnitOfWork {
                         );
             }
 
-            removedObjects
-                    .stream()
+            removedObjects.stream()
                     .filter(obj -> !dirtyObjects.contains(obj))
                     .forEach(obj -> getRepository(obj.getClass()).validate(obj.getIdentityKey(), obj));
 

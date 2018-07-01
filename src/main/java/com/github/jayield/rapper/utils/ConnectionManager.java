@@ -65,7 +65,7 @@ public class ConnectionManager {
     }
 
     private static String[] separateComponents(DBsPath envVar){
-        //CONNECTION STRING FORMAT: URL%;USER%;PASSWORD
+        //CONNECTION STRING FORMAT: jdbcURL%;USER%;PASSWORD
         String connectionString = System.getenv(envVar.toString());
         return connectionString.split("%;");
     }

@@ -20,6 +20,7 @@ import java.net.URLDecoder;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
 
@@ -83,7 +84,7 @@ public class UnitOfWorkTests {
         SQLConnection con = unit.getConnection().join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
         SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
-        //SQLUtils.<Void>callbackToPromise(con::commit).join();
+        //SQLUtils.<Void>callbackToPromise(con::commitNext).join();
 
         objectsContainer = new ObjectsContainer(con);
         unit.commit().join();

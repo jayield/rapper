@@ -3,7 +3,6 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
-import com.mchange.v2.sql.SqlUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
@@ -13,9 +12,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.URLDecoder;
-import java.sql.Connection;
 import java.util.Date;
-import java.sql.PreparedStatement;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
