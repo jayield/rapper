@@ -10,20 +10,20 @@ public class MapperRegistry {
 
     private MapperRegistry(){}
 
-    private static Map<Class, Container> repositoryMap = new HashMap<>();
+    private static Map<Class, Container> containerMap = new HashMap<>();
 
     public static<T extends DomainObject<K>, K> Container<T, K> getContainer(Class<T> type) {
-        return repositoryMap.computeIfAbsent(type, aClass -> {
+        return containerMap.computeIfAbsent(type, aClass -> {
             MapperSettings mapperSettings = new MapperSettings(aClass);
-            ExternalsHandler<T, K> externalHandler = new ExternalsHandler<>(mapperSettings);
-            DataMapper<T, K> dataMapper = new DataMapper<>(aClass, mapperSettings);
+            ExternalsHandler<T, K> externalsHandler = new ExternalsHandler<>(mapperSettings);
+            DataMapper<T, K> dataMapper = new DataMapper<>(aClass, externalsHandler, mapperSettings);
 
             Comparator<T> comparator = new DomainObjectComparator<>(mapperSettings);
             Class<K> keyType = ReflectionUtils.<T, K>getKeyType(aClass);
 
-            DataRepository<T, K> repository = new DataRepository<>(aClass, keyType, dataMapper, externalHandler, comparator);
+            DataRepository<T, K> repository = new DataRepository<>(aClass, dataMapper, comparator);
 
-            return new Container<>(mapperSettings, externalHandler, repository, dataMapper);
+            return new Container<>(mapperSettings, externalsHandler, repository, dataMapper);
         });
     }
 

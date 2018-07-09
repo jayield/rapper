@@ -1,6 +1,7 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.utils.helpers;
 
 import com.github.jayield.rapper.DomainObject;
+import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
@@ -8,12 +9,12 @@ import java.util.concurrent.CompletableFuture;
 import static com.github.jayield.rapper.utils.MapperRegistry.*;
 
 public class CreateHelper extends AbstractCommitHelper {
-    protected CreateHelper(Queue<DomainObject> list) {
+    public CreateHelper(Queue<DomainObject> list) {
         super(list);
     }
 
     @Override
-    CompletableFuture<Void> commitNext(UnitOfWork unit) {
+    public CompletableFuture<Void> commitNext(UnitOfWork unit) {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
@@ -23,12 +24,22 @@ public class CreateHelper extends AbstractCommitHelper {
     }
 
     @Override
-    CompletableFuture<Void> identityMapUpdateNext() {
+    public CompletableFuture<Void> identityMapUpdateNext() {
+        if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject object = objectIterator.next();
             getRepository(object.getClass()).validate(object.getIdentityKey(), object);
             return getExternal(object.getClass()).insertReferences(object);
         }
         return null;
+    }
+
+    @Override
+    public void rollbackNext() {
+        if (objectIterator == null) objectIterator = list.iterator();
+        if (objectIterator.hasNext()) {
+            DomainObject domainObject = objectIterator.next();
+            getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey());
+        }
     }
 }

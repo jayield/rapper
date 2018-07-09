@@ -18,20 +18,16 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
-
     private static final Logger logger = LoggerFactory.getLogger(DataRepository.class);
+
     private final ConcurrentMap<K, CompletableFuture<T>> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
-    private final Class<K> keyType;
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
-    private final ExternalsHandler<T, K> externalsHandler;
     private final Comparator<T> comparator;
 
-    public DataRepository(Class<T> type, Class<K> keyType, Mapper<T, K> mapper, ExternalsHandler<T, K> externalsHandler, Comparator<T> comparator) {
+    public DataRepository(Class<T> type, Mapper<T, K> mapper, Comparator<T> comparator) {
         this.type = type;
-        this.keyType = keyType;
         this.mapper = mapper;
-        this.externalsHandler = externalsHandler;
         this.comparator = comparator;
     }
 
@@ -61,20 +57,10 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K k) {
-        boolean[] wasComputed = {false};
-        //System.out.println("k " + k + " identitymap " + identityMap);
-        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(k, k1 -> {
-            wasComputed[0] = true;
-            return mapper.findById(unit, k)
-                    .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")));
-        });
-        if (wasComputed[0])
-            completableFuture = completableFuture.thenApply(t1 -> {
-                externalsHandler.populateExternals(t1);
-                return t1;
-            });
+        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(k, k1 -> mapper.findById(unit, k)
+                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found"))));
 
-        else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
+        //else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
 
         return completableFuture
                 .thenApply(Optional::of)
@@ -183,46 +169,19 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     private List<CompletableFuture<T>> processNewObjects(List<T> tList) {
-        return tList
-                .stream()
-                .map(t -> {
-                    boolean[] wasComputed = {false};
-                    CompletableFuture<T> future = identityMap.compute(t.getIdentityKey(), (k, tCompletableFuture) -> computeNewValue(wasComputed, t, tCompletableFuture));
-                    if (wasComputed[0])
-                        return future.thenApply(t1 -> {
-                            externalsHandler.populateExternals(t1);
-                            return t1;
-                        });
-                    return future;
-                })
+        return tList.stream()
+                .map(t -> identityMap.compute(t.getIdentityKey(), (k, tCompletableFuture) -> computeNewValue(t, tCompletableFuture)))
                 .collect(Collectors.toList());
     }
 
-    private CompletableFuture<T> computeNewValue(boolean[] wasComputed, T newT, CompletableFuture<T> actualFuture) {
+    private CompletableFuture<T> computeNewValue(T newT, CompletableFuture<T> actualFuture) {
         CompletableFuture<T> newFuture = CompletableFuture.completedFuture(newT);
 
+        if (actualFuture == null) return newFuture;
 
-        if (actualFuture == null) {
-            wasComputed[0] = true;
-            return newFuture;
-        }
         return actualFuture.thenApply(t -> {
-            if(comparator.compare(t, newT) < 0){
-                wasComputed[0] = true;
-                return newT;
-            }
+            if(comparator.compare(t, newT) < 0) return newT;
             return t;
         });
-        //TODO remove join
-//        T actualT = actualFuture.join();
-//        if (comparator.compare(actualT, newT) < 0) {
-//            wasComputed[0] = true;
-//            return newFuture;
-//        }
-//        return actualFuture;
-    }
-
-    Class<K> getKeyType() {
-        return keyType;
     }
 }

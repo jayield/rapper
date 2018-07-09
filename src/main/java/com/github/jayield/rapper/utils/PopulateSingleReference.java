@@ -12,8 +12,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 public class PopulateSingleReference<T extends DomainObject<K>, K> extends AbstractPopulate<T, K>{
-    public PopulateSingleReference(ExternalsHandler<T, K> externalsHandler) {
-        super(externalsHandler);
+    public PopulateSingleReference(ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings) {
+        super(externalsHandler, mapperSettings);
     }
 
     @Override

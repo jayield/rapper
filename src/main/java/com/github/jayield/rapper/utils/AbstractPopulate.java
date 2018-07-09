@@ -14,9 +14,11 @@ import java.util.stream.Stream;
 
 public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements Populate<T> {
     protected final ExternalsHandler<T, K> externalsHandler;
+    protected final MapperSettings mapperSettings;
 
-    public AbstractPopulate(ExternalsHandler<T,K> externalsHandler){
+    public AbstractPopulate(ExternalsHandler<T,K> externalsHandler, MapperSettings mapperSettings){
         this.externalsHandler = externalsHandler;
+        this.mapperSettings = mapperSettings;
     }
 
     @Override
@@ -60,7 +62,7 @@ public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements 
     protected Object getPrimaryKeyValue(T t, Field field) {
         try {
             field.setAccessible(true);
-            if (externalsHandler.getPrimaryKeyConstructor() == null)
+            if (mapperSettings.getPrimaryKeyConstructor() == null)
                 return field.get(t);
             else {
                 Field primaryKeyField = Arrays.stream(t.getClass().getDeclaredFields())

@@ -2,7 +2,6 @@ package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.*;
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.exceptions.DataMapperException;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
@@ -20,13 +19,11 @@ import java.net.URLDecoder;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.BiConsumer;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
-import static com.github.jayield.rapper.utils.DBsPath.TESTDB;
 import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 import static org.junit.Assert.*;
 
@@ -44,7 +41,7 @@ public class UnitOfWorkTests {
     private UnitOfWork unit;
 
     public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
-        Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
+        Field repositoryMapField = MapperRegistry.class.getDeclaredField("containerMap");
         repositoryMapField.setAccessible(true);
         repositoryMap = (Map<Class, DataRepository>) repositoryMapField.get(null);
     }
@@ -293,13 +290,13 @@ public class UnitOfWorkTests {
 
     private <R extends DomainObject<P>, P> MapperRegistry.Container<R, P> getContainer(Class<R> rClass) {
         MapperSettings mapperSettings = new MapperSettings(rClass);
-        ExternalsHandler<R, P> externalHandler = new ExternalsHandler<>(mapperSettings);
-        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, mapperSettings);
+        ExternalsHandler<R, P> externalsHandler = new ExternalsHandler<>(mapperSettings);
+        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, externalsHandler, mapperSettings);
         Mapperify<R, P> mapperify = new Mapperify<>(dataMapper);
         Type type1 = ((ParameterizedType) rClass.getGenericInterfaces()[0]).getActualTypeArguments()[0];
         Comparator<R> comparator = new DomainObjectComparator<>(mapperSettings);
-        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, (Class<P>) type1, mapperify, externalHandler, comparator);
+        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, mapperify, comparator);
 
-        return new MapperRegistry.Container<>(mapperSettings, externalHandler, employeeRepo, mapperify);
+        return new MapperRegistry.Container<>(mapperSettings, externalsHandler, employeeRepo, mapperify);
     }
 }

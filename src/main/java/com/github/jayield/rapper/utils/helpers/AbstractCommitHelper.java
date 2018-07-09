@@ -1,6 +1,7 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.utils.helpers;
 
 import com.github.jayield.rapper.DomainObject;
+import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.Iterator;
 import java.util.Queue;
@@ -23,11 +24,12 @@ public abstract class AbstractCommitHelper {
      * @param unit
      * @return
      */
-    abstract CompletableFuture<Void> commitNext(UnitOfWork unit);
+    public abstract CompletableFuture<Void> commitNext(UnitOfWork unit);
 
     /**
      * It will get the next Object from the list and update the Identity Map
      * @return
      */
-    abstract CompletableFuture<Void> identityMapUpdateNext();
+    public abstract CompletableFuture<Void> identityMapUpdateNext();
+    public abstract void rollbackNext();
 }

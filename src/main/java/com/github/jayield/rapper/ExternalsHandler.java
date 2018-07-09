@@ -16,30 +16,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.github.jayield.rapper.utils.SqlField.SqlFieldExternal;
-import static com.github.jayield.rapper.utils.SqlField.SqlFieldId;
 
 public class ExternalsHandler<T extends DomainObject<K>, K> {
-
-    private final Constructor<?> primaryKeyConstructor;
-    private final Field[] primaryKeyDeclaredFields;
-    private final HashMap<Class<? extends Populate>, Populate<T>> map;
+    private final Map<Class<? extends Populate>, Populate<T>> populatorsMap;
     private final Logger logger = LoggerFactory.getLogger(ExternalsHandler.class);
-    private final List<SqlFieldExternal> externals;
-    private final List<SqlFieldId> ids;
+    private final MapperSettings mapperSettings;
 
     public ExternalsHandler(MapperSettings mapperSettings) {
-        this.externals = mapperSettings.getExternals();
-        this.primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
+        this.mapperSettings = mapperSettings;
 
-        ids = mapperSettings.getIds();
-        Class<?> primaryKey = mapperSettings.getPrimaryKeyType();
-        primaryKeyDeclaredFields = primaryKey != null ? primaryKey.getDeclaredFields() : null;
-
-        map = new HashMap<>();
-
-        map.put(PopulateSingleReference.class, new PopulateSingleReference<>(this));
-        map.put(PopulateMultiReference.class, new PopulateMultiReference<>(this));
-        map.put(PopulateWithExternalTable.class, new PopulateWithExternalTable<>(this));
+        populatorsMap = new HashMap<>();
+        populatorsMap.put(PopulateSingleReference.class, new PopulateSingleReference<>(this, mapperSettings));
+        populatorsMap.put(PopulateMultiReference.class, new PopulateMultiReference<>(this, mapperSettings));
+        populatorsMap.put(PopulateWithExternalTable.class, new PopulateWithExternalTable<>(this, mapperSettings));
     }
 
     /**
@@ -48,13 +37,14 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param t
      */
     void populateExternals(T t) {
-        if (externals != null) externals
-                .forEach(sqlFieldExternal -> {
-                    Populate<T> populate = map.get(sqlFieldExternal.getPopulateStrategy());
-                    if(populate == null)
-                        throw new DataMapperException("The annotation ColumnName didn't follow the rules");
-                    populate.execute(t, sqlFieldExternal);
-                });
+        List<SqlFieldExternal> externals = mapperSettings.getExternals();
+        if (externals != null)
+            externals.forEach(sqlFieldExternal -> {
+                Populate<T> populate = populatorsMap.get(sqlFieldExternal.getPopulateStrategy());
+                if (populate == null)
+                    throw new DataMapperException("The annotation ColumnName didn't follow the rules");
+                populate.execute(t, sqlFieldExternal);
+            });
     }
 
     /**
@@ -93,6 +83,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
     private List<Object> getIds(io.vertx.ext.sql.ResultSet rs, String[] foreignNames) {
         SqlFunction<JsonObject, Stream<Object>> function;
 
+        Constructor primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
         if (primaryKeyConstructor == null)
             function = jo -> Arrays.stream(foreignNames).map(n -> {
                 //System.out.println(jo);
@@ -104,6 +95,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
             function = jo -> {
                 List<Object> idValues = new ArrayList<>();
                 Object newInstance = primaryKeyConstructor.newInstance();
+                Field[] primaryKeyDeclaredFields = mapperSettings.getPrimaryKeyType().getDeclaredFields();
                 for (int i = 0; i < foreignNames.length; i++) {
                     Object object = jo.getValue(foreignNames[i]);
                     idValues.add(object);
@@ -125,6 +117,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
     }
 
     public CompletableFuture<Void> updateReferences(T prevDomainObj, T obj) {
+        List<SqlFieldExternal> externals = mapperSettings.getExternals();
         if (externals == null) return CompletableFuture.completedFuture(null);
 
         return CompletableFuture.allOf(externals.stream()
@@ -182,6 +175,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
     }
 
     private CompletableFuture<Void> changeReferences(T obj, boolean isToStore) {
+        List<SqlFieldExternal> externals = mapperSettings.getExternals();
         if (externals == null) return CompletableFuture.completedFuture(null);
 
         return CompletableFuture.allOf(externals.stream()
@@ -241,13 +235,5 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
                 throw new DataMapperException(e);
             }
         });
-    }
-
-    public List<SqlFieldId> getIds() {
-        return ids;
-    }
-
-    public Constructor<?> getPrimaryKeyConstructor() {
-        return primaryKeyConstructor;
     }
 }

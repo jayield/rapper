@@ -39,14 +39,14 @@ public class DataRepositoryTests {
     private UnitOfWork unit;
 
     public DataRepositoryTests() throws NoSuchFieldException, IllegalAccessException {
-        Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
+        Field repositoryMapField = MapperRegistry.class.getDeclaredField("containerMap");
         repositoryMapField.setAccessible(true);
         repositoryMap = (Map<Class, MapperRegistry.Container>) repositoryMapField.get(null);
     }
 
     @Before
     public void before() {
-        //assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
         repositoryMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
@@ -68,7 +68,7 @@ public class DataRepositoryTests {
     @After
     public void after(){
         unit.rollback().join();
-        //assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
     }
 
     @Test
@@ -271,12 +271,12 @@ public class DataRepositoryTests {
         ExternalsHandler<Book, Long> bookExternal = new ExternalsHandler<>(bookSettings);
         ExternalsHandler<Author, Long> authorExternal = new ExternalsHandler<>(authorSettings);
 
-        DataMapper<TopStudent, Integer> topStudentMapper = new DataMapper<>(TopStudent.class, topStudentSettings);
-        DataMapper<Person, Integer> personMapper = new DataMapper<>(Person.class, personSettings);
-        DataMapper<Employee, Integer> employeeMapper = new DataMapper<>(Employee.class, employeeSettings);
-        DataMapper<Company, Company.PrimaryKey> companyMapper = new DataMapper<>(Company.class, companySettings);
-        DataMapper<Book, Long> bookMapper = new DataMapper<>(Book.class, bookSettings);
-        DataMapper<Author, Long> authorMapper = new DataMapper<>(Author.class, authorSettings);
+        DataMapper<TopStudent, Integer> topStudentMapper = new DataMapper<>(TopStudent.class, topStudentExternal, topStudentSettings);
+        DataMapper<Person, Integer> personMapper = new DataMapper<>(Person.class, personExternal, personSettings);
+        DataMapper<Employee, Integer> employeeMapper = new DataMapper<>(Employee.class, employeeExternal, employeeSettings);
+        DataMapper<Company, Company.PrimaryKey> companyMapper = new DataMapper<>(Company.class, companyExternal, companySettings);
+        DataMapper<Book, Long> bookMapper = new DataMapper<>(Book.class, bookExternal, bookSettings);
+        DataMapper<Author, Long> authorMapper = new DataMapper<>(Author.class, authorExternal, authorSettings);
 
         topStudentMapperify = new Mapperify<>(topStudentMapper);
         personMapperify = new Mapperify<>(personMapper);
@@ -292,12 +292,12 @@ public class DataRepositoryTests {
         Comparator<Book> bookComparator = new DomainObjectComparator<>(bookSettings);
         Comparator<Author> authorComparator = new DomainObjectComparator<>(authorSettings);
 
-        topStudentRepo = new DataRepository<>(TopStudent.class, Integer.class, topStudentMapperify, topStudentExternal, topStudentComparator);
-        personRepo = new DataRepository<>(Person.class, Integer.class, personMapperify, personExternal, personComparator);
-        employeeRepo = new DataRepository<>(Employee.class, Integer.class, employeeMapperify, employeeExternal, employeeComparator);
-        companyRepo = new DataRepository<>(Company.class, Company.PrimaryKey.class, companyMapperify, companyExternal, companyComparator);
-        bookRepo = new DataRepository<>(Book.class, Long.class, bookMapperify, bookExternal, bookComparator);
-        authorRepo = new DataRepository<>(Author.class, Long.class, authorMapperify, authorExternal, authorComparator);
+        topStudentRepo = new DataRepository<>(TopStudent.class, topStudentMapperify, topStudentComparator);
+        personRepo = new DataRepository<>(Person.class, personMapperify, personComparator);
+        employeeRepo = new DataRepository<>(Employee.class, employeeMapperify, employeeComparator);
+        companyRepo = new DataRepository<>(Company.class, companyMapperify, companyComparator);
+        bookRepo = new DataRepository<>(Book.class, bookMapperify, bookComparator);
+        authorRepo = new DataRepository<>(Author.class, authorMapperify, authorComparator);
 
         repositoryMap.put(TopStudent.class, new MapperRegistry.Container<>(topStudentSettings, topStudentExternal, topStudentRepo, topStudentMapper));
         repositoryMap.put(Person.class, new MapperRegistry.Container<>(personSettings, personExternal, personRepo, personMapper));

@@ -4,6 +4,7 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
+import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.UpdateResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,22 +25,19 @@ import java.util.stream.Stream;
 import static com.github.jayield.rapper.utils.SqlField.*;
 
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
-
     private static final String QUERY_ERROR = "Couldn't execute {} on {} on Unit of Work {} due to {}";
-    private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+    private static final Logger log = LoggerFactory.getLogger(DataMapper.class);
+
     private final Class<T> type;
-    private final Class<?> primaryKeyType;
-    private final Constructor<T> constructor;
-    private final Constructor<?> primaryKeyConstructor;
-    private final Logger log = LoggerFactory.getLogger(DataMapper.class);
+    private final ExternalsHandler<T, K> externalsHandler;
     private final MapperSettings mapperSettings;
+    private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+    private final Constructor<T> constructor;
 
-    public DataMapper(Class<T> type, MapperSettings mapperSettings) {
+    public DataMapper(Class<T> type, ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings) {
         this.type = type;
+        this.externalsHandler = externalsHandler;
         this.mapperSettings = mapperSettings;
-
-        primaryKeyType = mapperSettings.getPrimaryKeyType();
-        primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
 
         try {
             constructor = type.getConstructor();
@@ -66,7 +64,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(this::getNumberOfEntries);
     }
 
-    private Long getNumberOfEntries(io.vertx.ext.sql.ResultSet rs) {
+    private Long getNumberOfEntries(ResultSet rs) {
         return rs.getResults().get(0).getLong(0);
     }
 
@@ -86,7 +84,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SQLUtils.queryAsyncParams(selectByIdQuery, unit, SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), id))
                 .thenApply(rs -> {
                     log.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
-                    return stream(rs).findFirst();
+                    Optional<T> optionalT = stream(rs).findFirst();
+                    optionalT.ifPresent(externalsHandler::populateExternals);
+                    return optionalT;
                 })
                 .exceptionally(throwable -> {
                     log.warn(QUERY_ERROR, "FindById", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
@@ -187,7 +187,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 });
     }
 
-    private <R> List<T> processFindWhere(io.vertx.ext.sql.ResultSet resultSet, Pair<String, R>[] values, UnitOfWork current) {
+    private <R> List<T> processFindWhere(ResultSet resultSet, Pair<String, R>[] values, UnitOfWork current) {
         StringBuilder sb = new StringBuilder("Queried database for ");
         sb.append(type.getSimpleName()).append(" where ");
         for (int i = 0; i < values.length; i++) {
@@ -196,7 +196,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         }
         sb.append(" with Unit of Work ").append(current.hashCode());
         log.info(sb.toString());
-        return stream(resultSet).collect(Collectors.toList());
+        return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
     }
 
     private <R> JsonArray prepareFindWhere(Pair<String, R>[] values) {
@@ -207,7 +207,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SQLUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
                 .thenApply(resultSet -> {
                         log.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
-                        return stream(resultSet).collect(Collectors.toList());
+                        return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
                 })
                 .exceptionally(throwable -> {
                     log.warn(QUERY_ERROR, "FindAll", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
@@ -306,19 +306,21 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
-    private Stream<T> stream(io.vertx.ext.sql.ResultSet rs) {
+    private Stream<T> stream(ResultSet rs) {
         return rs.getRows(true).stream().map(this::mapper);
     }
 
     private T mapper(JsonObject rs) {
         try {
             T t = constructor.newInstance();
+            Constructor primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
             Object primaryKey = primaryKeyConstructor != null ? primaryKeyConstructor.newInstance() : null;
+            Class<?> primaryKeyType = mapperSettings.getPrimaryKeyType();
 
             //Set t's primary key field to primaryKey if its a composed primary key
             if (primaryKey != null) {
                 Arrays.stream(type.getDeclaredFields())
-                        .filter(field -> field.getType() == this.primaryKeyType)
+                        .filter(field -> field.getType() == primaryKeyType)
                         .findFirst()
                         .ifPresent(field -> {
                             try {

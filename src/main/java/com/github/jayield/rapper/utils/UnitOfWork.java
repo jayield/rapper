@@ -2,6 +2,10 @@ package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.utils.helpers.AbstractCommitHelper;
+import com.github.jayield.rapper.utils.helpers.CreateHelper;
+import com.github.jayield.rapper.utils.helpers.DeleteHelper;
+import com.github.jayield.rapper.utils.helpers.UpdateHelper;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.TransactionIsolation;
 import org.slf4j.Logger;
@@ -14,8 +18,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
-
-import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
 
 public class UnitOfWork {
     private static final String UNSUCCESSFUL_COMMIT_MESSAGE = "{} - Rolling back changes due to {}";
@@ -35,7 +37,7 @@ public class UnitOfWork {
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
     private final CreateHelper createHelper = new CreateHelper(newObjects);
     private final UpdateHelper updateHelper = new UpdateHelper(dirtyObjects, clonedObjects, removedObjects);
-    private final DeleteHelper deleteHelper = new DeleteHelper(removedObjects);
+    private final DeleteHelper deleteHelper = new DeleteHelper(removedObjects, dirtyObjects);
 
     public UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
@@ -125,9 +127,6 @@ public class UnitOfWork {
                 return toRet;
             } else {
                 List<CompletableFuture<Void>> completableFutures = iterateMultipleLists(abstractCommitHelper -> abstractCommitHelper.commitNext(this));
-                createHelper.reset();
-                updateHelper.reset();
-                deleteHelper.reset();
 
                 return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                         .thenCompose(aVoid -> proceedCommit())
@@ -139,9 +138,7 @@ public class UnitOfWork {
                         .handleAsync((aVoid, throwable) -> {
                             if (throwable != null) {
                                 logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
-                                return rollback().thenAccept(aVoid1 -> {
-                                    throw new DataMapperException(throwable);
-                                });
+                                return rollback().thenAccept(aVoid1 -> { throw new DataMapperException(throwable); });
                             }
                             return CompletableFuture.<Void>completedFuture(null);
                         })
@@ -155,28 +152,7 @@ public class UnitOfWork {
 
     private CompletableFuture<Void> proceedCommit() {
         List<CompletableFuture<Void>> futures = iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
-        createHelper.reset();
-        updateHelper.reset();
-        deleteHelper.reset();
         return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
-    }
-
-    public List<CompletableFuture<Void>> iterateMultipleLists(Function<AbstractCommitHelper, CompletableFuture<Void>> function) {
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-
-        CompletableFuture<Void> createFuture;
-        CompletableFuture<Void> updateFuture;
-        CompletableFuture<Void> deleteFuture;
-        do {
-            createFuture = function.apply(createHelper);
-            updateFuture = function.apply(updateHelper);
-            deleteFuture = function.apply(deleteHelper);
-
-            if (createFuture != null) futures.add(createFuture);
-            if (updateFuture != null) futures.add(updateFuture);
-            if (deleteFuture != null) futures.add(deleteFuture);
-        } while (createFuture != null || updateFuture != null || deleteFuture != null);
-        return futures;
     }
 
     /**
@@ -192,24 +168,35 @@ public class UnitOfWork {
                         .thenCompose(v -> closeConnection());
             }
 
-            newObjects.forEach(domainObject -> getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey()));
-
-            for (DomainObject obj : dirtyObjects) {
-                clonedObjects.stream()
-                        .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
-                        .findFirst()
-                        .ifPresent(
-                                clone -> getRepository(obj.getClass()).validate(clone.getIdentityKey(), clone)
-                        );
-            }
-
-            removedObjects.stream()
-                    .filter(obj -> !dirtyObjects.contains(obj))
-                    .forEach(obj -> getRepository(obj.getClass()).validate(obj.getIdentityKey(), obj));
+            iterateMultipleLists(abstractCommitHelper -> {
+                abstractCommitHelper.rollbackNext();
+                return null;
+            });
 
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
             throw new DataMapperException(e);
         }
+    }
+
+    public <N> List<N> iterateMultipleLists(Function<AbstractCommitHelper, N> function) {
+        List<N> list = new ArrayList<>();
+
+        N createFuture;
+        N updateFuture;
+        N deleteFuture;
+        do {
+            createFuture = function.apply(createHelper);
+            updateFuture = function.apply(updateHelper);
+            deleteFuture = function.apply(deleteHelper);
+
+            if (createFuture != null) list.add(createFuture);
+            if (updateFuture != null) list.add(updateFuture);
+            if (deleteFuture != null) list.add(deleteFuture);
+        } while (createFuture != null || updateFuture != null || deleteFuture != null);
+        createHelper.reset();
+        updateHelper.reset();
+        deleteHelper.reset();
+        return list;
     }
 }

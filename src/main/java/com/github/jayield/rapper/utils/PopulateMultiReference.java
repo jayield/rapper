@@ -13,13 +13,13 @@ import java.util.stream.Stream;
 
 public class PopulateMultiReference<T extends DomainObject<K>, K> extends AbstractPopulate<T, K> {
 
-    public PopulateMultiReference(ExternalsHandler<T, K> externalsHandler) {
-        super(externalsHandler);
+    public PopulateMultiReference(ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings) {
+        super(externalsHandler, mapperSettings);
     }
 
     @Override
     public Stream<Object> idValues(T t, SqlField.SqlFieldExternal sqlFieldExternal) {
-        return externalsHandler.getIds()
+        return mapperSettings.getIds()
                 .stream()
                 .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
     }

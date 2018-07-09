@@ -38,7 +38,7 @@ public class DomainObjectComparatorTests {
         MapperSettings employeeSettings = new MapperSettings(Employee.class);
         employeeComparator = new DomainObjectComparator<>(employeeSettings);
 
-        Field repositoryMapField = MapperRegistry.class.getDeclaredField("repositoryMap");
+        Field repositoryMapField = MapperRegistry.class.getDeclaredField("containerMap");
         repositoryMapField.setAccessible(true);
         repositoryMap = (Map<Class, MapperRegistry.Container>) repositoryMapField.get(null);
     }

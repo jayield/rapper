@@ -16,13 +16,13 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
 
     private final Logger logger = LoggerFactory.getLogger(PopulateWithExternalTable.class);
 
-    public PopulateWithExternalTable(ExternalsHandler<T, K> externalsHandler) {
-        super(externalsHandler);
+    public PopulateWithExternalTable(ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings) {
+        super(externalsHandler, mapperSettings);
     }
 
     @Override
     public Stream<Object> idValues(T t, SqlField.SqlFieldExternal sqlFieldExternal) {
-        return externalsHandler.getIds()
+        return mapperSettings.getIds()
                 .stream()
                 .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
     }

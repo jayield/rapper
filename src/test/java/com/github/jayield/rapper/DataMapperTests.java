@@ -326,7 +326,6 @@ public class DataMapperTests {
         employeeMapper.update(unit, employee).join();
 
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Boba"), AssertUtils::assertEmployee, con);
-
     }
 
     @Test
