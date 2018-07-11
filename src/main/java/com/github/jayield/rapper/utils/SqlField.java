@@ -26,7 +26,7 @@ public class SqlField {
         this.selectQueryValue = selectQueryValue;
     }
 
-    public <T> Stream<Object> getValuesForStatement(T obj) {
+    public Stream<Object> getValuesForStatement(Object obj) {
         field.setAccessible(true);
         try {
             return Stream.of( obj != null ? field.get(obj) : null);
@@ -59,7 +59,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+        public Stream<Object> getValuesForStatement(Object obj) {
             Object key = null;
             if(obj != null) {
                 if (DomainObject.class.isAssignableFrom(obj.getClass()))
@@ -222,11 +222,10 @@ public class SqlField {
         /**
          * This method will only be called to obtain the primary key of the object when it's a simple relation (ex. CF<DomainObject>)
          * @param obj
-         * @param <T>
          * @return
          */
         @Override
-        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+        public Stream<Object> getValuesForStatement(Object obj) {
             try {
                 field.setAccessible(true);
                 Foreign foreign = (Foreign) field.get(obj);

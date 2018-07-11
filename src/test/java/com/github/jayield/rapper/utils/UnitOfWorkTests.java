@@ -110,16 +110,13 @@ public class UnitOfWorkTests {
 
         unit.commit().join();
 
-        Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
-        identityMapField.setAccessible(true);
-
         assertNewObjects(true);
         assertDirtyObjects(true);
         assertRemovedObjects(true);
 
-        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
-        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
-        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
+        assertIdentityMaps(unit, newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(unit, dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(unit, removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
     }
 
     @Test
@@ -148,22 +145,20 @@ public class UnitOfWorkTests {
         assertTrue(failed[0]);
 
         removedObjects.remove(chat);
-        Field identityMapField = DataRepository.class.getDeclaredField("identityMap");
-        identityMapField.setAccessible(true);
 
         assertNewObjects(false);
         assertDirtyObjects(false);
         assertRemovedObjects(false);
 
-        assertIdentityMaps(identityMapField, newObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
-        assertIdentityMaps(identityMapField, dirtyObjects, (identityMap, domainObject) -> {
+        assertIdentityMaps(unit, newObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
+        assertIdentityMaps(unit, dirtyObjects, (identityMap, domainObject) -> {
             CompletableFuture<DomainObject> completableFuture = (CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey());
             if(completableFuture != null)
                 assertNotEquals(completableFuture.join(), domainObject);
             else
                 assertNull(identityMap.get(domainObject.getIdentityKey()));
         });
-        assertIdentityMaps(identityMapField, removedObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(unit, removedObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
     }
 
     @Test
@@ -191,10 +186,9 @@ public class UnitOfWorkTests {
         unit.rollback().join();
     }
 
-    private void assertIdentityMaps(Field identityMapField, List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {
+    private void assertIdentityMaps(UnitOfWork identityMapField, List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {
         for (DomainObject domainObject : objectList) {
-            DataRepository repository = getRepository(domainObject.getClass());
-            ConcurrentMap identityMap = (ConcurrentMap) identityMapField.get(repository);
+            ConcurrentMap identityMap = unit.getIdentityMap(domainObject.getClass());
             assertion.accept(identityMap, domainObject);
         }
     }

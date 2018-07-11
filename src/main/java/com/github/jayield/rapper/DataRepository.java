@@ -57,8 +57,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K k) {
-        CompletableFuture<T> completableFuture = unit.getIdentityMap(type).computeIfAbsent(k, k1 -> mapper.findById(unit, k)
-                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found"))))
+        CompletableFuture<T> completableFuture = unit
+                .getIdentityMap(type)
+                .computeIfAbsent(k, k1 ->
+                        mapper.findById(unit, k)
+                                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")))
+                )
                 .thenApply(t -> (T)t);
 
         //else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
@@ -98,12 +102,12 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Void> update(UnitOfWork unit, T t) {
         unit.registerDirty(t);
 
-        CompletableFuture<T> future = unit.getIdentityMap(type).computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
+        CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
                 tCompletableFuture.thenApply(t2 -> {
                     unit.registerClone(t2);
                     return t2;
                 })
-        ).thenApply(obj -> (T)obj);
+        );
 
         return future != null ? future.thenApply(t1 -> null) :
                 findById(unit, t.getIdentityKey())
@@ -122,10 +126,10 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
-        CompletableFuture<T> future = unit.getIdentityMap(type).computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
+        CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
             unit.registerRemoved(t);
             return t;
-        })).thenApply(obj -> (T)obj);
+        }));
 
         return future != null ? future.thenApply(t -> null) :
                 findById(unit, k)

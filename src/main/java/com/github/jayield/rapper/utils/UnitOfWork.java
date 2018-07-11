@@ -11,10 +11,7 @@ import io.vertx.ext.sql.TransactionIsolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -214,11 +211,11 @@ public class UnitOfWork {
     }
 
     public<T extends DomainObject<K>, K> void invalidate(Class<T> type, K identityKey) {
-        identityMap.get(type).remove(identityKey);
+        getIdentityMap(type).remove(identityKey);
     }
 
     public<T extends DomainObject<K>, K> void validate(K identityKey, T t) {
-        identityMap.get(t.getClass()).compute(identityKey,
+        getIdentityMap(t.getClass()).compute(identityKey,
                 (k, tCompletableFuture) -> tCompletableFuture == null
                         ? CompletableFuture.completedFuture(t)
                         : tCompletableFuture.thenApply(t1 -> getHighestVersionT(t, t1))
@@ -231,23 +228,21 @@ public class UnitOfWork {
 
     public<T extends DomainObject<K>, K> List<CompletableFuture<T>> processNewObjects(Class<T> type, List<T> tList, Comparator<T> comparator) {
         return tList.stream()
-                .map(t -> identityMap.get(type).compute(t.getIdentityKey(), (k, tCompletableFuture) ->
-                        computeNewValue(t, tCompletableFuture.thenApply(obj -> (T)obj), comparator)).thenApply(obj -> (T)obj))
+                .map(t -> getIdentityMap(type).compute(t.getIdentityKey(), (k, tCompletableFuture) ->
+                        computeNewValue(t, Optional.ofNullable(tCompletableFuture).map(completableFuture -> completableFuture.thenApply(t1 -> (T) t1)), comparator)).thenApply(obj -> (T)obj))
                 .collect(Collectors.toList());
     }
 
-    private<T extends DomainObject<K>, K> CompletableFuture<T> computeNewValue(T newT, CompletableFuture<T> actualFuture, Comparator<T> comparator) {
-        CompletableFuture<T> newFuture = CompletableFuture.completedFuture(newT);
+    private<T extends DomainObject<K>, K> CompletableFuture<T> computeNewValue(T newT, Optional<CompletableFuture<T>> actualFuture, Comparator<T> comparator) {
 
-        if (actualFuture == null) return newFuture;
 
-        return actualFuture.thenApply(t -> {
+        return actualFuture.map(tCompletableFuture -> tCompletableFuture.thenApply(t -> {
             if(comparator.compare(t, newT) < 0) return newT;
             return t;
-        });
+        })).orElse(CompletableFuture.completedFuture(newT));
     }
 
     public ConcurrentHashMap<Object, CompletableFuture<? extends DomainObject>> getIdentityMap(Class<? extends DomainObject> klass) {
-        return identityMap.get(klass);
+        return identityMap.computeIfAbsent(klass, aClass -> new ConcurrentHashMap<>());
     }
 }
