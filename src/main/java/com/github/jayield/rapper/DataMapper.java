@@ -54,13 +54,13 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     .map(pair -> pair.getKey() + " = ?")
                     .collect(Collectors.joining(" and ", " where ", ""));
 
-        return SQLUtils.query(mapperSettings.getSelectCountQuery() + whereCondition, unit, prepareFindWhere(values))
+        return SqlUtils.query(mapperSettings.getSelectCountQuery() + whereCondition, unit, prepareFindWhere(values))
                 .thenApply(this::getNumberOfEntries);
     }
 
     @Override
     public CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit) {
-        return SQLUtils.query(mapperSettings.getSelectCountQuery(), unit, new JsonArray())
+        return SqlUtils.query(mapperSettings.getSelectCountQuery(), unit, new JsonArray())
                 .thenApply(this::getNumberOfEntries);
     }
 
@@ -81,7 +81,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K id) {
         String selectByIdQuery = mapperSettings.getSelectByIdQuery();
-        return SQLUtils.queryAsyncParams(selectByIdQuery, unit, SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), id))
+        return SqlUtils.query(selectByIdQuery, unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), id))
                 .thenApply(rs -> {
                     log.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
                     Optional<T> optionalT = stream(rs).findFirst();
@@ -138,7 +138,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
-        return SQLUtils.updateAsyncParams(mapperSettings.getDeleteQuery(), unit, SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), k))
+        return SqlUtils.update(mapperSettings.getDeleteQuery(), unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), k))
                 .thenCompose(updateResult -> {
                     log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), k, unit.hashCode());
                     return getParentMapper()
@@ -153,7 +153,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Void> delete(UnitOfWork unit, T obj) {
-        return SQLUtils.updateAsyncParams(mapperSettings.getDeleteQuery(), unit, SQLUtils.setValuesInStatement(mapperSettings.getIds().stream(), obj))
+        return SqlUtils.update(mapperSettings.getDeleteQuery(), unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), obj))
                 .thenCompose(updateResult -> {
                     log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), obj.getIdentityKey(), unit.hashCode());
                     return getParentMapper()
@@ -179,7 +179,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", suffix));
         else query = mapperSettings.getSelectQuery() + suffix;
 
-        return SQLUtils.query(query, unit, prepareFindWhere(values))
+        return SqlUtils.query(query, unit, prepareFindWhere(values))
                 .thenApply(resultSet -> processFindWhere(resultSet, values, unit))
                 .exceptionally(throwable -> {
                     log.warn(QUERY_ERROR, "FindWhere", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
@@ -204,7 +204,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     private CompletableFuture<List<T>> findAllAux(UnitOfWork unit, String suffix) {
-        return SQLUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
+        return SqlUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
                 .thenApply(resultSet -> {
                         log.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
                         return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
@@ -216,7 +216,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     private CompletableFuture<Void> createAux(UnitOfWork unit, T obj) {
-        return SQLUtils.updateAsyncParams(mapperSettings.getInsertQuery(), unit, prepareCreate(obj))
+        return SqlUtils.update(mapperSettings.getInsertQuery(), unit, prepareCreate(obj))
                 .thenCompose(updateResult -> processCreate(obj, unit, updateResult))
                 .thenAccept(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
@@ -234,7 +234,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return this.findById(current, obj.getIdentityKey());
     }
 
-    private CompletableFuture<JsonArray> prepareCreate(T obj) {
+    private JsonArray prepareCreate(T obj) {
         Stream<SqlFieldId> ids = mapperSettings
                 .getIds()
                 .stream()
@@ -250,11 +250,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
                 .sorted(Comparator.comparing(SqlField::byInsert));
 
-        return SQLUtils.setValuesInStatement(fields, obj);
+        return SqlUtils.getValuesForStatement(fields, obj);
     }
 
     private CompletableFuture<Void> updateAux(T obj, UnitOfWork unit) {
-        return SQLUtils.updateAsyncParams(mapperSettings.getUpdateQuery(), unit, prepareUpdate(obj))
+        return SqlUtils.update(mapperSettings.getUpdateQuery(), unit, prepareUpdate(obj))
                 .thenCompose(updateResult -> processUpdate(obj, unit, updateResult))
                 .thenAccept(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
@@ -272,7 +272,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return this.findById(current, obj.getIdentityKey());
     }
 
-    private CompletableFuture<JsonArray> prepareUpdate(T obj) {
+    private JsonArray prepareUpdate(T obj) {
         try {
             Stream<SqlFieldId> ids = mapperSettings.getIds().stream();
             Stream<SqlField> columns = mapperSettings.getColumns().stream();
@@ -284,7 +284,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
                     .sorted(Comparator.comparing(SqlField::byUpdate));
 
-            CompletableFuture<JsonArray> jsonArray = SQLUtils.setValuesInStatement(fields, obj);
+            JsonArray jsonArray = SqlUtils.getValuesForStatement(fields, obj);
 
             //Since each object has its own version, we want the version from type not from the subClass
             SqlFieldVersion versionField = mapperSettings.getVersionField();
@@ -292,7 +292,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 Field f = versionField.field;
                 f.setAccessible(true);
                 long version = (long) f.get(obj);
-                jsonArray = jsonArray.thenApply(ja -> {ja.add(version); return ja;});
+                jsonArray.add(version);
             }
             return jsonArray;
         } catch ( IllegalAccessException e) {
@@ -334,8 +334,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             List<Object> idValues = new ArrayList<>();
 
-            mapperSettings
-                    .getAllFields()
+            mapperSettings.getAllFields()
                     .stream()
                     .filter(field -> mapperSettings.getFieldPredicate().test(field.field))
                     .forEach(sqlField -> setField(rs, t, primaryKey, sqlField, idValues));

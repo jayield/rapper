@@ -120,7 +120,7 @@ public class UnitOfWork {
             if (newObjects.isEmpty() && clonedObjects.isEmpty() && dirtyObjects.isEmpty() && removedObjects.isEmpty()) {
                 CompletableFuture<Void> toRet = CompletableFuture.completedFuture(null);
                 if (connection != null) {
-                    toRet = connection.thenCompose(con -> SQLUtils.callbackToPromise(con::commit))
+                    toRet = connection.thenCompose(con -> SqlUtils.callbackToPromise(con::commit))
                             .thenCompose(v -> closeConnection())
                             .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()));
                 }
@@ -129,11 +129,12 @@ public class UnitOfWork {
                 List<CompletableFuture<Void>> completableFutures = iterateMultipleLists(abstractCommitHelper -> abstractCommitHelper.commitNext(this));
 
                 return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
-                        .thenCompose(aVoid -> proceedCommit())
-                        .thenCompose(v ->
-                                connection.thenCompose(con ->
-                                        SQLUtils.callbackToPromise(con::commit)
-                                                .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode()))))
+                        .thenCompose(v -> {
+                            proceedCommit();
+                            return connection.thenCompose(con ->
+                                    SqlUtils.callbackToPromise(con::commit)
+                                            .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode())));
+                        })
                         .thenCompose(v -> closeConnection())
                         .handleAsync((aVoid, throwable) -> {
                             if (throwable != null) {
@@ -150,9 +151,8 @@ public class UnitOfWork {
         }
     }
 
-    private CompletableFuture<Void> proceedCommit() {
-        List<CompletableFuture<Void>> futures = iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
-        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[futures.size()]));
+    private void proceedCommit() {
+        iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
     }
 
     /**
@@ -164,14 +164,11 @@ public class UnitOfWork {
         try {
             //System.out.println("connection in rollbak " + connection);
             if(connection != null) {
-                return connection.thenCompose(con -> SQLUtils.callbackToPromise(con::rollback))
+                return connection.thenCompose(con -> SqlUtils.callbackToPromise(con::rollback))
                         .thenCompose(v -> closeConnection());
             }
 
-            iterateMultipleLists(abstractCommitHelper -> {
-                abstractCommitHelper.rollbackNext();
-                return null;
-            });
+            iterateMultipleLists(AbstractCommitHelper::rollbackNext);
 
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {

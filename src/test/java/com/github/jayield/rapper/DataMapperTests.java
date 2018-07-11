@@ -47,8 +47,8 @@ public class DataMapperTests {
         unit = new UnitOfWork(connectionSupplier);
         CompletableFuture<SQLConnection> con = unit.getConnection();
         con.thenCompose(sqlConnection ->
-                SQLUtils.<ResultSet>callbackToPromise(ar -> sqlConnection.call("{call deleteDB()}", ar))
-                .thenAccept(v -> SQLUtils.<ResultSet>callbackToPromise(ar -> sqlConnection.call("{call populateDB()}", ar)))
+                SqlUtils.<ResultSet>callbackToPromise(ar -> sqlConnection.call("{call deleteDB()}", ar))
+                .thenAccept(v -> SqlUtils.<ResultSet>callbackToPromise(ar -> sqlConnection.call("{call populateDB()}", ar)))
                 //.thenAccept(v -> SQLUtils.callbackToPromise(sqlConnection::commit))
                 .thenCompose(v -> unit.commit())
         ).join();
@@ -78,7 +78,7 @@ public class DataMapperTests {
         List<Person> people = personMapper.findWhere(unit, new Pair<>("name", "Jose")).join();
 
         SQLConnection con = unit.getConnection().join();
-        SQLUtils.<ResultSet>callbackToPromise(ar ->
+        SqlUtils.<ResultSet>callbackToPromise(ar ->
                 con.queryWithParams("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?",
                         new JsonArray().add("Jose"), ar))
                 .thenAccept(resultSet -> {
@@ -95,7 +95,7 @@ public class DataMapperTests {
 
         SQLConnection con = unit.getConnection().join();
 
-        SQLUtils.<ResultSet>callbackToPromise(ar ->
+        SqlUtils.<ResultSet>callbackToPromise(ar ->
                 con.queryWithParams("select owner, plate, brand, model, CAST(version as bigint) version from Car where brand = ?",
                         new JsonArray().add("Mitsubishi"), ar))
                 .thenAccept(resultSet -> {
@@ -103,15 +103,15 @@ public class DataMapperTests {
                         fail("Database has no data");
                     assertCar(cars.remove(0), resultSet.getRows(true).get(0));
                 })
-                .thenAccept(v -> SQLUtils.callbackToPromise(con::rollback))
+                .thenAccept(v -> SqlUtils.callbackToPromise(con::rollback))
                 .join();
     }
 
     @Test
     public void testNNExternalFindWhere(){
-        SQLConnection con = unit.getConnection().join();
         Book book = bookMapper.findWhere(unit, new Pair<>("name", "1001 noites")).join().get(0);
-        assertSingleRow(book, bookSelectQuery, new JsonArray().add(book.getName()), (book1, rs) -> AssertUtils.assertBook(book1, rs, con ), con);
+
+        assertSingleRow(book, bookSelectQuery, new JsonArray().add(book.getName()), (book1, rs) -> AssertUtils.assertBook(book1, rs, unit), unit.getConnection().join());
     }
 
     @Test
@@ -237,9 +237,8 @@ public class DataMapperTests {
                 .findById(unit, new Company.PrimaryKey(1, 1))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
 
-        Employee employee = new Employee(0, "Hugo", 0, companyCompletableFuture);
-        employeeMapper.create(unit, employee)
-                .join();
+        Employee employee = new Employee(0, "Hugo", 0, new Foreign<>( new Company.PrimaryKey(1, 1), uW -> companyCompletableFuture));
+        employeeMapper.create(unit, employee).join();
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Hugo"), AssertUtils::assertEmployee, con);
     }
 
@@ -305,9 +304,9 @@ public class DataMapperTests {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(first.getInteger("id"),"Boba", first.getLong("version"),
-                companyMapper
+                new Foreign<>(new Company.PrimaryKey(1, 2), uW -> companyMapper
                         .findById(unit, new Company.PrimaryKey(1, 2))
-                        .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
+                        .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))))));
 
         employeeMapper.update(unit, employee).join();
 
@@ -402,9 +401,9 @@ public class DataMapperTests {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(first.getInteger("id"), first.getString("name"), first.getLong("version"),
-                companyMapper
+                new Foreign<>(new Company.PrimaryKey(1, 2), uW -> companyMapper
                         .findById(unit, new Company.PrimaryKey(1, 2))
-                        .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found")))));
+                        .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))))));
         employeeMapper.delete(unit, employee).join();
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
     }

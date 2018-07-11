@@ -1,6 +1,5 @@
 package com.github.jayield.rapper.utils;
 
-import com.github.jayield.rapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
 import com.github.jayield.rapper.ExternalsHandler;
@@ -8,8 +7,9 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements Populate<T> {
@@ -36,22 +36,19 @@ public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements 
      * The field must be a collection or a Supplier
      *
      * @param t
-     * @param domainObjects
+     * @param futureSupplier
      * @param field
-     * @param fieldType
      * @throws DataMapperException
      */
-    protected void setExternal(T t, Object domainObjects, Field field, Class<?> fieldType) {
+    /*protected <R> void setExternal(T t, Function<UnitOfWork, CompletableFuture<R>> futureSupplier, Field field) {
         try {
-            if (fieldType.isAssignableFrom(CompletableFuture.class)) {
-                field.setAccessible(true);
-                field.set(t, domainObjects);
-            } else throw new DataMapperException("Couldn't set external, unsupported field type");
+            field.setAccessible(true);
+            field.set(t, futureSupplier);
         } catch (IllegalAccessException e) {
             throw new DataMapperException(e);
         }
     }
-
+*/
     /**
      * It will get the value of the primary key from t
      *

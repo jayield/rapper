@@ -17,7 +17,6 @@ import java.net.URLDecoder;
 import java.util.Comparator;
 import java.util.Map;
 
-import static com.github.jayield.rapper.utils.DBsPath.TESTDB;
 import static org.junit.Assert.*;
 
 public class DomainObjectComparatorTests {
@@ -52,9 +51,9 @@ public class DomainObjectComparatorTests {
         unit = new UnitOfWork(connectionManager::getConnection);
         SQLConnection con = connectionManager.getConnection().join();
 
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
-        SQLUtils.callbackToPromise(con::commit).join();
+        SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
+        SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
+        SqlUtils.callbackToPromise(con::commit).join();
     }
 
     @After

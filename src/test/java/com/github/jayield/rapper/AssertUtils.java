@@ -1,7 +1,9 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.utils.SQLUtils;
+import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.utils.UnitOfWork;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
@@ -10,7 +12,6 @@ import io.vertx.ext.sql.SQLConnection;
 import java.lang.reflect.Field;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
@@ -64,25 +65,26 @@ public class AssertUtils {
         }
     }
 
-    public static void assertCompanyWithExternal(Company company, JsonObject rs, SQLConnection con) {
+    public static void assertCompanyWithExternal(Company company, JsonObject rs, UnitOfWork unit) {
         assertEquals(company.getIdentityKey().getId(), rs.getInteger("id").intValue());
         assertEquals(company.getIdentityKey().getCid(), rs.getInteger("cid").intValue());
         assertEquals(company.getMotto(), rs.getString("motto"));
         assertEquals(company.getVersion(), rs.getLong("version").longValue());
         assertNotEquals(0, company.getVersion());
 
-        CompletableFuture<List<Employee>> completableFuture = company.getEmployees();
+        CompletableFuture<List<Employee>> completableFuture = company.getEmployees().apply(unit);
+        SQLConnection con = unit.getConnection().join();
         if(completableFuture != null) {
             List<Employee> employees = completableFuture.join();
-            SQLUtils.<ResultSet>callbackToPromise(ar ->
+            SqlUtils.<ResultSet>callbackToPromise(ar ->
                     con.queryWithParams("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?",
                             new JsonArray().add(company.getIdentityKey().getId()).add(company.getIdentityKey().getCid()), ar))
                     .thenAccept(resultSet -> resultSet.getRows(true).forEach(jo ->
-                            assertEmployeeWithExternals(employees.remove(0), jo)))
+                            assertEmployeeWithExternals(employees.remove(0), jo, unit)))
                     .join();
         }
         else {
-            SQLUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?",
+            SqlUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?",
                     new JsonArray().add(company.getIdentityKey().getId()).add(company.getIdentityKey().getCid()), ar))
                     .thenAccept(resultSet -> assertTrue(resultSet.getRows(true).isEmpty()))
                     .join();
@@ -97,12 +99,12 @@ public class AssertUtils {
         assertNotEquals(0, company.getVersion());
     }
 
-    public static void assertEmployeeWithExternals(Employee employee, JsonObject rs) {
+    public static void assertEmployeeWithExternals(Employee employee, JsonObject rs, UnitOfWork unit) {
         assertEquals((int) employee.getIdentityKey(), rs.getInteger("id").intValue());
         assertEquals(employee.getName(), rs.getString("name"));
         assertEquals(employee.getVersion(), rs.getLong("version").longValue());
-        System.out.println(rs);
-        CompletableFuture<Company> companyCompletableFuture = employee.getCompany();
+        //System.out.println(rs);
+        CompletableFuture<Company> companyCompletableFuture = employee.getCompany().getForeignFunction().apply(unit);
         if(companyCompletableFuture != null){
             Company company = companyCompletableFuture.join();
             assertEquals(company.getIdentityKey().getId(), rs.getInteger("companyId").intValue());
@@ -120,16 +122,16 @@ public class AssertUtils {
         assertEquals(employee.getVersion(), rs.getLong("version").longValue());
     }
 
-    public static void assertBook(Book book, JsonObject rs, SQLConnection con){
+    public static void assertBook(Book book, JsonObject rs, UnitOfWork unit){
         assertEquals((long) book.getIdentityKey(), rs.getLong("id").longValue());
         assertEquals(book.getName(), rs.getString("name"));
         assertEquals(book.getVersion(), rs.getLong("version").longValue());
 
-        CompletableFuture<List<Author>> authors = book.getAuthors();
+        CompletableFuture<List<Author>> authors = book.getAuthors().apply(unit);
         if(authors != null) {
             Author author = authors.join().get(0);
-            SQLUtils.<ResultSet>callbackToPromise(ar ->
-                    con.queryWithParams("select id, name, CAST(version as bigint) version from Author where id = ?",
+            SqlUtils.<ResultSet>callbackToPromise(ar ->
+                    unit.getConnection().join().queryWithParams("select id, name, CAST(version as bigint) version from Author where id = ?",
                             new JsonArray().add(author.getIdentityKey()), ar))
                     .thenAccept(resultSet -> assertAuthor(author, resultSet.getRows(true).get(0)))
                     .join();
@@ -168,27 +170,22 @@ public class AssertUtils {
 
     //---------------------------ResultSets assertions-----------------------------------
     public static<U> void assertSingleRow(U object, String sql, JsonArray jsonArray, BiConsumer<U, JsonObject> assertConsumer, SQLConnection con) {
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar))
-                .thenAccept(resultSet -> {
-                    if(resultSet.getRows(true).isEmpty())
-                        fail("Object wasn't selected from the database");
-                    else
-                        assertConsumer.accept(object, resultSet.getRows(true).get(0));
-                }).join();
+        ResultSet resultSet = SqlUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
+        if(resultSet.getRows(true).isEmpty())
+            throw new DataMapperException("Object wasn't selected from the database");
+        else
+            assertConsumer.accept(object, resultSet.getRows(true).get(0));
     }
 
     public static<U> void assertMultipleRows(SQLConnection connection, List<U> list, String sql, BiConsumer<U, JsonObject> assertConsumer, int expectedRows){
-        SQLUtils.<ResultSet>callbackToPromise(ar -> connection.query(sql, ar))
-                .thenAccept(resultSet -> {
-                    List<JsonObject> res = resultSet.getRows(true);
-                    assertEquals(expectedRows, res.size());
-                    assertConsumer.accept(list.get(0), res.get(0));
-                }).join();
+        ResultSet resultSet = SqlUtils.<ResultSet>callbackToPromise(ar -> connection.query(sql, ar)).join();
+        List<JsonObject> res = resultSet.getRows(true);
+        assertEquals(expectedRows, res.size());
+        assertConsumer.accept(list.get(0), res.get(0));
     }
 
     public static void assertNotFound(String sql, JsonArray jsonArray, SQLConnection con){
-        SQLUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar))
-                .thenAccept(resultSet -> assertTrue(resultSet.getRows(true).isEmpty()))
-                .join();
+        ResultSet resultSet = SqlUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
+        assertTrue(resultSet.getRows(true).isEmpty());
     }
 }

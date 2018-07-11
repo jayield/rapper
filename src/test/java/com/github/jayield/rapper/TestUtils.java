@@ -4,11 +4,6 @@ import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
-import org.hsqldb.cmdline.SqlFile;
-import org.hsqldb.cmdline.SqlToolError;
-
-import java.io.*;
-import java.util.function.Consumer;
 
 import static com.github.jayield.rapper.utils.ConnectionManager.getConnectionManager;
 import static org.junit.Assert.assertEquals;
@@ -29,7 +24,7 @@ public class TestUtils {
     public static final String dogSelectQuery = "select name, race, age from Dog where name = ? and race = ?";
 
     public static ResultSet executeQuery(String sql, JsonArray jsonArray, SQLConnection con){
-         return SQLUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
+         return SqlUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
     }
 
 //    public static Consumer<PreparedStatement> getPersonPSConsumer(int nif) {

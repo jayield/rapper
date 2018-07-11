@@ -5,12 +5,11 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.sql.Date;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -45,7 +44,9 @@ public class MapperSettings {
             || field.getType().isAssignableFrom(Integer.class)
             || field.getType().isAssignableFrom(Double.class)
             || field.getType().isAssignableFrom(Long.class)
-            || field.getType().isAssignableFrom(Boolean.class);
+            || field.getType().isAssignableFrom(Boolean.class)
+            || field.getType().isAssignableFrom(Function.class)
+            || field.getType().isAssignableFrom(Foreign.class);
 
     public MapperSettings(Class<?> type) {
         this.type = type;

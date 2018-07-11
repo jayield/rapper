@@ -1,7 +1,6 @@
 package com.github.jayield.rapper.utils;
 
 import io.vertx.core.Vertx;
-import io.vertx.core.VertxOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.jdbc.JDBCClient;
 import io.vertx.ext.sql.SQLConnection;
@@ -9,8 +8,6 @@ import io.vertx.ext.sql.TransactionIsolation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.sql.Connection;
-import java.sql.SQLException;
 import java.util.concurrent.CompletableFuture;
 
 public class ConnectionManager {
@@ -78,14 +75,14 @@ public class ConnectionManager {
     }
 
     public CompletableFuture<SQLConnection> getConnection() {
-        return SQLUtils.callbackToPromise(client::getConnection)
-                .thenCompose(con -> SQLUtils.<Void>callbackToPromise(ar -> con.setAutoCommit(false, ar))
+        return SqlUtils.callbackToPromise(client::getConnection)
+                .thenCompose(con -> SqlUtils.<Void>callbackToPromise(ar -> con.setAutoCommit(false, ar))
                         .thenApply(v -> con));
     }
 
     public CompletableFuture<SQLConnection> getConnection(int transactionLevel){
         return getConnection().thenCompose(con ->
-            SQLUtils.<Void>callbackToPromise(ar -> con.setTransactionIsolation(TransactionIsolation.from(transactionLevel), ar))
+            SqlUtils.<Void>callbackToPromise(ar -> con.setTransactionIsolation(TransactionIsolation.from(transactionLevel), ar))
                 .thenApply(v -> con)
         );
     }

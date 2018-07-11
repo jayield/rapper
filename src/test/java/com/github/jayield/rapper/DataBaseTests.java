@@ -1,9 +1,6 @@
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.domainModel.Company;
-import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.utils.*;
-import com.mchange.v2.sql.SqlUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;
@@ -13,8 +10,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.URLDecoder;
-import java.sql.Timestamp;
-import java.util.Date;
 
 import static org.junit.Assert.assertEquals;
 
@@ -42,29 +37,29 @@ public class DataBaseTests {
     @Test
     public void connectivity() {
         try (SQLConnection con = connectionManager.getConnection().join()) {
-            SQLUtils.<UpdateResult>callbackToPromise(ar ->
+            SqlUtils.<UpdateResult>callbackToPromise(ar ->
                     con.update("insert into Person(nif, name, birthday) values (1, 'Test', '1990-05-02')", ar))
                     .thenApply(UpdateResult::getUpdated)
                     .thenAccept(updated -> assertEquals(1, updated.intValue()))
                     .join();
 
-            SQLUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.query("select * from Person", ar))
+            SqlUtils.<io.vertx.ext.sql.ResultSet>callbackToPromise(ar -> con.query("select * from Person", ar))
                     .thenApply(resultSet -> resultSet.getRows().isEmpty())
                     .thenAccept(Assert::assertFalse)
                     .join();
 
-            SQLUtils.<UpdateResult>callbackToPromise(ar ->
+            SqlUtils.<UpdateResult>callbackToPromise(ar ->
                     con.updateWithParams("update Person set name = 'test2' where nif = ?", new JsonArray().add(1), ar))
                     .thenApply(UpdateResult::getUpdated)
                     .thenAccept(updated -> assertEquals(1, updated.intValue()))
                     .join();
 
-            SQLUtils.<UpdateResult>callbackToPromise(ar ->
+            SqlUtils.<UpdateResult>callbackToPromise(ar ->
                     con.updateWithParams("delete from Person where nif = ?", new JsonArray().add(1), ar))
                     .thenApply(UpdateResult::getUpdated)
                     .thenAccept(updated -> assertEquals(1, updated.intValue()))
                     .join();
-            SQLUtils.callbackToPromise(con::rollback)
+            SqlUtils.callbackToPromise(con::rollback)
                     .join();
         }
     }

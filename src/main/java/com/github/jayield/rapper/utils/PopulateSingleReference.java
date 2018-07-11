@@ -3,12 +3,15 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.ExternalsHandler;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.utils.MapperRegistry.Container;
+import com.github.jayield.rapper.utils.SqlField.SqlFieldExternal;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class PopulateSingleReference<T extends DomainObject<K>, K> extends AbstractPopulate<T, K>{
@@ -17,7 +20,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
     }
 
     @Override
-    public Stream<Object> idValues(T t, SqlField.SqlFieldExternal sqlFieldExternal) {
+    public Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal) {
         return Arrays.stream(sqlFieldExternal.getForeignKey());
     }
 
@@ -32,7 +35,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
      * @param <V>
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlField.SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues) {
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         Object id;
         Constructor<?> externalPrimaryKeyConstructor = container.getMapperSettings().getPrimaryKeyConstructor();
         if (externalPrimaryKeyConstructor == null){
@@ -56,12 +59,16 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
             }
         }
 
-        UnitOfWork unit = new UnitOfWork(ConnectionManager.getConnectionManager()::getConnection);
-
-        CompletableFuture<? extends DomainObject> domainObjects = container.getDataRepository()
+        Function<UnitOfWork, CompletableFuture<N>> futureSupplier = unit -> container.getDataRepository()
                 .findById(unit, (V) id)
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
-        setExternal(t, domainObjects, sqlFieldExternal.field, sqlFieldExternal.type);
+
+        try {
+            sqlFieldExternal.field.setAccessible(true);
+            sqlFieldExternal.field.set(t, new Foreign<>((V) id, futureSupplier));
+        } catch (IllegalAccessException e) {
+            throw new DataMapperException(e);
+        }
     }
 }

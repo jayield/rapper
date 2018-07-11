@@ -27,23 +27,25 @@ public class DeleteHelper extends AbstractCommitHelper {
     }
 
     @Override
-    public CompletableFuture<Void> identityMapUpdateNext() {
+    public Object identityMapUpdateNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject object = objectIterator.next();
             getRepository(object.getClass()).invalidate(object.getIdentityKey());
-            return getExternal(object.getClass()).removeReferences(object);
+            return true;
         }
         return null;
     }
 
     @Override
-    public void rollbackNext() {
+    public Object rollbackNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
             if (dirtyObjects.contains(domainObject)) rollbackNext();
             getRepository(domainObject.getClass()).validate(domainObject.getIdentityKey(), domainObject);
+            return true;
         }
+        return null;
     }
 }

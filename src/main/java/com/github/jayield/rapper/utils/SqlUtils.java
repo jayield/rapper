@@ -11,15 +11,14 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class SQLUtils {
+public class SqlUtils {
 
-    private SQLUtils() {
+    private SqlUtils() {
     }
 
-    private static final Logger logger = LoggerFactory.getLogger(SQLUtils.class);
+    private static final Logger logger = LoggerFactory.getLogger(SqlUtils.class);
 
     public static CompletableFuture<ResultSet> query(String sql, UnitOfWork unit, JsonArray params){
         CompletableFuture<SQLConnection> con = unit.getConnection();
@@ -39,17 +38,8 @@ public class SQLUtils {
         return params.thenCompose(jsonArray -> update(sql, unit, jsonArray));
     }
 
-    public static CompletableFuture<JsonArray> setValuesInStatement(Stream<? extends SqlField> fields, Object obj) {
-        //offset is used when a single setValueInStatement sets multiple values (for example in setValueInStatement of SqlFieldExternal)
-//        int[] offset = {0};
-//        CollectionUtils.zipWithIndex(fields)
-//                .forEach(entry -> offset[0] = entry.item.setValueInStatement(stmt, entry.index + 1 + offset[0], obj));
-//        JsonArray jsonArray = new JsonArray();
-
-        return CollectionUtils.listToCompletableFuture(fields.map(f-> f.setValueInStatement(obj)).collect(Collectors.toList()))
-                .thenApply(list -> list.stream().flatMap(s-> s).collect(CollectionUtils.toJsonArray()));
-//        fields.forEach(f -> f.setValueInStatement(obj));
-//        return jsonArray;
+    public static JsonArray getValuesForStatement(Stream<? extends SqlField> fields, Object obj) {
+        return fields.map(f-> f.getValuesForStatement(obj)).flatMap(objectStream -> objectStream).collect(CollectionUtils.toJsonArray());
     }
 
     public static <T> CompletableFuture<T> callbackToPromise(Consumer<Handler<AsyncResult<T>>> handler){

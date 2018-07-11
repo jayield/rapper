@@ -79,8 +79,8 @@ public class UnitOfWorkTests {
         unit = new UnitOfWork(manager::getConnection);
 
         SQLConnection con = unit.getConnection().join();
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
+        SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
+        SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
         //SQLUtils.<Void>callbackToPromise(con::commitNext).join();
 
         objectsContainer = new ObjectsContainer(con);
@@ -187,6 +187,7 @@ public class UnitOfWorkTests {
         assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().isEmpty());
         assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().isEmpty());
         assertTrue(!companyRepo.findById(unit, new Company.PrimaryKey(1, 1)).join().isPresent());
+        unit.rollback().join();
     }
 
     private void assertIdentityMaps(Field identityMapField, List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {
@@ -205,7 +206,7 @@ public class UnitOfWorkTests {
             assertNotFound(employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), con);
         }
         else{
-            assertSingleRow(originalEmployee, employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), AssertUtils::assertEmployeeWithExternals, con);
+            assertSingleRow(originalEmployee, employeeSelectQuery, new JsonArray().add(originalEmployee.getName()), (employee, rs) -> AssertUtils.assertEmployeeWithExternals(employee, rs, unit), con);
         }
         unit.rollback().join();
     }

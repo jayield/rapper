@@ -5,8 +5,12 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -22,14 +26,10 @@ public class SqlField {
         this.selectQueryValue = selectQueryValue;
     }
 
-    public<T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+    public <T> Stream<Object> getValuesForStatement(T obj) {
         field.setAccessible(true);
         try {
-            return CompletableFuture.completedFuture(Stream.of( obj != null ? field.get(obj) : null));
-//            if(value != null)
-//                jsonArray.add(value);
-//            else
-//                jsonArray.addNull();
+            return Stream.of( obj != null ? field.get(obj) : null);
         } catch (IllegalAccessException | IllegalStateException e) {
             throw new DataMapperException(e);
         }
@@ -59,7 +59,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+        public <T> Stream<Object> getValuesForStatement(T obj) {
             Object key = null;
             if(obj != null) {
                 if (DomainObject.class.isAssignableFrom(obj.getClass()))
@@ -68,10 +68,9 @@ public class SqlField {
                     key = obj;
             }
             if(embeddedId)
-                return super.setValueInStatement(key);
-            else {
-                return CompletableFuture.completedFuture(Stream.of(key));
-            }
+                return super.getValuesForStatement(key);
+            else
+                return Stream.of(key);
         }
 
         @Override
@@ -111,17 +110,60 @@ public class SqlField {
         private final Class<? extends Populate> populateStrategy;
         private Object[] foreignKey;
 
-        //TODO if name defined check if type == CompletableFuture<DomainObject>, else check type == CompletableFuture<List<DomainObject>>
         public SqlFieldExternal(Field field, String pref) {
             super(field, SQL_FIELD_EXTERNAL, buildSelectQueryValue(field, pref));
             type = field.getType();
-            domainObjectType = ReflectionUtils.getGenericType(field.getGenericType());
+
             ColumnName annotation = field.getAnnotation(ColumnName.class);
             names = annotation.name();
             foreignNames = annotation.foreignName();
             externalNames = annotation.externalName();
+
+            verifyField();
+
+            if(type == Function.class)
+                domainObjectType = ReflectionUtils.getGenericType(((ParameterizedType) field.getGenericType()).getActualTypeArguments()[1]); //Index number 1 is the return of the Function
+            else
+                domainObjectType = (Class<? extends DomainObject>) ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0];
             selectTableQuery = buildSelectQuery(annotation.table());
             populateStrategy = getStrategy(annotation);
+        }
+
+        /**
+         * It will verify if the field follows the rules
+         */
+        private void verifyField() {
+            try {
+                if (type != Function.class && type != Foreign.class)
+                    throw new DataMapperException("The field annotated with @ColumnName must be of type Function or Foreign");
+                String[] nameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("name").getDefaultValue();
+
+                checkNameParameter(nameDefaultValue);
+            } catch (NoSuchMethodException e) {
+                throw new DataMapperException(e);
+            }
+        }
+
+        private void checkNameParameter(String[] nameDefaultValue) {
+            if(!Arrays.equals(this.names, nameDefaultValue)) {
+                if (type != Foreign.class)
+                    throw new DataMapperException("The field annotated with @ColumnName with \"name\" defined must be of type Foreign");
+            }
+            else {
+                Type[] typeArguments = ((ParameterizedType) field.getGenericType()).getActualTypeArguments();
+
+                if(typeArguments[0] != UnitOfWork.class)
+                    throw new DataMapperException("The field annotated with @ColumnName must be a Function<UnitOfWork, CompletableFuture>");
+
+                Type genericType = typeArguments[1];
+                if(((ParameterizedType) genericType).getRawType() != CompletableFuture.class)
+                    throw new DataMapperException("The field annotated with @ColumnName must be a Function<UnitOfWork, CompletableFuture>");
+
+                genericType = ((ParameterizedType) genericType).getActualTypeArguments()[0];
+
+                if(((ParameterizedType) genericType).getRawType() != List.class)
+                    throw new DataMapperException("The field annotated with @ColumnName without \"name\" defined must be a Function<UnitOfWork, CompletableFuture<List<DomainObject>>>");
+            }
         }
 
         private static String buildSelectQueryValue(Field field, String pref) {
@@ -177,21 +219,25 @@ public class SqlField {
             return sb.toString();
         }
 
+        /**
+         * This method will only be called to obtain the primary key of the object when it's a simple relation (ex. CF<DomainObject>)
+         * @param obj
+         * @param <T>
+         * @return
+         */
         @Override
-        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+        public <T> Stream<Object> getValuesForStatement(T obj) {
             try {
                 field.setAccessible(true);
-                CompletableFuture<? extends DomainObject> future = (CompletableFuture<? extends DomainObject>) field.get(obj);
-                //It will get the value from the completableFuture, get the value's SqlFieldIds and call its setValueInStatement(), incrementing the index.
-                future = future == null ? CompletableFuture.completedFuture(null) : future;
+                Foreign foreign = (Foreign) field.get(obj);
+                Object key = foreign != null ? foreign.getForeignKey() : null;
 
-                return future.thenCompose(domainObject ->
-                        CollectionUtils.listToCompletableFuture(MapperRegistry.getMapperSettings(domainObjectType)
-                            .getIds()
-                                .stream()
-                                .map(sqlFieldId -> sqlFieldId.setValueInStatement(domainObject)).collect(Collectors.toList()))
-                        .thenApply(list -> list.stream().flatMap(s -> s))
-                );
+                List<Stream<Object>> futureList = MapperRegistry.getMapperSettings(domainObjectType)
+                        .getIds()
+                        .stream()
+                        .map(sqlFieldId -> sqlFieldId.getValuesForStatement(key)).collect(Collectors.toList());
+
+                return futureList.stream().flatMap(s -> s);
             } catch (IllegalAccessException e) {
                 throw new DataMapperException(e);
             }

@@ -5,20 +5,22 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.EmbeddedId;
 import com.github.jayield.rapper.Version;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
+import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 
 public class Company implements DomainObject<Company.PrimaryKey> {
     @EmbeddedId
     private final PrimaryKey primaryKey;
     private final String motto;
     @ColumnName(foreignName = {"companyId", "companyCid"})
-    private final CompletableFuture<List<Employee>> employees;
+    private final Function<UnitOfWork, CompletableFuture<List<Employee>>> employees;
     @Version
     private final long version;
 
-    public Company(PrimaryKey primaryKey, String motto, CompletableFuture<List<Employee>> employees, long version) {
+    public Company(PrimaryKey primaryKey, String motto, Function<UnitOfWork, CompletableFuture<List<Employee>>> employees, long version) {
         this.primaryKey = primaryKey;
         this.motto = motto;
         this.employees = employees;
@@ -36,7 +38,7 @@ public class Company implements DomainObject<Company.PrimaryKey> {
         return motto;
     }
 
-    public CompletableFuture<List<Employee>> getEmployees() {
+    public Function<UnitOfWork, CompletableFuture<List<Employee>>> getEmployees() {
         return employees;
     }
 

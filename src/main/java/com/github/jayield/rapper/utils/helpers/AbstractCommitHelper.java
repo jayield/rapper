@@ -30,6 +30,6 @@ public abstract class AbstractCommitHelper {
      * It will get the next Object from the list and update the Identity Map
      * @return
      */
-    public abstract CompletableFuture<Void> identityMapUpdateNext();
-    public abstract void rollbackNext();
+    public abstract Object identityMapUpdateNext();
+    public abstract Object rollbackNext();
 }

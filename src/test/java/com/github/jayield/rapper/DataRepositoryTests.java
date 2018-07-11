@@ -58,8 +58,8 @@ public class DataRepositoryTests {
         unit = new UnitOfWork(manager::getConnection);
 
         SQLConnection con = unit.getConnection().join();
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
-        SQLUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
+        SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
+        SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
         unit.commit().join();
 
         createRepos();

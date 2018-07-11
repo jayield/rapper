@@ -31,23 +31,18 @@ public class UpdateHelper extends AbstractCommitHelper {
     }
 
     @Override
-    public CompletableFuture<Void> identityMapUpdateNext() {
+    public Object identityMapUpdateNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject object = objectIterator.next();
             getRepository(object.getClass()).validate(object.getIdentityKey(), object);
-
-            DomainObject prevDomainObj = clonedObjects.stream()
-                    .filter(domainObject1 -> domainObject1.getIdentityKey().equals(object.getIdentityKey()))
-                    .findFirst()
-                    .orElseThrow(() -> new DataMapperException("Previous state of the updated domainObject not found"));
-            return getExternal(object.getClass()).updateReferences(prevDomainObj, object);
+            return true;
         }
         return null;
     }
 
     @Override
-    public void rollbackNext() {
+    public Object rollbackNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject obj = objectIterator.next();
@@ -55,6 +50,8 @@ public class UpdateHelper extends AbstractCommitHelper {
                     .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                     .findFirst()
                     .ifPresent(clone -> getRepository(obj.getClass()).validate(clone.getIdentityKey(), clone));
+            return true;
         }
+        return null;
     }
 }

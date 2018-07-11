@@ -24,22 +24,24 @@ public class CreateHelper extends AbstractCommitHelper {
     }
 
     @Override
-    public CompletableFuture<Void> identityMapUpdateNext() {
+    public Object identityMapUpdateNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject object = objectIterator.next();
             getRepository(object.getClass()).validate(object.getIdentityKey(), object);
-            return getExternal(object.getClass()).insertReferences(object);
+            return true;
         }
         return null;
     }
 
     @Override
-    public void rollbackNext() {
+    public Object rollbackNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
             getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey());
+            return true;
         }
+        return null;
     }
 }
