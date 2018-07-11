@@ -11,13 +11,13 @@ import static com.github.jayield.rapper.utils.MapperRegistry.*;
 public class DeleteHelper extends AbstractCommitHelper {
     private final Queue<DomainObject> dirtyObjects;
 
-    public DeleteHelper(Queue<DomainObject> list, Queue<DomainObject> dirtyObjects) {
-        super(list);
+    public DeleteHelper(UnitOfWork unit, Queue<DomainObject> list, Queue<DomainObject> dirtyObjects) {
+        super(unit, list);
         this.dirtyObjects = dirtyObjects;
     }
 
     @Override
-    public CompletableFuture<Void> commitNext(UnitOfWork unit) {
+    public CompletableFuture<Void> commitNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
@@ -31,7 +31,7 @@ public class DeleteHelper extends AbstractCommitHelper {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject object = objectIterator.next();
-            getRepository(object.getClass()).invalidate(object.getIdentityKey());
+            unit.invalidate(object.getClass(), object.getIdentityKey());
             return getExternal(object.getClass()).removeReferences(object);
         }
         return null;
@@ -43,7 +43,7 @@ public class DeleteHelper extends AbstractCommitHelper {
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
             if (dirtyObjects.contains(domainObject)) rollbackNext();
-            getRepository(domainObject.getClass()).validate(domainObject.getIdentityKey(), domainObject);
+            unit.validate(domainObject.getIdentityKey(), domainObject);
         }
     }
 }

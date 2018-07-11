@@ -1,0 +1,36 @@
+@startuml
+
+class SqlField {
+    +field: Field
+    +name: String
+    +selectQueryValue: String
+
+    +setValueInStatement(Object) : CompletableFuture<Stream<Object>>
+}
+
+class SqlFieldId  {
+    +identity: boolean
+    +embeddedId: boolean
+    +isFromParent: boolean
+}
+
+class SqlFieldVersion {
+
+}
+
+class SqlFieldExternal {
+    +type: Class<?>
+    +domainObjectType: Class<? extends DomainObject>
+    +names: String[]
+    +foreignNames: String[]
+    +externalNames: String[]
+    +selectTableQuery: String
+    +Object: mon
+}
+
+SqlField <|-- SqlFieldId
+SqlField <|-- SqlFieldVersion
+SqlField <|-- SqlFieldExternal
+
+
+@enduml

@@ -12,32 +12,38 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.*;
+import java.util.stream.Collectors;
 
 public class UnitOfWork {
     private static final String UNSUCCESSFUL_COMMIT_MESSAGE = "{} - Rolling back changes due to {}";
     private static final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
     public static final AtomicInteger numberOfOpenConnections = new AtomicInteger(0);
+    public static final ConcurrentHashMap<SQLConnection, StackTraceElement[]> connectionsMap = new ConcurrentHashMap<>();
 
     /**
      * Private for each transaction
      */
     private CompletableFuture<SQLConnection> connection = null;
     private final Supplier<CompletableFuture<SQLConnection>> connectionSupplier;
+    private final ConcurrentMap<Class<? extends DomainObject>, ConcurrentHashMap<Object,CompletableFuture<? extends DomainObject>>> identityMap = new ConcurrentHashMap<>();
 
     //Multiple Threads may be accessing the Queue, so it must be a ConcurrentLinkedQueue
     private final Queue<DomainObject> newObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> clonedObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
-    private final CreateHelper createHelper = new CreateHelper(newObjects);
-    private final UpdateHelper updateHelper = new UpdateHelper(dirtyObjects, clonedObjects, removedObjects);
-    private final DeleteHelper deleteHelper = new DeleteHelper(removedObjects, dirtyObjects);
+    private final CreateHelper createHelper = new CreateHelper(this, newObjects);
+    private final UpdateHelper updateHelper = new UpdateHelper(this, dirtyObjects, clonedObjects, removedObjects);
+    private final DeleteHelper deleteHelper = new DeleteHelper(this, removedObjects, dirtyObjects);
 
     public UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
         this.connectionSupplier = connectionSupplier;
@@ -55,6 +61,11 @@ public class UnitOfWork {
         if(connection == null) {
             connection = connectionSupplier.get();
             numberOfOpenConnections.incrementAndGet();
+            StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+            connection = connection.thenApply(con -> {
+                connectionsMap.put(con, stack);
+                return con;
+            });
             String string = Thread.currentThread().getStackTrace()[2].toString();
             logger.info("{} - New connection opened from {}", this.hashCode(), string);
         }
@@ -65,7 +76,12 @@ public class UnitOfWork {
         numberOfOpenConnections.decrementAndGet();
         String string = Thread.currentThread().getStackTrace()[2].toString();
         logger.info("{} - Closing connection from {}", this.hashCode(), string);
-        return connection.thenAccept(SQLConnection::close)
+        return connection
+                .thenApply(con -> {
+                    connectionsMap.remove(con);
+                    return con;
+                })
+                .thenAccept(SQLConnection::close)
                 .thenAccept(v -> connection = null);
     }
 
@@ -126,7 +142,7 @@ public class UnitOfWork {
                 }
                 return toRet;
             } else {
-                List<CompletableFuture<Void>> completableFutures = iterateMultipleLists(abstractCommitHelper -> abstractCommitHelper.commitNext(this));
+                List<CompletableFuture<Void>> completableFutures = iterateMultipleLists(AbstractCommitHelper::commitNext);
 
                 return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
                         .thenCompose(aVoid -> proceedCommit())
@@ -198,5 +214,43 @@ public class UnitOfWork {
         updateHelper.reset();
         deleteHelper.reset();
         return list;
+    }
+
+    public<T extends DomainObject<K>, K> void invalidate(Class<T> type, K identityKey) {
+        identityMap.get(type).remove(identityKey);
+    }
+
+    public<T extends DomainObject<K>, K> void validate(K identityKey, T t) {
+        identityMap.get(t.getClass()).compute(identityKey,
+                (k, tCompletableFuture) -> tCompletableFuture == null
+                        ? CompletableFuture.completedFuture(t)
+                        : tCompletableFuture.thenApply(t1 -> getHighestVersionT(t, t1))
+        );
+    }
+
+    private<T extends DomainObject<K>, K> T getHighestVersionT(T t, T t1) {
+        return t.getVersion() > t1.getVersion() ? t : t1;
+    }
+
+    public<T extends DomainObject<K>, K> List<CompletableFuture<T>> processNewObjects(Class<T> type, List<T> tList, Comparator<T> comparator) {
+        return tList.stream()
+                .map(t -> identityMap.get(type).compute(t.getIdentityKey(), (k, tCompletableFuture) ->
+                        computeNewValue(t, tCompletableFuture.thenApply(obj -> (T)obj), comparator)).thenApply(obj -> (T)obj))
+                .collect(Collectors.toList());
+    }
+
+    private<T extends DomainObject<K>, K> CompletableFuture<T> computeNewValue(T newT, CompletableFuture<T> actualFuture, Comparator<T> comparator) {
+        CompletableFuture<T> newFuture = CompletableFuture.completedFuture(newT);
+
+        if (actualFuture == null) return newFuture;
+
+        return actualFuture.thenApply(t -> {
+            if(comparator.compare(t, newT) < 0) return newT;
+            return t;
+        });
+    }
+
+    public ConcurrentHashMap<Object, CompletableFuture<? extends DomainObject>> getIdentityMap(Class<? extends DomainObject> klass) {
+        return identityMap.get(klass);
     }
 }

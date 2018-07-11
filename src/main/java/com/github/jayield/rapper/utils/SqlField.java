@@ -22,7 +22,7 @@ public class SqlField {
         this.selectQueryValue = selectQueryValue;
     }
 
-    public<T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+    public CompletableFuture<Stream<Object>> setValueInStatement(Object obj) {
         field.setAccessible(true);
         try {
             return CompletableFuture.completedFuture(Stream.of( obj != null ? field.get(obj) : null));
@@ -59,7 +59,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+        public CompletableFuture<Stream<Object>> setValueInStatement(Object obj) {
             Object key = null;
             if(obj != null) {
                 if (DomainObject.class.isAssignableFrom(obj.getClass()))
@@ -178,7 +178,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
+        public CompletableFuture<Stream<Object>> setValueInStatement(Object obj) {
             try {
                 field.setAccessible(true);
                 CompletableFuture<? extends DomainObject> future = (CompletableFuture<? extends DomainObject>) field.get(obj);
