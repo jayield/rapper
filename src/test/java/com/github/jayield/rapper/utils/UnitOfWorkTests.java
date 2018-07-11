@@ -69,6 +69,7 @@ public class UnitOfWorkTests {
 
     @Before
     public void before()throws NoSuchFieldException, IllegalAccessException {
+        UnitOfWork.connectionsMap.values().forEach(array -> System.out.println(Arrays.toString(array)));
         assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
         repositoryMap.clear();
 
@@ -261,11 +262,11 @@ public class UnitOfWorkTests {
     private void populateIdentityMaps() {
         DataRepository carRepo = getRepository(Car.class);
         Car originalCar = objectsContainer.getOriginalCar();
-        carRepo.validate(originalCar.getIdentityKey(), originalCar);
+        unit.validate(originalCar.getIdentityKey(), originalCar);
 
         DataRepository employeeRepo = getRepository(Employee.class);
         Employee originalEmployee = objectsContainer.getOriginalEmployee();
-        employeeRepo.validate(originalEmployee.getIdentityKey(), originalEmployee);
+        unit.validate(originalEmployee.getIdentityKey(), originalEmployee);
     }
 
     private void addRemovedObjects() {

@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private static final Logger logger = LoggerFactory.getLogger(DataRepository.class);
 
-    private final ConcurrentMap<K, CompletableFuture<T>> identityMap = new ConcurrentHashMap<>();
+    //private final ConcurrentMap<K, CompletableFuture<T>> identityMap = new ConcurrentHashMap<>();
     private final Class<T> type;
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
     private final Comparator<T> comparator;
@@ -47,18 +47,19 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, Pair<String, R>... values) {
-        return find(() -> mapper.findWhere(unit, values));
+        return find(unit, () -> mapper.findWhere(unit, values));
     }
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, int page, int numberOfItems, Pair<String, R>... values) {
-        return find(() -> mapper.findWhere(unit, page, numberOfItems, values));
+        return find(unit, () -> mapper.findWhere(unit, page, numberOfItems, values));
     }
 
     @Override
     public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K k) {
-        CompletableFuture<T> completableFuture = identityMap.computeIfAbsent(k, k1 -> mapper.findById(unit, k)
-                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found"))));
+        CompletableFuture<T> completableFuture = unit.getIdentityMap(type).computeIfAbsent(k, k1 -> mapper.findById(unit, k)
+                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found"))))
+                .thenApply(t -> (T)t);
 
         //else logger.info("{} with id {} obtained from IdentityMap", type.getSimpleName(), k);
 
@@ -66,19 +67,19 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                 .thenApply(Optional::of)
                 .exceptionally(throwable -> {
                     logger.warn("Removing CompletableFuture of {} from identityMap due to {}", type.getSimpleName(), throwable.getMessage());
-                    identityMap.remove(k);
+                    unit.getIdentityMap(type).remove(k);
                     return Optional.empty();
                 });
     }
 
     @Override
     public CompletableFuture<List<T>> findAll(UnitOfWork unit) {
-        return find(() -> mapper.findAll(unit));
+        return find(unit, () -> mapper.findAll(unit));
     }
 
     @Override
     public CompletableFuture<List<T>> findAll(UnitOfWork unit, int page, int numberOfItems) {
-        return find(() -> mapper.findAll(unit, page, numberOfItems));
+        return find(unit, () -> mapper.findAll(unit, page, numberOfItems));
     }
 
     @Override
@@ -97,12 +98,13 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     public CompletableFuture<Void> update(UnitOfWork unit, T t) {
         unit.registerDirty(t);
 
-        CompletableFuture<T> future = identityMap.computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
+        CompletableFuture<T> future = unit.getIdentityMap(type).computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
                 tCompletableFuture.thenApply(t2 -> {
                     unit.registerClone(t2);
                     return t2;
                 })
-        );
+        ).thenApply(obj -> (T)obj);
+
         return future != null ? future.thenApply(t1 -> null) :
                 findById(unit, t.getIdentityKey())
                         .thenAccept(optionalT -> {
@@ -120,10 +122,10 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
 
     @Override
     public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
-        CompletableFuture<T> future = identityMap.computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
+        CompletableFuture<T> future = unit.getIdentityMap(type).computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
             unit.registerRemoved(t);
             return t;
-        }));
+        })).thenApply(obj -> (T)obj);
 
         return future != null ? future.thenApply(t -> null) :
                 findById(unit, k)
@@ -146,42 +148,9 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
-    private CompletableFuture<List<T>> find(Supplier<CompletableFuture<List<T>>> supplier){
+    private CompletableFuture<List<T>> find(UnitOfWork unit, Supplier<CompletableFuture<List<T>>> supplier){
         return supplier.get()
-                .thenApply(this::processNewObjects)
+                .thenApply(list -> unit.processNewObjects(type, list, comparator))
                 .thenCompose(CollectionUtils::listToCompletableFuture);
-    }
-
-    public void invalidate(K identityKey) {
-        identityMap.remove(identityKey);
-    }
-
-    public void validate(K identityKey, T t) {
-        identityMap.compute(identityKey,
-                (k, tCompletableFuture) -> tCompletableFuture == null
-                        ? CompletableFuture.completedFuture(t)
-                        : tCompletableFuture.thenApply(t1 -> getHighestVersionT(t, t1))
-        );
-    }
-
-    private T getHighestVersionT(T t, T t1) {
-        return t.getVersion() > t1.getVersion() ? t : t1;
-    }
-
-    private List<CompletableFuture<T>> processNewObjects(List<T> tList) {
-        return tList.stream()
-                .map(t -> identityMap.compute(t.getIdentityKey(), (k, tCompletableFuture) -> computeNewValue(t, tCompletableFuture)))
-                .collect(Collectors.toList());
-    }
-
-    private CompletableFuture<T> computeNewValue(T newT, CompletableFuture<T> actualFuture) {
-        CompletableFuture<T> newFuture = CompletableFuture.completedFuture(newT);
-
-        if (actualFuture == null) return newFuture;
-
-        return actualFuture.thenApply(t -> {
-            if(comparator.compare(t, newT) < 0) return newT;
-            return t;
-        });
     }
 }

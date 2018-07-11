@@ -9,12 +9,12 @@ import java.util.concurrent.CompletableFuture;
 import static com.github.jayield.rapper.utils.MapperRegistry.*;
 
 public class CreateHelper extends AbstractCommitHelper {
-    public CreateHelper(Queue<DomainObject> list) {
-        super(list);
+    public CreateHelper(UnitOfWork unit, Queue<DomainObject> list) {
+        super(unit, list);
     }
 
     @Override
-    public CompletableFuture<Void> commitNext(UnitOfWork unit) {
+    public CompletableFuture<Void> commitNext() {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
@@ -28,7 +28,7 @@ public class CreateHelper extends AbstractCommitHelper {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject object = objectIterator.next();
-            getRepository(object.getClass()).validate(object.getIdentityKey(), object);
+            unit.validate(object.getIdentityKey(), object);
             return true;
         }
         return null;
@@ -39,7 +39,7 @@ public class CreateHelper extends AbstractCommitHelper {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject domainObject = objectIterator.next();
-            getRepository(domainObject.getClass()).invalidate(domainObject.getIdentityKey());
+            unit.invalidate(domainObject.getClass(), domainObject.getIdentityKey());
             return true;
         }
         return null;

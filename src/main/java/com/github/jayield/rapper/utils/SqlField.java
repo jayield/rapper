@@ -59,7 +59,7 @@ public class SqlField {
         }
 
         @Override
-        public <T> Stream<Object> getValuesForStatement(T obj) {
+        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
             Object key = null;
             if(obj != null) {
                 if (DomainObject.class.isAssignableFrom(obj.getClass()))
@@ -226,7 +226,7 @@ public class SqlField {
          * @return
          */
         @Override
-        public <T> Stream<Object> getValuesForStatement(T obj) {
+        public <T> CompletableFuture<Stream<Object>> setValueInStatement(T obj) {
             try {
                 field.setAccessible(true);
                 Foreign foreign = (Foreign) field.get(obj);

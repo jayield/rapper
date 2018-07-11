@@ -10,9 +10,11 @@ import java.util.concurrent.CompletableFuture;
 public abstract class AbstractCommitHelper {
     protected final Queue<DomainObject> list;
     protected Iterator<DomainObject> objectIterator;
+    protected final UnitOfWork unit;
 
-    protected AbstractCommitHelper(Queue<DomainObject> list) {
+    protected AbstractCommitHelper(UnitOfWork unit, Queue<DomainObject> list) {
         this.list = list;
+        this.unit = unit;
     }
 
     public void reset() {
@@ -21,10 +23,9 @@ public abstract class AbstractCommitHelper {
 
     /**
      * It will get the next Object from the list and call the DataMapper methods
-     * @param unit
      * @return
      */
-    public abstract CompletableFuture<Void> commitNext(UnitOfWork unit);
+    public abstract CompletableFuture<Void> commitNext();
 
     /**
      * It will get the next Object from the list and update the Identity Map
