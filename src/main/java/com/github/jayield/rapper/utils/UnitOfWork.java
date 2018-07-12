@@ -138,34 +138,31 @@ public class UnitOfWork {
                             .thenAccept(v -> logger.info("{} - Changes have been committed", this.hashCode()));
                 }
                 return toRet;
-            } else {
-                List<CompletableFuture<Void>> completableFutures = iterateMultipleLists(AbstractCommitHelper::commitNext);
-
-                return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]))
+            } else if (connection != null){
+                return connection.thenCompose(con -> SqlUtils.callbackToPromise(con::commit)
+                                .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode())))
                         .thenCompose(v -> {
-                            proceedCommit();
-                            return connection.thenCompose(con ->
-                                    SqlUtils.callbackToPromise(con::commit)
-                                            .thenAccept(v2 -> logger.info("{} - Changes have been committed", this.hashCode())));
+                            iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
+                            return closeConnection();
                         })
-                        .thenCompose(v -> closeConnection())
                         .handleAsync((aVoid, throwable) -> {
                             if (throwable != null) {
                                 logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), throwable.getMessage());
-                                return rollback().thenAccept(aVoid1 -> { throw new DataMapperException(throwable); });
+                                return rollback().thenAccept(aVoid1 -> {
+                                    throw new DataMapperException(throwable);
+                                });
                             }
                             return CompletableFuture.<Void>completedFuture(null);
                         })
                         .thenCompose(voidCompletableFuture -> voidCompletableFuture);
+            } else {
+                iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
+                return CompletableFuture.completedFuture(null);
             }
         } catch (DataMapperException e){
             logger.info(UNSUCCESSFUL_COMMIT_MESSAGE, this.hashCode(), e.getMessage());
             return rollback().thenAccept(aVoid -> { throw e; });
         }
-    }
-
-    private void proceedCommit() {
-        iterateMultipleLists(AbstractCommitHelper::identityMapUpdateNext);
     }
 
     /**

@@ -16,7 +16,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
 import java.net.URLDecoder;
-import java.sql.*;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentMap;
@@ -74,22 +73,20 @@ public class UnitOfWorkTests {
         repositoryMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
-                "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
-                "SA", "");
+                "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
+                "SA",
+                ""
+        );
 
         unit = new UnitOfWork(manager::getConnection);
 
         SQLConnection con = unit.getConnection().join();
         SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call deleteDB()}", ar)).join();
         SqlUtils.<ResultSet>callbackToPromise(ar -> con.call("{call populateDB()}", ar)).join();
-        //SQLUtils.<Void>callbackToPromise(con::commitNext).join();
 
         objectsContainer = new ObjectsContainer(con);
         unit.commit().join();
         setupLists();
-
-        employeeRepo = MapperRegistry.getRepository(Employee.class);
-        companyRepo = MapperRegistry.getRepository(Company.class);
     }
 
     @After
@@ -98,7 +95,7 @@ public class UnitOfWorkTests {
     }
 
     @Test
-    public void testCommit() throws NoSuchFieldException, IllegalAccessException {
+    public void testCommit() {
         populateIdentityMaps();
         addNewObjects();
         addDirtyAndClonedObjects();
@@ -114,51 +111,37 @@ public class UnitOfWorkTests {
         assertDirtyObjects(true);
         assertRemovedObjects(true);
 
-        assertIdentityMaps(unit, newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
-        assertIdentityMaps(unit, dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
-        assertIdentityMaps(unit, removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
+        assertIdentityMaps(newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
     }
 
     @Test
-    public void testRollback() throws IllegalAccessException, NoSuchFieldException, SQLException {
+    public void testRollback() {
         populateIdentityMaps();
         addNewObjects();
         addDirtyAndClonedObjects();
         addRemovedObjects();
 
-        //There's no table Chat in DB, so there will be a SQLException and a rollback
-        Chat chat = new Chat();
-        removedObjects.add(chat);
-
         List<DomainObject> newObjects = new ArrayList<>(this.newObjects);
         List<DomainObject> dirtyObjects = new ArrayList<>(this.dirtyObjects);
         List<DomainObject> removedObjects = new ArrayList<>(this.removedObjects);
 
-        final boolean[] failed = {false};
-        unit.commit()
-                .exceptionally(throwable -> {
-                    failed[0] = true;
-                    return null;
-                })
-                .join();
-
-        assertTrue(failed[0]);
-
-        removedObjects.remove(chat);
+        unit.rollback().join();
 
         assertNewObjects(false);
         assertDirtyObjects(false);
         assertRemovedObjects(false);
 
-        assertIdentityMaps(unit, newObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
-        assertIdentityMaps(unit, dirtyObjects, (identityMap, domainObject) -> {
+        assertIdentityMaps(newObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
+        assertIdentityMaps(dirtyObjects, (identityMap, domainObject) -> {
             CompletableFuture<DomainObject> completableFuture = (CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey());
             if(completableFuture != null)
                 assertNotEquals(completableFuture.join(), domainObject);
             else
                 assertNull(identityMap.get(domainObject.getIdentityKey()));
         });
-        assertIdentityMaps(unit, removedObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        assertIdentityMaps(removedObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
     }
 
     @Test
@@ -186,7 +169,7 @@ public class UnitOfWorkTests {
         unit.rollback().join();
     }
 
-    private void assertIdentityMaps(UnitOfWork identityMapField, List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) throws IllegalAccessException {
+    private void assertIdentityMaps(List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) {
         for (DomainObject domainObject : objectList) {
             ConcurrentMap identityMap = unit.getIdentityMap(domainObject.getClass());
             assertion.accept(identityMap, domainObject);
@@ -264,24 +247,24 @@ public class UnitOfWorkTests {
     }
 
     private void addRemovedObjects() {
-        removedObjects.add(objectsContainer.getOriginalEmployee());
+        getRepository(Employee.class).delete(unit, objectsContainer.getOriginalEmployee()).join();
     }
 
     //Original car shall be in the identityMap
     private void addDirtyAndClonedObjects() {
-        clonedObjects.add(objectsContainer.getOriginalPerson());
+        /*clonedObjects.add(objectsContainer.getOriginalPerson());
         clonedObjects.add(objectsContainer.getOriginalCar());
-        clonedObjects.add(objectsContainer.getOriginalTopStudent());
+        clonedObjects.add(objectsContainer.getOriginalTopStudent());*/
 
-        dirtyObjects.add(objectsContainer.getUpdatedPerson());
-        dirtyObjects.add(objectsContainer.getUpdatedCar());
-        dirtyObjects.add(objectsContainer.getUpdatedTopStudent());
+        getRepository(Person.class).update(unit, objectsContainer.getUpdatedPerson()).join();
+        getRepository(Car.class).update(unit, objectsContainer.getUpdatedCar()).join();
+        getRepository(TopStudent.class).update(unit, objectsContainer.getUpdatedTopStudent()).join();
     }
 
     private void addNewObjects() {
-        newObjects.add(objectsContainer.getInsertedPerson());
-        newObjects.add(objectsContainer.getInsertedCar());
-        newObjects.add(objectsContainer.getInsertedTopStudent());
+        getRepository(Person.class).create(unit, objectsContainer.getInsertedPerson()).join();
+        getRepository(Car.class).create(unit, objectsContainer.getInsertedCar()).join();
+        getRepository(TopStudent.class).create(unit, objectsContainer.getInsertedTopStudent()).join();
     }
 
     private <R extends DomainObject<P>, P> MapperRegistry.Container<R, P> getContainer(Class<R> rClass) {

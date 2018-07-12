@@ -167,9 +167,9 @@ public class DataRepositoryTests {
                 .join();
 
         Optional<TopStudent> first = topStudentRepo.findById(unit, 454).join();
-        assertEquals(1, topStudentMapperify.getIfindById().getCount());
+        assertEquals(0, topStudentMapperify.getIfindById().getCount());
         topStudentRepo.findById(unit, 454).join();
-        assertEquals(1, topStudentMapperify.getIfindById().getCount());
+        assertEquals(0, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), topStudent);
     }
@@ -190,9 +190,9 @@ public class DataRepositoryTests {
                 .join();
 
         Optional<Person> first = personRepo.findById(unit, 321).join();
-        assertEquals(2, personMapperify.getIfindById().getCount());
+        assertEquals(0, personMapperify.getIfindById().getCount());
         Optional<Person> second = personRepo.findById(unit, 454).join();
-        assertEquals(2, personMapperify.getIfindById().getCount());
+        assertEquals(0, personMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), list.get(0));
         assertEquals(second.get(), list.get(1));

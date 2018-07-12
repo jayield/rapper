@@ -89,20 +89,20 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     @Override
     public CompletableFuture<Void> create(UnitOfWork unit, T t) {
         unit.registerNew(t);
-        return CompletableFuture.completedFuture(null);
+        return mapper.create(unit, t);
     }
 
     @Override
     public CompletableFuture<Void> createAll(UnitOfWork unit, Iterable<T> t) {
         t.forEach(unit::registerNew);
-        return CompletableFuture.completedFuture(null);
+        return mapper.createAll(unit, t);
     }
 
     @Override
     public CompletableFuture<Void> update(UnitOfWork unit, T t) {
         unit.registerDirty(t);
 
-        CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
+        /*CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
                 tCompletableFuture.thenApply(t2 -> {
                     unit.registerClone(t2);
                     return t2;
@@ -114,14 +114,17 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                         .thenAccept(optionalT -> {
                             T t1 = optionalT.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found"));
                             unit.registerClone(t1);
-                        });
+                        });*/
+        return mapper.update(unit, t);
     }
 
     @Override
     public CompletableFuture<Void> updateAll(UnitOfWork unit, Iterable<T> t) {
-        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        /*List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         t.forEach(t1 -> completableFutures.add(update(unit, t1)));
-        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));*/
+        t.forEach(unit::registerDirty);
+        return mapper.updateAll(unit, t);
     }
 
     @Override
@@ -131,18 +134,18 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
             return t;
         }));
 
-        return future != null ? future.thenApply(t -> null) :
-                findById(unit, k)
-                        .thenAccept(t -> {
-                            T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
-                            unit.registerRemoved(t1);
-                        });
+        return future != null ? mapper.deleteById(unit, k) : findById(unit, k)
+                .thenCompose(t -> {
+                    T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
+                    unit.registerRemoved(t1);
+                    return mapper.deleteById(unit, k);
+                });
     }
 
     @Override
     public CompletableFuture<Void> delete(UnitOfWork unit, T t) {
         unit.registerRemoved(t);
-        return CompletableFuture.completedFuture(null);
+        return mapper.delete(unit, t);
     }
 
     @Override
