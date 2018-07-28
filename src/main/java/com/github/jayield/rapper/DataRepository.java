@@ -24,11 +24,13 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     private final Class<T> type;
     private final Mapper<T, K> mapper;    //Used to communicate with the DB
     private final Comparator<T> comparator;
+    private final UnitOfWork unit;
 
-    public DataRepository(Class<T> type, Mapper<T, K> mapper, Comparator<T> comparator) {
+    public DataRepository(Class<T> type, Mapper<T, K> mapper, Comparator<T> comparator, UnitOfWork unit) {
         this.type = type;
         this.mapper = mapper;
         this.comparator = comparator;
+        this.unit = unit;
     }
 
     public Mapper<T, K> getMapper() {
@@ -36,31 +38,31 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public <R> CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit, Pair<String, R>... values) {
-        return mapper.getNumberOfEntries(unit, values);
+    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
+        return mapper.getNumberOfEntries(values);
     }
 
     @Override
-    public CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit) {
-        return mapper.getNumberOfEntries(unit);
+    public CompletableFuture<Long> getNumberOfEntries() {
+        return mapper.getNumberOfEntries();
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, Pair<String, R>... values) {
-        return find(unit, () -> mapper.findWhere(unit, values));
+    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        return find(() -> mapper.findWhere(values));
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, int page, int numberOfItems, Pair<String, R>... values) {
-        return find(unit, () -> mapper.findWhere(unit, page, numberOfItems, values));
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
+        return find(() -> mapper.findWhere(page, numberOfItems, values));
     }
 
     @Override
-    public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K k) {
+    public CompletableFuture<Optional<T>> findById(K k) {
         CompletableFuture<T> completableFuture = unit
                 .getIdentityMap(type)
                 .computeIfAbsent(k, k1 ->
-                        mapper.findById(unit, k)
+                        mapper.findById(k)
                                 .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")))
                 )
                 .thenApply(t -> (T)t);
@@ -77,29 +79,29 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(UnitOfWork unit) {
-        return find(unit, () -> mapper.findAll(unit));
+    public CompletableFuture<List<T>> findAll() {
+        return find(mapper::findAll);
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(UnitOfWork unit, int page, int numberOfItems) {
-        return find(unit, () -> mapper.findAll(unit, page, numberOfItems));
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return find(() -> mapper.findAll(page, numberOfItems));
     }
 
     @Override
-    public CompletableFuture<Void> create(UnitOfWork unit, T t) {
+    public CompletableFuture<Void> create(T t) {
         unit.registerNew(t);
-        return mapper.create(unit, t);
+        return mapper.create(t);
     }
 
     @Override
-    public CompletableFuture<Void> createAll(UnitOfWork unit, Iterable<T> t) {
+    public CompletableFuture<Void> createAll(Iterable<T> t) {
         t.forEach(unit::registerNew);
-        return mapper.createAll(unit, t);
+        return mapper.createAll(t);
     }
 
     @Override
-    public CompletableFuture<Void> update(UnitOfWork unit, T t) {
+    public CompletableFuture<Void> update(T t) {
         unit.registerDirty(t);
 
         /*CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(t.getIdentityKey(), (k, tCompletableFuture) ->
@@ -115,47 +117,47 @@ public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K
                             T t1 = optionalT.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " not found"));
                             unit.registerClone(t1);
                         });*/
-        return mapper.update(unit, t);
+        return mapper.update(t);
     }
 
     @Override
-    public CompletableFuture<Void> updateAll(UnitOfWork unit, Iterable<T> t) {
+    public CompletableFuture<Void> updateAll(Iterable<T> t) {
         /*List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         t.forEach(t1 -> completableFutures.add(update(unit, t1)));
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));*/
         t.forEach(unit::registerDirty);
-        return mapper.updateAll(unit, t);
+        return mapper.updateAll(t);
     }
 
     @Override
-    public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
+    public CompletableFuture<Void> deleteById(K k) {
         CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
             unit.registerRemoved(t);
             return t;
         }));
 
-        return future != null ? mapper.deleteById(unit, k) : findById(unit, k)
+        return future != null ? mapper.deleteById(k) : findById(k)
                 .thenCompose(t -> {
                     T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
                     unit.registerRemoved(t1);
-                    return mapper.deleteById(unit, k);
+                    return mapper.deleteById(k);
                 });
     }
 
     @Override
-    public CompletableFuture<Void> delete(UnitOfWork unit, T t) {
+    public CompletableFuture<Void> delete(T t) {
         unit.registerRemoved(t);
-        return mapper.delete(unit, t);
+        return mapper.delete(t);
     }
 
     @Override
-    public CompletableFuture<Void> deleteAll(UnitOfWork unit, Iterable<K> keys) {
+    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        keys.forEach(k -> completableFutures.add(deleteById(unit, k)));
+        keys.forEach(k -> completableFutures.add(deleteById(k)));
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
-    private CompletableFuture<List<T>> find(UnitOfWork unit, Supplier<CompletableFuture<List<T>>> supplier){
+    private CompletableFuture<List<T>> find(Supplier<CompletableFuture<List<T>>> supplier){
         return supplier.get()
                 .thenApply(list -> unit.processNewObjects(type, list, comparator))
                 .thenCompose(CollectionUtils::listToCompletableFuture);

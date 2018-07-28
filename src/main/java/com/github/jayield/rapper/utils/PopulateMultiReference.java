@@ -41,7 +41,7 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
                 .map(str -> new Pair<>(str, idValues1.next()))
                 .toArray(Pair[]::new);
 
-        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> container.getDataRepository().findWhere(unit, pairs);
+        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getRepository(sqlFieldExternal.domainObjectType, unit).findWhere(pairs);
 
         try {
             sqlFieldExternal.field.setAccessible(true);

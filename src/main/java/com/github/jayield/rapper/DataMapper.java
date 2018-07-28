@@ -19,6 +19,7 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -32,22 +33,17 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final ExternalsHandler<T, K> externalsHandler;
     private final MapperSettings mapperSettings;
     private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-    private final Constructor<T> constructor;
+    private final UnitOfWork unit;
 
-    public DataMapper(Class<T> type, ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings) {
+    public DataMapper(Class<T> type, ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings, UnitOfWork unit) {
         this.type = type;
         this.externalsHandler = externalsHandler;
         this.mapperSettings = mapperSettings;
-
-        try {
-            constructor = type.getConstructor();
-        } catch (NoSuchMethodException e) {
-            throw new DataMapperException(e);
-        }
+        this.unit = unit;
     }
 
     @Override
-    public <R> CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit, Pair<String, R>... values) {
+    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
         String whereCondition = "";
         if (values.length > 0)
             whereCondition = Arrays.stream(values)
@@ -59,7 +55,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit) {
+    public CompletableFuture<Long> getNumberOfEntries() {
         return SqlUtils.query(mapperSettings.getSelectCountQuery(), unit, new JsonArray())
                 .thenApply(this::getNumberOfEntries);
     }
@@ -69,17 +65,17 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, Pair<String, R>... values) {
-        return findWhereAux(unit, "", values);
+    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        return findWhereAux("", values);
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, int page, int numberOfItems, Pair<String, R>... values) {
-        return findWhereAux(unit, String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems), values);
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
+        return findWhereAux(String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems), values);
     }
 
     @Override
-    public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K id) {
+    public CompletableFuture<Optional<T>> findById(K id) {
         String selectByIdQuery = mapperSettings.getSelectByIdQuery();
         return SqlUtils.query(selectByIdQuery, unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), id))
                 .thenApply(rs -> {
@@ -95,54 +91,54 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(UnitOfWork unit) {
-        return findAllAux(unit, "");
+    public CompletableFuture<List<T>> findAll() {
+        return findAllAux("");
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(UnitOfWork unit, int page, int numberOfItems) {
-        return findAllAux(unit, String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems));
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return findAllAux(String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems));
     }
 
     @Override
-    public CompletableFuture<Void> create(UnitOfWork unit, T obj) {
+    public CompletableFuture<Void> create(T obj) {
         Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
 
-        return parentMapper.map(parent -> parent.create(unit, obj))
+        return parentMapper.map(parent -> parent.create(obj))
                 .orElse(CompletableFuture.completedFuture(null))
-                .thenCompose(ignored -> createAux(unit, obj));
+                .thenCompose(ignored -> createAux(obj));
     }
 
     @Override
-    public CompletableFuture<Void> createAll(UnitOfWork unit, Iterable<T> t) {
-        return reduceCompletableFutures(unit, t, this::create);
+    public CompletableFuture<Void> createAll(Iterable<T> t) {
+        return reduceCompletableFutures(t, this::create);
     }
 
     @Override
-    public CompletableFuture<Void> update(UnitOfWork unit, T obj) {
+    public CompletableFuture<Void> update(T obj) {
         Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         if (parentMapper.isPresent()) {
             return parentMapper
                     .get()
-                    .update(unit, obj)
-                    .thenCompose(ignored -> updateAux(obj, unit));
+                    .update(obj)
+                    .thenCompose(ignored -> updateAux(obj));
         } else
-            return updateAux(obj, unit);
+            return updateAux(obj);
     }
 
     @Override
-    public CompletableFuture<Void> updateAll(UnitOfWork unit, Iterable<T> t) {
-        return reduceCompletableFutures(unit, t, this::update);
+    public CompletableFuture<Void> updateAll(Iterable<T> t) {
+        return reduceCompletableFutures(t, this::update);
     }
 
     @Override
-    public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
+    public CompletableFuture<Void> deleteById(K k) {
         return SqlUtils.update(mapperSettings.getDeleteQuery(), unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), k))
                 .thenCompose(updateResult -> {
                     log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), k, unit.hashCode());
                     return getParentMapper()
-                            .map(objectDataMapper -> objectDataMapper.deleteById(unit, k))
+                            .map(objectDataMapper -> objectDataMapper.deleteById(k))
                             .orElse(CompletableFuture.completedFuture(null));
                 })
                 .exceptionally(throwable -> {
@@ -152,12 +148,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<Void> delete(UnitOfWork unit, T obj) {
+    public CompletableFuture<Void> delete(T obj) {
         return SqlUtils.update(mapperSettings.getDeleteQuery(), unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), obj))
                 .thenCompose(updateResult -> {
                     log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), obj.getIdentityKey(), unit.hashCode());
                     return getParentMapper()
-                            .map(objectDataMapper -> objectDataMapper.delete(unit, obj))
+                            .map(objectDataMapper -> objectDataMapper.delete(obj))
                             .orElse(CompletableFuture.completedFuture(null));
                 })
                 .exceptionally(throwable -> {
@@ -167,11 +163,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<Void> deleteAll(UnitOfWork unit, Iterable<K> keys) {
-        return reduceCompletableFutures(unit, keys, this::deleteById);
+    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
+        return reduceCompletableFutures(keys, this::deleteById);
     }
 
-    private <R> CompletableFuture<List<T>> findWhereAux(UnitOfWork unit, String suffix, Pair<String, R>... values){
+    private <R> CompletableFuture<List<T>> findWhereAux(String suffix, Pair<String, R>... values){
         String query;
         if (values.length > 0)
             query = Arrays.stream(values)
@@ -180,21 +176,21 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         else query = mapperSettings.getSelectQuery() + suffix;
 
         return SqlUtils.query(query, unit, prepareFindWhere(values))
-                .thenApply(resultSet -> processFindWhere(resultSet, values, unit))
+                .thenApply(resultSet -> processFindWhere(resultSet, values))
                 .exceptionally(throwable -> {
                     log.warn(QUERY_ERROR, "FindWhere", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
 
-    private <R> List<T> processFindWhere(ResultSet resultSet, Pair<String, R>[] values, UnitOfWork current) {
+    private <R> List<T> processFindWhere(ResultSet resultSet, Pair<String, R>[] values) {
         StringBuilder sb = new StringBuilder("Queried database for ");
         sb.append(type.getSimpleName()).append(" where ");
         for (int i = 0; i < values.length; i++) {
             sb.append(values[i].getKey()).append(" = ").append(values[i].getValue());
             if (i + 1 < values.length) sb.append(" and ");
         }
-        sb.append(" with Unit of Work ").append(current.hashCode());
+        sb.append(" with Unit of Work ").append(unit.hashCode());
         log.info(sb.toString());
         return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
     }
@@ -203,7 +199,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return Arrays.stream(values).map(Pair::getValue).collect(CollectionUtils.toJsonArray());
     }
 
-    private CompletableFuture<List<T>> findAllAux(UnitOfWork unit, String suffix) {
+    private CompletableFuture<List<T>> findAllAux(String suffix) {
         return SqlUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
                 .thenApply(resultSet -> {
                         log.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
@@ -215,9 +211,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 });
     }
 
-    private CompletableFuture<Void> createAux(UnitOfWork unit, T obj) {
+    private CompletableFuture<Void> createAux(T obj) {
         return SqlUtils.update(mapperSettings.getInsertQuery(), unit, prepareCreate(obj))
-                .thenCompose(updateResult -> processCreate(obj, unit, updateResult))
+                .thenCompose(updateResult -> processCreate(obj, updateResult))
                 .thenAccept(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
                     log.info("Create new {}", type.getSimpleName());
@@ -229,9 +225,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 );
     }
 
-    private CompletionStage<Optional<T>> processCreate(T obj, UnitOfWork current, UpdateResult ur) {
+    private CompletionStage<Optional<T>> processCreate(T obj, UpdateResult ur) {
         setGeneratedKeys(obj, ur.getKeys());
-        return this.findById(current, obj.getIdentityKey());
+        return this.findById(obj.getIdentityKey());
     }
 
     private JsonArray prepareCreate(T obj) {
@@ -253,9 +249,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SqlUtils.getValuesForStatement(fields, obj);
     }
 
-    private CompletableFuture<Void> updateAux(T obj, UnitOfWork unit) {
+    private CompletableFuture<Void> updateAux(T obj) {
         return SqlUtils.update(mapperSettings.getUpdateQuery(), unit, prepareUpdate(obj))
-                .thenCompose(updateResult -> processUpdate(obj, unit, updateResult))
+                .thenCompose(updateResult -> processUpdate(obj, updateResult))
                 .thenAccept(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
                     log.info("Updated {} with id {}", type.getSimpleName(), obj.getIdentityKey());
@@ -266,10 +262,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 });
     }
 
-    private CompletableFuture<Optional<T>> processUpdate(T obj, UnitOfWork current, UpdateResult ur) {
+    private CompletableFuture<Optional<T>> processUpdate(T obj, UpdateResult ur) {
         int updateCount = ur.getUpdated();
         if (updateCount == 0) throw new DataMapperException("No rows affected by update, object's version might be wrong");
-        return this.findById(current, obj.getIdentityKey());
+        return this.findById(obj.getIdentityKey());
     }
 
     private JsonArray prepareUpdate(T obj) {
@@ -300,9 +296,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         }
     }
 
-    private <R> CompletableFuture<Void> reduceCompletableFutures(UnitOfWork unit, Iterable<R> r, BiFunction<UnitOfWork, R, CompletableFuture<Void>> function) {
+    private <R> CompletableFuture<Void> reduceCompletableFutures(Iterable<R> r, Function<R, CompletableFuture<Void>> function) {
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
-        r.forEach(k -> completableFutures.add(function.apply(unit, k)));
+        r.forEach(k -> completableFutures.add(function.apply(k)));
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
@@ -312,7 +308,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private T mapper(JsonObject rs) {
         try {
-            T t = constructor.newInstance();
+            T t = (T) mapperSettings.getConstructor().newInstance();
             Constructor primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
             Object primaryKey = primaryKeyConstructor != null ? primaryKeyConstructor.newInstance() : null;
             Class<?> primaryKeyType = mapperSettings.getPrimaryKeyType();
@@ -402,7 +398,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private Optional<Mapper<? super T, ? super K>> getParentMapper() {
         Class<? super T> aClass = type.getSuperclass();
         if (aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            Mapper<? super T, ? super K> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass).getMapper();
+            Mapper<? super T, ? super K> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass, unit).getMapper();
             return Optional.of(classMapper);
         }
         return Optional.empty();

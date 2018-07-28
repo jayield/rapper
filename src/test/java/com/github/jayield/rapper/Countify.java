@@ -30,9 +30,9 @@ public class Countify {
 
     static class Counter<T, R> implements ICounter<T, R> {
         private int count=0;
-        private final BiFunction<UnitOfWork, T, R> inner;
+        private final Function<T, R> inner;
 
-        public Counter(BiFunction<UnitOfWork, T, R> inner) {
+        public Counter(Function<T, R> inner) {
             this.inner = inner;
         }
 
@@ -42,13 +42,13 @@ public class Countify {
         }
 
         @Override
-        public R apply(UnitOfWork unit, T arg) {
+        public R apply(T arg) {
             count++;
-            return inner.apply(unit, arg);
+            return inner.apply(arg);
         }
     }
 
-    public static <T,R> ICounter of(BiFunction<UnitOfWork, T, R> inner) {
+    public static <T,R> ICounter<T,R> of(Function<T, R> inner) {
         return new Counter<>(inner);
     }
 }

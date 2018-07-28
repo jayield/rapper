@@ -19,16 +19,16 @@ public class UpdateHelper extends AbstractCommitHelper {
         this.removedObjects = removedObjects;
     }
 
-    @Override
-    public CompletableFuture<Void> commitNext() {
-        if (objectIterator == null) objectIterator = list.iterator();
-        if (objectIterator.hasNext()) {
-            DomainObject domainObject = objectIterator.next();
-            if (removedObjects.contains(domainObject)) return commitNext();
-            return getMapper(domainObject.getClass()).update(unit, domainObject);
-        }
-        return null;
-    }
+//    @Override
+//    public CompletableFuture<Void> commitNext() {
+//        if (objectIterator == null) objectIterator = list.iterator();
+//        if (objectIterator.hasNext()) {
+//            DomainObject domainObject = objectIterator.next();
+//            if (removedObjects.contains(domainObject)) return commitNext();
+//            return getMapper(domainObject.getClass()).update(unit, domainObject);
+//        }
+//        return null;
+//    }
 
     @Override
     public Object identityMapUpdateNext() {

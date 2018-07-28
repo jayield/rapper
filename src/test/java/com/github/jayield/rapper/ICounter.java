@@ -17,14 +17,12 @@
 
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.utils.UnitOfWork;
-
-import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * @author Miguel Gamboa
  *         created on 24-03-2017
  */
-public interface ICounter<T, R> extends BiFunction<UnitOfWork, T, R> {
+public interface ICounter<T, R> extends Function<T, R> {
     int getCount();
 }

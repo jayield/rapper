@@ -16,15 +16,15 @@ public class DeleteHelper extends AbstractCommitHelper {
         this.dirtyObjects = dirtyObjects;
     }
 
-    @Override
-    public CompletableFuture<Void> commitNext() {
-        if (objectIterator == null) objectIterator = list.iterator();
-        if (objectIterator.hasNext()) {
-            DomainObject domainObject = objectIterator.next();
-            return getMapper(domainObject.getClass()).delete(unit, domainObject);
-        }
-        return null;
-    }
+//    @Override
+//    public CompletableFuture<Void> commitNext() {
+//        if (objectIterator == null) objectIterator = list.iterator();
+//        if (objectIterator.hasNext()) {
+//            DomainObject domainObject = objectIterator.next();
+//            return getMapper(domainObject.getClass()).delete(unit, domainObject);
+//        }
+//        return null;
+//    }
 
     @Override
     public Object identityMapUpdateNext() {

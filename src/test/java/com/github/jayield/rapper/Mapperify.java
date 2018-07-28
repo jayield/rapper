@@ -17,79 +17,79 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     public Mapperify(Mapper<T, K> other){
 
         this.other = other;
-        ifindById = Countify.<K, CompletableFuture<Optional<T>>>of((unitOfWork, k) -> other.findById(unitOfWork, k));
-        ifindAll = Countify.of((unit, i) -> other.findAll(unit));
-        ifindWhere = Countify.<Pair<String, Object>[], CompletableFuture<List<T>>>of((unit, values) -> other.findWhere(unit, values));
+        ifindById = Countify.of(other::findById);
+        ifindAll = Countify.of(i -> other.findAll());
+        ifindWhere = Countify.of(other::findWhere);
     }
 
     @Override
-    public <R> CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit, Pair<String, R>... values) {
-        return other.getNumberOfEntries(unit, values);
+    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
+        return other.getNumberOfEntries(values);
     }
 
     @Override
-    public CompletableFuture<Long> getNumberOfEntries(UnitOfWork unit) {
-        return other.getNumberOfEntries(unit);
+    public CompletableFuture<Long> getNumberOfEntries() {
+        return other.getNumberOfEntries();
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, Pair<String, R>... values) {
-        return ifindWhere.apply(unit, (Pair<String, Object>[]) values);
+    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
+        return ifindWhere.apply((Pair<String, Object>[]) values);
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(UnitOfWork unit, int page, int numberOfItems, Pair<String, R>... values) {
-        return other.findWhere(unit, page, numberOfItems, values);
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
+        return other.findWhere(page, numberOfItems, values);
     }
 
     @Override
-    public CompletableFuture<Optional<T>> findById(UnitOfWork unit, K k) {
-        return ifindById.apply(unit, k);
+    public CompletableFuture<Optional<T>> findById(K k) {
+        return ifindById.apply(k);
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(UnitOfWork unit) {
-        return ifindAll.apply(unit, null);
+    public CompletableFuture<List<T>> findAll() {
+        return ifindAll.apply(null);
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll(UnitOfWork unit, int page, int numberOfItems) {
-        return other.findAll(unit, page, numberOfItems);
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return other.findAll(page, numberOfItems);
     }
 
     @Override
-    public CompletableFuture<Void> create(UnitOfWork unit, T t) {
-        return other.create(unit, t);
+    public CompletableFuture<Void> create(T t) {
+        return other.create(t);
     }
 
     @Override
-    public CompletableFuture<Void> createAll(UnitOfWork unit, Iterable<T> t) {
-        return other.createAll(unit, t);
+    public CompletableFuture<Void> createAll(Iterable<T> t) {
+        return other.createAll(t);
     }
 
     @Override
-    public CompletableFuture<Void> update(UnitOfWork unit, T t) {
-        return other.update(unit, t);
+    public CompletableFuture<Void> update(T t) {
+        return other.update(t);
     }
 
     @Override
-    public CompletableFuture<Void> updateAll(UnitOfWork unit, Iterable<T> t) {
-        return other.updateAll(unit, t);
+    public CompletableFuture<Void> updateAll(Iterable<T> t) {
+        return other.updateAll(t);
     }
 
     @Override
-    public CompletableFuture<Void> deleteById(UnitOfWork unit, K k) {
-        return other.deleteById(unit, k);
+    public CompletableFuture<Void> deleteById(K k) {
+        return other.deleteById(k);
     }
 
     @Override
-    public CompletableFuture<Void> delete(UnitOfWork unit, T t) {
-        return other.delete(unit, t);
+    public CompletableFuture<Void> delete(T t) {
+        return other.delete(t);
     }
 
     @Override
-    public CompletableFuture<Void> deleteAll(UnitOfWork unit, Iterable<K> keys) {
-        return other.deleteAll(unit, keys);
+    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
+        return other.deleteAll(keys);
     }
 
     public ICounter<Void, CompletableFuture<List<T>>> getIfindAll() {

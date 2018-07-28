@@ -54,17 +54,16 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param repo
      * @param foreignNames
      * @param resultSet
-     * @param unit
      * @return
      */
-    public <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, ResultSet resultSet, UnitOfWork unit) {
+    public <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, ResultSet resultSet) {
         List<V> idValues = getIds(resultSet, foreignNames)
                 .stream()
                 .map(e -> (V)e)
                 .collect(Collectors.toList());
         return idValues
                 .stream()
-                .map(v -> repo.findById(unit, v))
+                .map(repo::findById)
                 .map(optionalCompletableFuture -> optionalCompletableFuture
                         .thenApply(optional -> optional.orElseThrow(
                                 () -> new DataMapperException("Couldn't get external object. Its ID was found in the external table, but not on its table"))

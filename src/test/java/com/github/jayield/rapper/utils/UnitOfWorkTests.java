@@ -149,24 +149,28 @@ public class UnitOfWorkTests {
         logger.info("Number of Openned connections - {}", UnitOfWork.numberOfOpenConnections.get());
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
         SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_UNCOMMITTED.getType());
-
-        Employee employee = employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().get(0);
-        Employee employee2 = employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().get(0);
+        employeeRepo = MapperRegistry.getRepository(Employee.class, unit);
+        Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
+        Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
         unit.commit().join();
 
         UnitOfWork unitOfWork = new UnitOfWork(connectionSqlSupplier.wrap());
-        CompletableFuture<Void> future1 = employeeRepo.deleteById(unitOfWork, employee.getIdentityKey());
-        CompletableFuture<Void> future = employeeRepo.deleteById(unitOfWork, employee2.getIdentityKey());
+        DataRepository<Employee, Integer> employeeRepo2 = MapperRegistry.getRepository(Employee.class, unitOfWork);
+        CompletableFuture<Void> future1 = employeeRepo2.deleteById(employee.getIdentityKey());
+        CompletableFuture<Void> future = employeeRepo2.deleteById(employee2.getIdentityKey());
+
+        companyRepo = MapperRegistry.getRepository(Company.class, unitOfWork);
 
         CompletableFuture.allOf(future, future1)
-                .thenCompose(aVoid -> companyRepo.deleteById(unitOfWork, new Company.PrimaryKey(1, 1)))
+                .thenCompose(aVoid -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
                 .thenCompose(voidCompletableFuture -> unitOfWork.commit())
                 .join();
 
-        assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join().isEmpty());
-        assertTrue(employeeRepo.findWhere(unit, new Pair<>("name", "Charles")).join().isEmpty());
-        assertTrue(!companyRepo.findById(unit, new Company.PrimaryKey(1, 1)).join().isPresent());
+        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Bob")).join().isEmpty());
+        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Charles")).join().isEmpty());
+        assertTrue(!companyRepo.findById(new Company.PrimaryKey(1, 1)).join().isPresent());
         unit.rollback().join();
+        unitOfWork.rollback().join();
     }
 
     private void assertIdentityMaps(List<DomainObject> objectList, BiConsumer<ConcurrentMap, DomainObject> assertion) {
@@ -237,17 +241,17 @@ public class UnitOfWorkTests {
     }
 
     private void populateIdentityMaps() {
-        DataRepository carRepo = getRepository(Car.class);
+        DataRepository carRepo = getRepository(Car.class, unit);
         Car originalCar = objectsContainer.getOriginalCar();
         unit.validate(originalCar.getIdentityKey(), originalCar);
 
-        DataRepository employeeRepo = getRepository(Employee.class);
+        DataRepository employeeRepo = getRepository(Employee.class, unit);
         Employee originalEmployee = objectsContainer.getOriginalEmployee();
         unit.validate(originalEmployee.getIdentityKey(), originalEmployee);
     }
 
     private void addRemovedObjects() {
-        getRepository(Employee.class).delete(unit, objectsContainer.getOriginalEmployee()).join();
+        getRepository(Employee.class, unit).delete(objectsContainer.getOriginalEmployee()).join();
     }
 
     //Original car shall be in the identityMap
@@ -256,26 +260,26 @@ public class UnitOfWorkTests {
         clonedObjects.add(objectsContainer.getOriginalCar());
         clonedObjects.add(objectsContainer.getOriginalTopStudent());*/
 
-        getRepository(Person.class).update(unit, objectsContainer.getUpdatedPerson()).join();
-        getRepository(Car.class).update(unit, objectsContainer.getUpdatedCar()).join();
-        getRepository(TopStudent.class).update(unit, objectsContainer.getUpdatedTopStudent()).join();
+        getRepository(Person.class, unit).update(objectsContainer.getUpdatedPerson()).join();
+        getRepository(Car.class, unit).update(objectsContainer.getUpdatedCar()).join();
+        getRepository(TopStudent.class, unit).update(objectsContainer.getUpdatedTopStudent()).join();
     }
 
     private void addNewObjects() {
-        getRepository(Person.class).create(unit, objectsContainer.getInsertedPerson()).join();
-        getRepository(Car.class).create(unit, objectsContainer.getInsertedCar()).join();
-        getRepository(TopStudent.class).create(unit, objectsContainer.getInsertedTopStudent()).join();
+        getRepository(Person.class, unit).create(objectsContainer.getInsertedPerson()).join();
+        getRepository(Car.class, unit).create(objectsContainer.getInsertedCar()).join();
+        getRepository(TopStudent.class, unit).create(objectsContainer.getInsertedTopStudent()).join();
     }
 
     private <R extends DomainObject<P>, P> MapperRegistry.Container<R, P> getContainer(Class<R> rClass) {
         MapperSettings mapperSettings = new MapperSettings(rClass);
         ExternalsHandler<R, P> externalsHandler = new ExternalsHandler<>(mapperSettings);
-        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, externalsHandler, mapperSettings);
+        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, externalsHandler, mapperSettings, unit);
         Mapperify<R, P> mapperify = new Mapperify<>(dataMapper);
         Type type1 = ((ParameterizedType) rClass.getGenericInterfaces()[0]).getActualTypeArguments()[0];
         Comparator<R> comparator = new DomainObjectComparator<>(mapperSettings);
-        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, mapperify, comparator);
+        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, mapperify, comparator, unit);
 
-        return new MapperRegistry.Container<>(mapperSettings, externalsHandler, employeeRepo, mapperify);
+        return new MapperRegistry.Container<>(mapperSettings, externalsHandler);
     }
 }

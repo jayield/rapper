@@ -63,13 +63,13 @@ public class DomainObjectComparatorTests {
 
     @Test
     public void testCompareCars() {
-        Mapper<Car, CarKey> carMapper = MapperRegistry.getMapper(Car.class);
+        Mapper<Car, CarKey> carMapper = MapperRegistry.getRepository(Car.class, unit).getMapper();
 
-        Car car1 = carMapper.findById(unit, new CarKey(2, "23we45"))
+        Car car1 = carMapper.findById(new CarKey(2, "23we45"))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Car not found"));
 
-        Car car2 = carMapper.findById(unit, new CarKey(2, "23we45"))
+        Car car2 = carMapper.findById(new CarKey(2, "23we45"))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Car not found"));
 
@@ -80,13 +80,13 @@ public class DomainObjectComparatorTests {
 
     @Test
     public void testCompareBooks(){
-        Mapper<Book, Long> bookMapper = MapperRegistry.getMapper(Book.class);
+        Mapper<Book, Long> bookMapper = MapperRegistry.getRepository(Book.class, unit).getMapper();
 
-        Book book1 = bookMapper.findWhere(unit, new Pair<>("name", "1001 noites"))
+        Book book1 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
                 .join()
                 .get(0);
 
-        Book book2 = bookMapper.findWhere(unit, new Pair<>("name", "1001 noites"))
+        Book book2 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
                 .join()
                 .get(0);
 
@@ -97,13 +97,13 @@ public class DomainObjectComparatorTests {
 
     @Test
     public void testCompareEmployees() {
-        Mapper<Employee, Integer> bookMapper = MapperRegistry.getMapper(Employee.class);
+        Mapper<Employee, Integer> bookMapper = MapperRegistry.getRepository(Employee.class, unit).getMapper();
 
-        Employee employee1 = bookMapper.findWhere(unit, new Pair<>("name", "Charles"))
+        Employee employee1 = bookMapper.findWhere(new Pair<>("name", "Charles"))
                 .join()
                 .get(0);
 
-        Employee employee2 = bookMapper.findWhere(unit, new Pair<>("name", "Bob"))
+        Employee employee2 = bookMapper.findWhere(new Pair<>("name", "Bob"))
                 .join()
                 .get(0);
 

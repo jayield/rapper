@@ -73,23 +73,23 @@ public class DataRepositoryTests {
 
     @Test
     public void testGetNumberOfEntriesWhere(){
-        long numberOfEntries = companyRepo.getNumberOfEntries(unit, new Pair<>("id", 1)).join();
+        long numberOfEntries = companyRepo.getNumberOfEntries(new Pair<>("id", 1)).join();
         assertEquals(11, numberOfEntries);
     }
 
     @Test
     public void testGetNumberOfEntries(){
-        long numberOfEntries = companyRepo.getNumberOfEntries(unit).join();
+        long numberOfEntries = companyRepo.getNumberOfEntries().join();
         assertEquals(11, numberOfEntries);
     }
 
     //-----------------------------------Find-----------------------------------//
     @Test
     public void testFindById() {
-        Optional<TopStudent> first = topStudentRepo.findById(unit, 454).join();
+        Optional<TopStudent> first = topStudentRepo.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
 
-        Optional<TopStudent> second = topStudentRepo.findById(unit, 454).join();
+        Optional<TopStudent> second = topStudentRepo.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), second.get());
@@ -100,10 +100,10 @@ public class DataRepositoryTests {
 
     @Test
     public void testFindAll() {
-        topStudentRepo.findAll(unit).join();
+        topStudentRepo.findAll().join();
         assertEquals(1, topStudentMapperify.getIfindAll().getCount());
 
-        List<TopStudent> second = topStudentRepo.findAll(unit).join();
+        List<TopStudent> second = topStudentRepo.findAll().join();
         assertEquals(2, topStudentMapperify.getIfindAll().getCount());
 
         SQLConnection con = unit.getConnection().join();
@@ -117,12 +117,12 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1).toInstant(), 0, 1, 20, 2016, 0, 0);
 
         //Act
-        topStudentRepo.create(unit, topStudent)
+        topStudentRepo.create(topStudent)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
         //Assert
-        Optional<TopStudent> first = topStudentRepo.findById(unit, 456).join();
+        Optional<TopStudent> first = topStudentRepo.findById(456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), topStudent);
@@ -136,14 +136,14 @@ public class DataRepositoryTests {
         list.add(new TopStudent(457, "Maria", null, 0, 2, 18, 2010, 0, 0));
 
         //Act
-        topStudentRepo.createAll(unit, list)
+        topStudentRepo.createAll(list)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
         //Assert
-        Optional<TopStudent> first = topStudentRepo.findById(unit, 456).join();
+        Optional<TopStudent> first = topStudentRepo.findById(456).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
-        Optional<TopStudent> second = topStudentRepo.findById(unit, 457).join();
+        Optional<TopStudent> second = topStudentRepo.findById(457).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), list.get(0));
@@ -162,13 +162,13 @@ public class DataRepositoryTests {
         TopStudent topStudent = new TopStudent(454, "Carlos", new Date(2010, 6, 3).toInstant(), firstRes.getLong(1),
                 4, 6, 7, firstRes.getLong(2), firstRes.getLong(0));
 
-        topStudentRepo.update(unit, topStudent)
+        topStudentRepo.update(topStudent)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
-        Optional<TopStudent> first = topStudentRepo.findById(unit, 454).join();
+        Optional<TopStudent> first = topStudentRepo.findById(454).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
-        topStudentRepo.findById(unit, 454).join();
+        topStudentRepo.findById(454).join();
         assertEquals(0, topStudentMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), topStudent);
@@ -185,13 +185,13 @@ public class DataRepositoryTests {
         list.add(new Person(454, "Ze Miguens", new Date(1080, 2, 4).toInstant(), rs.getResults().get(0).getLong(0)));
         unit.rollback().join();
 
-        personRepo.updateAll(unit, list)
+        personRepo.updateAll(list)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
-        Optional<Person> first = personRepo.findById(unit, 321).join();
+        Optional<Person> first = personRepo.findById(321).join();
         assertEquals(0, personMapperify.getIfindById().getCount());
-        Optional<Person> second = personRepo.findById(unit, 454).join();
+        Optional<Person> second = personRepo.findById(454).join();
         assertEquals(0, personMapperify.getIfindById().getCount());
 
         assertEquals(first.get(), list.get(0));
@@ -201,11 +201,11 @@ public class DataRepositoryTests {
     //-----------------------------------DeleteById-----------------------------------//
     @Test
     public void testDeleteById() {
-        topStudentRepo.deleteById(unit, 454)
+        topStudentRepo.deleteById(454)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
-        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(unit, 454).join();
+        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(454).join();
         assertEquals(2, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
         SQLConnection con = unit.getConnection().join();
@@ -216,11 +216,11 @@ public class DataRepositoryTests {
     public void testDelete() {
         TopStudent topStudent = new TopStudent(454, null, null, 0, 0, 0, 0, 0, 0);
 
-        topStudentRepo.delete(unit, topStudent)
+        topStudentRepo.delete(topStudent)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
-        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(unit, 454).join();
+        Optional<TopStudent> optionalTopStudent = topStudentRepo.findById(454).join();
         assertEquals(1, topStudentMapperify.getIfindById().getCount());
         assertFalse(optionalTopStudent.isPresent());
         SQLConnection con = unit.getConnection().join();
@@ -239,7 +239,7 @@ public class DataRepositoryTests {
         firstRes = rs.getRows(true).get(0);
         list.add(firstRes.getInteger("id"));
 
-        employeeRepo.deleteAll(unit, list)
+        employeeRepo.deleteAll(list)
                 .thenCompose(aVoid -> unit.commit())
                 .join();
 
@@ -247,11 +247,11 @@ public class DataRepositoryTests {
         assertNotFound(employeeSelectQuery, new JsonArray().add("Bob"), con);
         assertNotFound(employeeSelectQuery, new JsonArray().add("Charles"), con);
 
-        Optional<Employee> optionalPerson = employeeRepo.findById(unit, list.remove(0)).join();
+        Optional<Employee> optionalPerson = employeeRepo.findById(list.remove(0)).join();
         assertTrue(3 >= employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson.isPresent());
 
-        Optional<Employee> optionalPerson2 = employeeRepo.findById(unit, list.remove(0)).join();
+        Optional<Employee> optionalPerson2 = employeeRepo.findById(list.remove(0)).join();
         assertTrue(4 >= employeeMapperify.getIfindById().getCount());
         assertFalse(optionalPerson2.isPresent());
     }
@@ -271,12 +271,12 @@ public class DataRepositoryTests {
         ExternalsHandler<Book, Long> bookExternal = new ExternalsHandler<>(bookSettings);
         ExternalsHandler<Author, Long> authorExternal = new ExternalsHandler<>(authorSettings);
 
-        DataMapper<TopStudent, Integer> topStudentMapper = new DataMapper<>(TopStudent.class, topStudentExternal, topStudentSettings);
-        DataMapper<Person, Integer> personMapper = new DataMapper<>(Person.class, personExternal, personSettings);
-        DataMapper<Employee, Integer> employeeMapper = new DataMapper<>(Employee.class, employeeExternal, employeeSettings);
-        DataMapper<Company, Company.PrimaryKey> companyMapper = new DataMapper<>(Company.class, companyExternal, companySettings);
-        DataMapper<Book, Long> bookMapper = new DataMapper<>(Book.class, bookExternal, bookSettings);
-        DataMapper<Author, Long> authorMapper = new DataMapper<>(Author.class, authorExternal, authorSettings);
+        DataMapper<TopStudent, Integer> topStudentMapper = new DataMapper<>(TopStudent.class, topStudentExternal, topStudentSettings, unit);
+        DataMapper<Person, Integer> personMapper = new DataMapper<>(Person.class, personExternal, personSettings, unit);
+        DataMapper<Employee, Integer> employeeMapper = new DataMapper<>(Employee.class, employeeExternal, employeeSettings, unit);
+        DataMapper<Company, Company.PrimaryKey> companyMapper = new DataMapper<>(Company.class, companyExternal, companySettings, unit);
+        DataMapper<Book, Long> bookMapper = new DataMapper<>(Book.class, bookExternal, bookSettings, unit);
+        DataMapper<Author, Long> authorMapper = new DataMapper<>(Author.class, authorExternal, authorSettings, unit);
 
         topStudentMapperify = new Mapperify<>(topStudentMapper);
         personMapperify = new Mapperify<>(personMapper);
@@ -292,17 +292,17 @@ public class DataRepositoryTests {
         Comparator<Book> bookComparator = new DomainObjectComparator<>(bookSettings);
         Comparator<Author> authorComparator = new DomainObjectComparator<>(authorSettings);
 
-        topStudentRepo = new DataRepository<>(TopStudent.class, topStudentMapperify, topStudentComparator);
-        personRepo = new DataRepository<>(Person.class, personMapperify, personComparator);
-        employeeRepo = new DataRepository<>(Employee.class, employeeMapperify, employeeComparator);
-        companyRepo = new DataRepository<>(Company.class, companyMapperify, companyComparator);
-        bookRepo = new DataRepository<>(Book.class, bookMapperify, bookComparator);
-        authorRepo = new DataRepository<>(Author.class, authorMapperify, authorComparator);
+        topStudentRepo = new DataRepository<>(TopStudent.class, topStudentMapperify, topStudentComparator, unit);
+        personRepo = new DataRepository<>(Person.class, personMapperify, personComparator, unit);
+        employeeRepo = new DataRepository<>(Employee.class, employeeMapperify, employeeComparator, unit);
+        companyRepo = new DataRepository<>(Company.class, companyMapperify, companyComparator, unit);
+        bookRepo = new DataRepository<>(Book.class, bookMapperify, bookComparator, unit);
+        authorRepo = new DataRepository<>(Author.class, authorMapperify, authorComparator, unit);
 
-        repositoryMap.put(TopStudent.class, new MapperRegistry.Container<>(topStudentSettings, topStudentExternal, topStudentRepo, topStudentMapper));
-        repositoryMap.put(Person.class, new MapperRegistry.Container<>(personSettings, personExternal, personRepo, personMapper));
-        repositoryMap.put(Employee.class, new MapperRegistry.Container<>(employeeSettings, employeeExternal, employeeRepo, employeeMapper));
-        repositoryMap.put(Company.class, new MapperRegistry.Container<>(companySettings, companyExternal, companyRepo, companyMapper));
-        repositoryMap.put(Author.class, new MapperRegistry.Container<>(authorSettings, authorExternal, authorRepo, authorMapper));
+        repositoryMap.put(TopStudent.class, new MapperRegistry.Container<>(topStudentSettings, topStudentExternal));
+        repositoryMap.put(Person.class, new MapperRegistry.Container<>(personSettings, personExternal));
+        repositoryMap.put(Employee.class, new MapperRegistry.Container<>(employeeSettings, employeeExternal));
+        repositoryMap.put(Company.class, new MapperRegistry.Container<>(companySettings, companyExternal));
+        repositoryMap.put(Author.class, new MapperRegistry.Container<>(authorSettings, authorExternal));
     }
 }

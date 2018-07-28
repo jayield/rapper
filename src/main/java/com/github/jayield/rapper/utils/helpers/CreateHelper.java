@@ -13,15 +13,15 @@ public class CreateHelper extends AbstractCommitHelper {
         super(unit, list);
     }
 
-    @Override
-    public CompletableFuture<Void> commitNext() {
-        if (objectIterator == null) objectIterator = list.iterator();
-        if (objectIterator.hasNext()) {
-            DomainObject domainObject = objectIterator.next();
-            return getMapper(domainObject.getClass()).create(unit, domainObject);
-        }
-        return null;
-    }
+//    @Override
+//    public CompletableFuture<Void> commitNext() {
+//        if (objectIterator == null) objectIterator = list.iterator();
+//        if (objectIterator.hasNext()) {
+//            DomainObject domainObject = objectIterator.next();
+//            return getMapper(domainObject.getClass()).create(unit, domainObject);
+//        }
+//        return null;
+//    }
 
     @Override
     public Object identityMapUpdateNext() {

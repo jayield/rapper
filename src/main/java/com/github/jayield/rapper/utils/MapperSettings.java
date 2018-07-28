@@ -35,6 +35,7 @@ public class MapperSettings {
     private String pagination;
     private Class<?> primaryKeyType = null;
     private Constructor<?> primaryKeyConstructor;
+    private final Constructor<?> constructor;
 
     private final Predicate<Field> fieldPredicate = field ->
             field.getType().isPrimitive()
@@ -50,6 +51,11 @@ public class MapperSettings {
 
     public MapperSettings(Class<?> type) {
         this.type = type;
+        try {
+            constructor = type.getConstructor();
+        } catch (NoSuchMethodException e) {
+            throw new DataMapperException(e);
+        }
 
         operations = initOperations(type);
 
@@ -213,7 +219,7 @@ public class MapperSettings {
                 .collect(Collectors.joining(" and ", "delete from " + type.getSimpleName() + " where ", ""));
     }
 
-    class FieldOperations {
+    static class FieldOperations {
         public final Predicate<Field> predicate;
         public final BiFunction<Field, String, Stream<SqlField>> function;
 
@@ -325,5 +331,9 @@ public class MapperSettings {
 
     public SqlFieldVersion getVersionField() {
         return versionField;
+    }
+
+    public Constructor<?> getConstructor() {
+        return constructor;
     }
 }

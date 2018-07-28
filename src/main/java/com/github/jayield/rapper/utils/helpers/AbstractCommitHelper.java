@@ -25,7 +25,7 @@ public abstract class AbstractCommitHelper {
      * It will get the next Object from the list and call the DataMapper methods
      * @return
      */
-    public abstract CompletableFuture<Void> commitNext();
+    //public abstract CompletableFuture<Void> commitNext();
 
     /**
      * It will get the next Object from the list and update the Identity Map

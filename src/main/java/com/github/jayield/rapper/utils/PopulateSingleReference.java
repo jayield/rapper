@@ -2,6 +2,7 @@ package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.ExternalsHandler;
+import com.github.jayield.rapper.Mapper;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.MapperRegistry.Container;
 import com.github.jayield.rapper.utils.SqlField.SqlFieldExternal;
@@ -59,8 +60,8 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
             }
         }
 
-        Function<UnitOfWork, CompletableFuture<N>> futureSupplier = unit -> container.getDataRepository()
-                .findById(unit, (V) id)
+        Function<UnitOfWork, CompletableFuture<N>> futureSupplier = unit -> MapperRegistry.getRepository((Class<N>)sqlFieldExternal.domainObjectType, unit)
+                .findById((V) id)
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
 

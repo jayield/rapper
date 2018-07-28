@@ -16,19 +16,18 @@ public class MapperRegistry {
         return containerMap.computeIfAbsent(type, aClass -> {
             MapperSettings mapperSettings = new MapperSettings(aClass);
             ExternalsHandler<T, K> externalsHandler = new ExternalsHandler<>(mapperSettings);
-            DataMapper<T, K> dataMapper = new DataMapper<>(aClass, externalsHandler, mapperSettings);
 
-            Comparator<T> comparator = new DomainObjectComparator<>(mapperSettings);
-            Class<K> keyType = ReflectionUtils.<T, K>getKeyType(aClass);
-
-            DataRepository<T, K> repository = new DataRepository<>(aClass, dataMapper, comparator);
-
-            return new Container<>(mapperSettings, externalsHandler, repository, dataMapper);
+            return new Container<>(mapperSettings, externalsHandler);
         });
     }
 
-    public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> type) {
-        return getContainer(type).getDataRepository();
+    public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> type, UnitOfWork unit) {
+        Container<T,K> container = getContainer(type);
+        return new DataRepository<>(
+                type,
+                new DataMapper<>(type, container.getExternalsHandler(), container.getMapperSettings(), unit),
+                new DomainObjectComparator<>(container.getMapperSettings()),
+                unit);
     }
 
     public static <T extends DomainObject<K>, K> ExternalsHandler<T, K> getExternal(Class<T> type){
@@ -39,21 +38,17 @@ public class MapperRegistry {
         return getContainer(type).getMapperSettings();
     }
 
-    public static <T extends DomainObject<K>, K> Mapper<T, K> getMapper(Class<T> type){
-        return getContainer(type).getMapper();
-    }
+//    public static <T extends DomainObject<K>, K> Mapper<T, K> getMapper(Class<T> type){
+//        return getContainer(type).getMapper();
+//    }
 
     public static class Container<T extends DomainObject<K>, K>{
         private final MapperSettings mapperSettings;
         private final ExternalsHandler<T, K> externalsHandler;
-        private final DataRepository<T, K> dataRepository;
-        private final Mapper<T, K> dataMapper;
 
-        public Container(MapperSettings mapperSettings, ExternalsHandler<T, K> externalsHandler, DataRepository<T, K> dataRepository, Mapper<T, K> dataMapper){
+        public Container(MapperSettings mapperSettings, ExternalsHandler<T, K> externalsHandler){
             this.mapperSettings = mapperSettings;
             this.externalsHandler = externalsHandler;
-            this.dataRepository = dataRepository;
-            this.dataMapper = dataMapper;
         }
 
         MapperSettings getMapperSettings() {
@@ -62,14 +57,6 @@ public class MapperRegistry {
 
         ExternalsHandler<T, K> getExternalsHandler() {
             return externalsHandler;
-        }
-
-        DataRepository<T, K> getDataRepository() {
-            return dataRepository;
-        }
-
-        Mapper<T, K> getMapper() {
-            return dataMapper;
         }
     }
 }
