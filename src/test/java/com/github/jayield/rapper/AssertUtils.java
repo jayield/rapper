@@ -72,7 +72,7 @@ public class AssertUtils {
         assertEquals(company.getVersion(), rs.getLong("version").longValue());
         assertNotEquals(0, company.getVersion());
 
-        CompletableFuture<List<Employee>> completableFuture = company.getEmployees().apply(unit);
+        CompletableFuture<List<Employee>> completableFuture = company.getEmployees().get();
         SQLConnection con = unit.getConnection().join();
         if(completableFuture != null) {
             List<Employee> employees = completableFuture.join();
@@ -104,7 +104,7 @@ public class AssertUtils {
         assertEquals(employee.getName(), rs.getString("name"));
         assertEquals(employee.getVersion(), rs.getLong("version").longValue());
         //System.out.println(rs);
-        CompletableFuture<Company> companyCompletableFuture = employee.getCompany().getForeignFunction().apply(unit);
+        CompletableFuture<Company> companyCompletableFuture = employee.getCompany().getForeignFunction().get();
         if(companyCompletableFuture != null){
             Company company = companyCompletableFuture.join();
             assertEquals(company.getIdentityKey().getId(), rs.getInteger("companyId").intValue());
@@ -127,7 +127,7 @@ public class AssertUtils {
         assertEquals(book.getName(), rs.getString("name"));
         assertEquals(book.getVersion(), rs.getLong("version").longValue());
 
-        CompletableFuture<List<Author>> authors = book.getAuthors().apply(unit);
+        CompletableFuture<List<Author>> authors = book.getAuthors().get();
         if(authors != null) {
             Author author = authors.join().get(0);
             SqlUtils.<ResultSet>callbackToPromise(ar ->

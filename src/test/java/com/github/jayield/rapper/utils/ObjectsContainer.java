@@ -62,7 +62,7 @@ class ObjectsContainer {
 
             rs = executeQuery(employeeSelectQuery, new JsonArray().add("Charles"), con);
             first = rs.getRows(true).get(0);
-            originalEmployee = new Employee(first.getInteger("id"), first.getString("name"), first.getLong("version"), new Foreign<>(originalCompany.getIdentityKey(), unit -> CompletableFuture.completedFuture(originalCompany)));
+            originalEmployee = new Employee(first.getInteger("id"), first.getString("name"), first.getLong("version"), new Foreign<>(originalCompany.getIdentityKey(), () -> CompletableFuture.completedFuture(originalCompany)));
         } catch (ParseException e) {
             throw new RuntimeException(e);
         }

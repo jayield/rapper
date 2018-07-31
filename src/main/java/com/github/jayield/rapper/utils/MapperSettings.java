@@ -11,6 +11,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -46,7 +47,7 @@ public class MapperSettings {
             || field.getType().isAssignableFrom(Double.class)
             || field.getType().isAssignableFrom(Long.class)
             || field.getType().isAssignableFrom(Boolean.class)
-            || field.getType().isAssignableFrom(Function.class)
+            || field.getType().isAssignableFrom(Supplier.class)
             || field.getType().isAssignableFrom(Foreign.class);
 
     public MapperSettings(Class<?> type) {

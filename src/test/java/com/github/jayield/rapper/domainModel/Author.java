@@ -9,6 +9,7 @@ import com.github.jayield.rapper.utils.UnitOfWork;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class Author implements DomainObject<Long> {
 
@@ -18,13 +19,13 @@ public class Author implements DomainObject<Long> {
     @Version
     private long version;
     @ColumnName(foreignName = "authorId", table = "BookAuthor", externalName = "bookId")
-    private Function<UnitOfWork, CompletableFuture<List<Book>>> books;
+    private Supplier<CompletableFuture<List<Book>>> books;
 
     public String getName() {
         return name;
     }
 
-    public Function<UnitOfWork, CompletableFuture<List<Book>>> getBooks() {
+    public Supplier<CompletableFuture<List<Book>>> getBooks() {
         return books;
     }
 

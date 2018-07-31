@@ -22,13 +22,13 @@ public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements 
     }
 
     @Override
-    public CompletableFuture<Void> execute(T t, SqlField.SqlFieldExternal sqlFieldExternal) {
-        populate(t, sqlFieldExternal, MapperRegistry.getContainer(sqlFieldExternal.domainObjectType), idValues(t, sqlFieldExternal));
+    public CompletableFuture<Void> execute(T t, SqlField.SqlFieldExternal sqlFieldExternal, UnitOfWork unitOfWork) {
+        populate(t, sqlFieldExternal, MapperRegistry.getContainer(sqlFieldExternal.domainObjectType), idValues(t, sqlFieldExternal), unitOfWork);
         return null;
     }
 
     public abstract Stream<Object> idValues(T t, SqlField.SqlFieldExternal sqlFieldExternal);
-    public abstract<N extends DomainObject<V>,V> void populate(T t, SqlField.SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues);
+    public abstract<N extends DomainObject<V>,V> void populate(T t, SqlField.SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues, UnitOfWork unitOfWork);
 
 
     /**

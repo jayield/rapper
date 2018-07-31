@@ -11,6 +11,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class PopulateMultiReference<T extends DomainObject<K>, K> extends AbstractPopulate<T, K> {
@@ -35,13 +36,13 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
      * @param idValues
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues, UnitOfWork unit) {
         Iterator<Object> idValues1 = idValues.iterator();
         Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.foreignNames)
                 .map(str -> new Pair<>(str, idValues1.next()))
                 .toArray(Pair[]::new);
 
-        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getRepository(sqlFieldExternal.domainObjectType, unit).findWhere(pairs);
+        Supplier<CompletableFuture<List<N>>> objects = () -> MapperRegistry.getRepository(sqlFieldExternal.domainObjectType, unit).findWhere(pairs);
 
         try {
             sqlFieldExternal.field.setAccessible(true);

@@ -36,14 +36,14 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      *
      * @param t
      */
-    void populateExternals(T t) {
+    void populateExternals(T t, UnitOfWork unit) {
         List<SqlFieldExternal> externals = mapperSettings.getExternals();
         if (externals != null)
             externals.forEach(sqlFieldExternal -> {
                 Populate<T> populate = populatorsMap.get(sqlFieldExternal.getPopulateStrategy());
                 if (populate == null)
                     throw new DataMapperException("The annotation ColumnName didn't follow the rules");
-                populate.execute(t, sqlFieldExternal);
+                populate.execute(t, sqlFieldExternal, unit);
             });
     }
 

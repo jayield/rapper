@@ -149,12 +149,15 @@ public class UnitOfWorkTests {
         logger.info("Number of Openned connections - {}", UnitOfWork.numberOfOpenConnections.get());
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
         SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_UNCOMMITTED.getType());
+
         employeeRepo = MapperRegistry.getRepository(Employee.class, unit);
+
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
         unit.commit().join();
 
         UnitOfWork unitOfWork = new UnitOfWork(connectionSqlSupplier.wrap());
+
         DataRepository<Employee, Integer> employeeRepo2 = MapperRegistry.getRepository(Employee.class, unitOfWork);
         CompletableFuture<Void> future1 = employeeRepo2.deleteById(employee.getIdentityKey());
         CompletableFuture<Void> future = employeeRepo2.deleteById(employee2.getIdentityKey());

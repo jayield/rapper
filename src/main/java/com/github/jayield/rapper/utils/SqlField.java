@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -121,8 +122,8 @@ public class SqlField {
 
             verifyField();
 
-            if(type == Function.class)
-                domainObjectType = ReflectionUtils.getGenericType(((ParameterizedType) field.getGenericType()).getActualTypeArguments()[1]); //Index number 1 is the return of the Function
+            if(type == Supplier.class)
+                domainObjectType = ReflectionUtils.getGenericType(((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0]); //Index number 1 is the return of the Function
             else
                 domainObjectType = (Class<? extends DomainObject>) ((ParameterizedType) field.getGenericType()).getActualTypeArguments()[0];
             selectTableQuery = buildSelectQuery(annotation.table());
@@ -134,8 +135,8 @@ public class SqlField {
          */
         private void verifyField() {
             try {
-                if (type != Function.class && type != Foreign.class)
-                    throw new DataMapperException("The field annotated with @ColumnName must be of type Function or Foreign");
+                if (type != Supplier.class && type != Foreign.class)
+                    throw new DataMapperException("The field annotated with @ColumnName must be of type Supplier or Foreign");
                 String[] nameDefaultValue = (String[]) ColumnName.class.getDeclaredMethod("name").getDefaultValue();
 
                 checkNameParameter(nameDefaultValue);
@@ -152,17 +153,17 @@ public class SqlField {
             else {
                 Type[] typeArguments = ((ParameterizedType) field.getGenericType()).getActualTypeArguments();
 
-                if(typeArguments[0] != UnitOfWork.class)
-                    throw new DataMapperException("The field annotated with @ColumnName must be a Function<UnitOfWork, CompletableFuture>");
+//                if(typeArguments[0] != UnitOfWork.class)
+//                    throw new DataMapperException("The field annotated with @ColumnName must be a Function<UnitOfWork, CompletableFuture>");
 
-                Type genericType = typeArguments[1];
+                Type genericType = typeArguments[0];
                 if(((ParameterizedType) genericType).getRawType() != CompletableFuture.class)
-                    throw new DataMapperException("The field annotated with @ColumnName must be a Function<UnitOfWork, CompletableFuture>");
+                    throw new DataMapperException("The field annotated with @ColumnName must be a Supplier<CompletableFuture>");
 
                 genericType = ((ParameterizedType) genericType).getActualTypeArguments()[0];
 
                 if(((ParameterizedType) genericType).getRawType() != List.class)
-                    throw new DataMapperException("The field annotated with @ColumnName without \"name\" defined must be a Function<UnitOfWork, CompletableFuture<List<DomainObject>>>");
+                    throw new DataMapperException("The field annotated with @ColumnName without \"name\" defined must be a Supplier<CompletableFuture<List<DomainObject>>>");
             }
         }
 

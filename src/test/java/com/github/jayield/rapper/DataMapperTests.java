@@ -245,7 +245,7 @@ public class DataMapperTests {
                 .findById(new Company.PrimaryKey(1, 1))
                 .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))));
 
-        Employee employee = new Employee(0, "Hugo", 0, new Foreign<>( new Company.PrimaryKey(1, 1), uW -> companyCompletableFuture));
+        Employee employee = new Employee(0, "Hugo", 0, new Foreign<>( new Company.PrimaryKey(1, 1), () -> companyCompletableFuture));
         employeeMapper.create(employee).join();
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Hugo"), AssertUtils::assertEmployee, con);
     }
@@ -312,7 +312,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(first.getInteger("id"),"Boba", first.getLong("version"),
-                new Foreign<>(new Company.PrimaryKey(1, 2), uW -> companyMapper
+                new Foreign<>(new Company.PrimaryKey(1, 2), () -> companyMapper
                         .findById(new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))))));
 
@@ -409,7 +409,7 @@ public class DataMapperTests {
         ResultSet rs = executeQuery(employeeSelectQuery, new JsonArray().add("Bob"), con);
         JsonObject first = rs.getRows(true).get(0);
         Employee employee = new Employee(first.getInteger("id"), first.getString("name"), first.getLong("version"),
-                new Foreign<>(new Company.PrimaryKey(1, 2), uW -> companyMapper
+                new Foreign<>(new Company.PrimaryKey(1, 2), () -> companyMapper
                         .findById(new Company.PrimaryKey(1, 2))
                         .thenApply(company -> company.orElseThrow(() -> new DataMapperException(("Company not found"))))));
         employeeMapper.delete(employee).join();

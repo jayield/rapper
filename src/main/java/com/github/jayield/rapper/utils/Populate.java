@@ -14,6 +14,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
 public interface Populate<T extends DomainObject> {
-    CompletableFuture<Void> execute(T t, SqlField.SqlFieldExternal sqlFieldExternal);
+    CompletableFuture<Void> execute(T t, SqlField.SqlFieldExternal sqlFieldExternal, UnitOfWork unitOfWork);
 }
 

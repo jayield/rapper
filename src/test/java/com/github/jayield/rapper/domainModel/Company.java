@@ -10,17 +10,18 @@ import com.github.jayield.rapper.utils.UnitOfWork;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class Company implements DomainObject<Company.PrimaryKey> {
     @EmbeddedId
     private final PrimaryKey primaryKey;
     private final String motto;
     @ColumnName(foreignName = {"companyId", "companyCid"})
-    private final Function<UnitOfWork, CompletableFuture<List<Employee>>> employees;
+    private final Supplier<CompletableFuture<List<Employee>>> employees;
     @Version
     private final long version;
 
-    public Company(PrimaryKey primaryKey, String motto, Function<UnitOfWork, CompletableFuture<List<Employee>>> employees, long version) {
+    public Company(PrimaryKey primaryKey, String motto, Supplier<CompletableFuture<List<Employee>>> employees, long version) {
         this.primaryKey = primaryKey;
         this.motto = motto;
         this.employees = employees;
@@ -38,7 +39,7 @@ public class Company implements DomainObject<Company.PrimaryKey> {
         return motto;
     }
 
-    public Function<UnitOfWork, CompletableFuture<List<Employee>>> getEmployees() {
+    public Supplier<CompletableFuture<List<Employee>>> getEmployees() {
         return employees;
     }
 
