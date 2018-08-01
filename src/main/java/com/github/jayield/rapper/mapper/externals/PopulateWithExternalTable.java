@@ -1,20 +1,22 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.mapper.externals;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.ExternalsHandler;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import com.github.jayield.rapper.utils.MapperRegistry.Container;
-import com.github.jayield.rapper.utils.SqlField.SqlFieldExternal;
+import com.github.jayield.rapper.mapper.MapperRegistry;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
+import com.github.jayield.rapper.utils.*;
+import com.github.jayield.rapper.mapper.MapperRegistry.Container;
+import com.github.jayield.rapper.sql.SqlField.SqlFieldExternal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
 
 public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends AbstractPopulate<T, K> {
 

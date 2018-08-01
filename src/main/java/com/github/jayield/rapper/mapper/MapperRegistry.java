@@ -1,8 +1,10 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.*;
+import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
+import com.github.jayield.rapper.utils.DomainObjectComparator;
 
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -51,7 +53,7 @@ public class MapperRegistry {
             this.externalsHandler = externalsHandler;
         }
 
-        MapperSettings getMapperSettings() {
+        public MapperSettings getMapperSettings() {
             return mapperSettings;
         }
 

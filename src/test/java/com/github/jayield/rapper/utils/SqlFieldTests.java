@@ -4,11 +4,14 @@ import com.github.jayield.rapper.domainModel.Author;
 import com.github.jayield.rapper.domainModel.Book;
 import com.github.jayield.rapper.domainModel.Company;
 import com.github.jayield.rapper.domainModel.Employee;
+import com.github.jayield.rapper.mapper.externals.PopulateMultiReference;
+import com.github.jayield.rapper.mapper.externals.PopulateSingleReference;
+import com.github.jayield.rapper.mapper.externals.PopulateWithExternalTable;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
 
-import static com.github.jayield.rapper.utils.SqlField.*;
+import static com.github.jayield.rapper.sql.SqlField.*;
 import static org.junit.Assert.assertEquals;
 
 public class SqlFieldTests {

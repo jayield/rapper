@@ -1,10 +1,16 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.Book;
 import com.github.jayield.rapper.domainModel.Car;
 import com.github.jayield.rapper.domainModel.CarKey;
 import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.Mapper;
+import com.github.jayield.rapper.mapper.MapperRegistry;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;

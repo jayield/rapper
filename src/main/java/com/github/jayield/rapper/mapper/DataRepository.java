@@ -1,9 +1,10 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.mapper;
 
+import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.CollectionUtils;
 import com.github.jayield.rapper.utils.Pair;
-import com.github.jayield.rapper.utils.UnitOfWork;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,10 +13,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class DataRepository<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private static final Logger logger = LoggerFactory.getLogger(DataRepository.class);

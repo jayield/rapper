@@ -1,7 +1,14 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.*;
+import com.github.jayield.rapper.annotations.ColumnName;
+import com.github.jayield.rapper.annotations.EmbeddedId;
+import com.github.jayield.rapper.annotations.Id;
+import com.github.jayield.rapper.annotations.Version;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.utils.EmbeddedIdClass;
+import com.github.jayield.rapper.mapper.externals.Foreign;
+import com.github.jayield.rapper.sql.SqlField;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -9,13 +16,12 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.github.jayield.rapper.utils.SqlField.*;
+import static com.github.jayield.rapper.sql.SqlField.*;
 
 public class MapperSettings {
 

@@ -1,7 +1,15 @@
 package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.*;
+import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.*;
+import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
+import com.github.jayield.rapper.mapper.DataMapper;
+import com.github.jayield.rapper.mapper.DataRepository;
+import com.github.jayield.rapper.mapper.MapperRegistry;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlSupplier;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
@@ -23,7 +31,7 @@ import java.util.function.BiConsumer;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
-import static com.github.jayield.rapper.utils.MapperRegistry.getRepository;
+import static com.github.jayield.rapper.mapper.MapperRegistry.getRepository;
 import static org.junit.Assert.*;
 
 public class UnitOfWorkTests {
@@ -68,7 +76,7 @@ public class UnitOfWorkTests {
 
     @Before
     public void before()throws NoSuchFieldException, IllegalAccessException {
-        UnitOfWork.connectionsMap.values().forEach(array -> System.out.println(Arrays.toString(array)));
+        //UnitOfWork.connectionsMap.values().forEach(array -> System.out.println(Arrays.toString(array)));
         assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
         repositoryMap.clear();
 

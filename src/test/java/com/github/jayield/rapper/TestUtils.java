@@ -1,11 +1,11 @@
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.utils.*;
+import com.github.jayield.rapper.utils.SqlUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 
-import static com.github.jayield.rapper.utils.ConnectionManager.getConnectionManager;
+import static com.github.jayield.rapper.connections.ConnectionManager.getConnectionManager;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;

@@ -1,15 +1,13 @@
 package com.github.jayield.rapper.domainModel;
 
-import com.github.jayield.rapper.ColumnName;
+import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.EmbeddedId;
-import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.annotations.EmbeddedId;
+import com.github.jayield.rapper.annotations.Version;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
-import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class Company implements DomainObject<Company.PrimaryKey> {

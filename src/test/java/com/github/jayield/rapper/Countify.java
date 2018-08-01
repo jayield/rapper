@@ -17,9 +17,6 @@
 
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.utils.UnitOfWork;
-
-import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**

@@ -1,8 +1,7 @@
 package com.github.jayield.rapper.domainModel;
 
-import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.annotations.Version;
 
-import java.sql.Date;
 import java.time.Instant;
 
 public class TopStudent extends Student {

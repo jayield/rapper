@@ -1,6 +1,7 @@
 package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.domainModel.*;
+import com.github.jayield.rapper.mapper.externals.Foreign;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;

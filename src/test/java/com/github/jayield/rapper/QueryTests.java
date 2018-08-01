@@ -1,7 +1,7 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.utils.MapperSettings;
+import com.github.jayield.rapper.mapper.MapperSettings;
 import org.junit.Test;
 
 import static org.junit.Assert.*;

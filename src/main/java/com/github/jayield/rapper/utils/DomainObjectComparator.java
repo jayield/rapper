@@ -1,8 +1,9 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.utils;
 
+import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import com.github.jayield.rapper.utils.MapperSettings;
-import com.github.jayield.rapper.utils.SqlField;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlField;
 
 import java.util.ArrayList;
 import java.util.Comparator;

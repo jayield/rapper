@@ -1,12 +1,8 @@
-package com.github.jayield.rapper.utils.helpers;
+package com.github.jayield.rapper.unitofwork;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
-
-import static com.github.jayield.rapper.utils.MapperRegistry.*;
 
 public class DeleteHelper extends AbstractCommitHelper {
     private final Queue<DomainObject> dirtyObjects;

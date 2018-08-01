@@ -1,10 +1,10 @@
 package com.github.jayield.rapper.domainModel;
 
-import com.github.jayield.rapper.ColumnName;
+import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.Id;
-import com.github.jayield.rapper.Version;
-import com.github.jayield.rapper.utils.Foreign;
+import com.github.jayield.rapper.annotations.Id;
+import com.github.jayield.rapper.annotations.Version;
+import com.github.jayield.rapper.mapper.externals.Foreign;
 
 public class Employee implements DomainObject<Integer> {
     @Id(isIdentity = true)

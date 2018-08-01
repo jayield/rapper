@@ -1,7 +1,7 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.mapper.Mapper;
 import com.github.jayield.rapper.utils.Pair;
-import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.List;
 import java.util.Optional;

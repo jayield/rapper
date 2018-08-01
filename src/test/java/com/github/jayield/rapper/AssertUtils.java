@@ -3,7 +3,7 @@ package com.github.jayield.rapper;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.utils.SqlUtils;
-import com.github.jayield.rapper.utils.UnitOfWork;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
@@ -104,7 +104,7 @@ public class AssertUtils {
         assertEquals(employee.getName(), rs.getString("name"));
         assertEquals(employee.getVersion(), rs.getLong("version").longValue());
         //System.out.println(rs);
-        CompletableFuture<Company> companyCompletableFuture = employee.getCompany().getForeignFunction().get();
+        CompletableFuture<Company> companyCompletableFuture = employee.getCompany().getForeignObject();
         if(companyCompletableFuture != null){
             Company company = companyCompletableFuture.join();
             assertEquals(company.getIdentityKey().getId(), rs.getInteger("companyId").intValue());

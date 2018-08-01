@@ -1,15 +1,16 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.mapper.externals;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.EmbeddedId;
-import com.github.jayield.rapper.ExternalsHandler;
+import com.github.jayield.rapper.annotations.EmbeddedId;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.MapperRegistry;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlField;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements Populate<T> {

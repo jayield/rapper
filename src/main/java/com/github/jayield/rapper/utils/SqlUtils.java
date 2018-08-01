@@ -1,5 +1,7 @@
 package com.github.jayield.rapper.utils;
 
+import com.github.jayield.rapper.sql.SqlField;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Handler;
 import io.vertx.core.json.JsonArray;

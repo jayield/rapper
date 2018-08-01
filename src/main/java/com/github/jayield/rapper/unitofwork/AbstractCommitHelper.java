@@ -1,11 +1,9 @@
-package com.github.jayield.rapper.utils.helpers;
+package com.github.jayield.rapper.unitofwork;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.utils.UnitOfWork;
 
 import java.util.Iterator;
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 
 public abstract class AbstractCommitHelper {
     protected final Queue<DomainObject> list;

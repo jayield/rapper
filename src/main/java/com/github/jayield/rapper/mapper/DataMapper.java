@@ -1,6 +1,12 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.mapper;
 
+import com.github.jayield.rapper.connections.ConnectionManager;
+import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
+import com.github.jayield.rapper.sql.SqlField;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
@@ -18,12 +24,11 @@ import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.github.jayield.rapper.utils.SqlField.*;
+import static com.github.jayield.rapper.sql.SqlField.*;
 
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private static final String QUERY_ERROR = "Couldn't execute {} on {} on Unit of Work {} due to {}";
@@ -385,7 +390,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             } catch (IllegalAccessException | ParseException e1) {
                 throw new DataMapperException(e1);
             }
-        } catch ( IllegalAccessException e) {
+        } catch (IllegalAccessException e) {
             throw new DataMapperException(e);
         }
     }

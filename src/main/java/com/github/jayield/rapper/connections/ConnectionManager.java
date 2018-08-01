@@ -1,5 +1,6 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.connections;
 
+import com.github.jayield.rapper.utils.SqlUtils;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.jdbc.JDBCClient;

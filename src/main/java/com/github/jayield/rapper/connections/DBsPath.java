@@ -1,4 +1,4 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.connections;
 
 public enum DBsPath {
     DEFAULTDB ("DB_CONNECTION_STRING"),

@@ -1,8 +1,16 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.sql;
 
-import com.github.jayield.rapper.ColumnName;
+import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.externals.Populate;
+import com.github.jayield.rapper.mapper.externals.PopulateMultiReference;
+import com.github.jayield.rapper.mapper.externals.PopulateSingleReference;
+import com.github.jayield.rapper.mapper.externals.PopulateWithExternalTable;
+import com.github.jayield.rapper.mapper.MapperRegistry;
+import com.github.jayield.rapper.mapper.externals.Foreign;
+import com.github.jayield.rapper.utils.Pair;
+import com.github.jayield.rapper.utils.ReflectionUtils;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
@@ -10,7 +18,6 @@ import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -88,7 +95,7 @@ public class SqlField {
             return isFromParent;
         }
 
-        void setFromParent() {
+        public void setFromParent() {
             isFromParent = true;
         }
     }

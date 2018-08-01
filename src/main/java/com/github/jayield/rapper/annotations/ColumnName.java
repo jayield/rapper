@@ -1,4 +1,4 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.annotations;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

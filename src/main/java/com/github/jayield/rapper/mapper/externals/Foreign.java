@@ -1,9 +1,8 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.mapper.externals;
 
 import com.github.jayield.rapper.DomainObject;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class Foreign<T extends DomainObject<K>, K> {
@@ -19,7 +18,7 @@ public class Foreign<T extends DomainObject<K>, K> {
         return foreignKey;
     }
 
-    public Supplier<CompletableFuture<T>> getForeignFunction() {
-        return foreignFunction;
+    public CompletableFuture<T> getForeignObject() {
+        return foreignFunction.get();
     }
 }

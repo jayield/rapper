@@ -1,6 +1,14 @@
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.*;
+import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
+import com.github.jayield.rapper.mapper.DataMapper;
+import com.github.jayield.rapper.mapper.DataRepository;
+import com.github.jayield.rapper.mapper.MapperRegistry;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;

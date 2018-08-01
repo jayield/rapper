@@ -1,4 +1,4 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.sql;
 
 import com.github.jayield.rapper.exceptions.DataMapperException;
 

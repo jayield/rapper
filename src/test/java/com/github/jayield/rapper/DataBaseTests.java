@@ -1,6 +1,8 @@
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.utils.*;
+import com.github.jayield.rapper.connections.ConnectionManager;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.UpdateResult;

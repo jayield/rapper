@@ -1,22 +1,14 @@
 package com.github.jayield.rapper;
 
-import com.github.jayield.rapper.domainModel.Author;
-import com.github.jayield.rapper.domainModel.Book;
-import com.github.jayield.rapper.domainModel.Company;
-import com.github.jayield.rapper.domainModel.Employee;
-import com.github.jayield.rapper.exceptions.DataMapperException;
-import com.github.jayield.rapper.utils.*;
+import com.github.jayield.rapper.connections.ConnectionManager;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Test;
 
 import java.net.URLDecoder;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;

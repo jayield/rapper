@@ -1,6 +1,11 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.mapper.externals;
 
+import com.github.jayield.rapper.mapper.DataRepository;
+import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlFunction;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
@@ -15,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.github.jayield.rapper.utils.SqlField.SqlFieldExternal;
+import static com.github.jayield.rapper.sql.SqlField.SqlFieldExternal;
 
 public class ExternalsHandler<T extends DomainObject<K>, K> {
     private final Map<Class<? extends Populate>, Populate<T>> populatorsMap;
@@ -36,7 +41,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      *
      * @param t
      */
-    void populateExternals(T t, UnitOfWork unit) {
+    public void populateExternals(T t, UnitOfWork unit) {
         List<SqlFieldExternal> externals = mapperSettings.getExternals();
         if (externals != null)
             externals.forEach(sqlFieldExternal -> {

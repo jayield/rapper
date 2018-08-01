@@ -1,11 +1,9 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.unitofwork;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import com.github.jayield.rapper.utils.helpers.AbstractCommitHelper;
-import com.github.jayield.rapper.utils.helpers.CreateHelper;
-import com.github.jayield.rapper.utils.helpers.DeleteHelper;
-import com.github.jayield.rapper.utils.helpers.UpdateHelper;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.connections.ConnectionManager;
 import io.vertx.ext.sql.SQLConnection;
 import io.vertx.ext.sql.TransactionIsolation;
 import org.slf4j.Logger;
@@ -24,14 +22,11 @@ public class UnitOfWork {
     private static final String UNSUCCESSFUL_COMMIT_MESSAGE = "{} - Rolling back changes due to {}";
     private static final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
     public static final AtomicInteger numberOfOpenConnections = new AtomicInteger(0);
-    public static final ConcurrentHashMap<SQLConnection, StackTraceElement[]> connectionsMap = new ConcurrentHashMap<>();
+    public static final ConcurrentMap<SQLConnection, StackTraceElement[]> connectionsMap = new ConcurrentHashMap<>();
 
-    /**
-     * Private for each transaction
-     */
     private CompletableFuture<SQLConnection> connection = null;
     private final Supplier<CompletableFuture<SQLConnection>> connectionSupplier;
-    private final ConcurrentMap<Class<? extends DomainObject>, ConcurrentHashMap<Object,CompletableFuture<? extends DomainObject>>> identityMap = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Class<? extends DomainObject>, ConcurrentHashMap<Object, CompletableFuture<? extends DomainObject>>> identityMap = new ConcurrentHashMap<>();
 
     //Multiple Threads may be accessing the Queue, so it must be a ConcurrentLinkedQueue
     private final Queue<DomainObject> newObjects = new ConcurrentLinkedQueue<>();
@@ -73,11 +68,10 @@ public class UnitOfWork {
         numberOfOpenConnections.decrementAndGet();
         String string = Thread.currentThread().getStackTrace()[2].toString();
         logger.info("{} - Closing connection from {}", this.hashCode(), string);
-        return connection
-                .thenApply(con -> {
-                    connectionsMap.remove(con);
-                    return con;
-                })
+        return connection.thenApply(con -> {
+            connectionsMap.remove(con);
+            return con;
+        })
                 .thenAccept(SQLConnection::close)
                 .thenAccept(v -> connection = null);
     }
