@@ -1,11 +1,10 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.mapper;
 
+import com.github.jayield.rapper.AssertUtils;
 import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.externals.Foreign;
-import com.github.jayield.rapper.mapper.DataMapper;
-import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.utils.SqlUtils;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
@@ -58,13 +57,13 @@ public class DataMapperTests {
                 .thenCompose(v -> unit.commit())
         ).join();
 
-        personMapper =(DataMapper<Person, Integer>) MapperRegistry.getRepository(Person.class, unit).getMapper();
-        carMapper = (DataMapper<Car, CarKey>) MapperRegistry.getRepository(Car.class, unit).getMapper();
-        topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getRepository(TopStudent.class, unit).getMapper();
-        companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getRepository(Company.class, unit).getMapper();
-        bookMapper = (DataMapper<Book, Long>) MapperRegistry.getRepository(Book.class, unit).getMapper();
-        employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getRepository(Employee.class, unit).getMapper();
-        dogMapper = (DataMapper<Dog, Dog.DogPK>) MapperRegistry.getRepository(Dog.class, unit).getMapper();
+        personMapper =(DataMapper<Person, Integer>) MapperRegistry.getMapper(Person.class, unit);
+        carMapper = (DataMapper<Car, CarKey>) MapperRegistry.getMapper(Car.class, unit);
+        topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getMapper(TopStudent.class, unit);
+        companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getMapper(Company.class, unit);
+        bookMapper = (DataMapper<Book, Long>) MapperRegistry.getMapper(Book.class, unit);
+        employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getMapper(Employee.class, unit);
+        dogMapper = (DataMapper<Dog, Dog.DogPK>) MapperRegistry.getMapper(Dog.class, unit);
     }
 
     @After
@@ -238,8 +237,7 @@ public class DataMapperTests {
     public void testHierarchyCreate() {
         SQLConnection con = unit.getConnection().join();
         TopStudent topStudent = new TopStudent(456, "Manel", new Date(2020, 12, 1).toInstant(), 0, 1, 20, 2016, 0, 0);
-        topStudentMapper.create(topStudent)
-                .join();
+        topStudentMapper.create(topStudent).join();
         assertSingleRow(topStudent, topStudentSelectQuery, new JsonArray().add(topStudent.getNif()), AssertUtils::assertTopStudent, con);
     }
 

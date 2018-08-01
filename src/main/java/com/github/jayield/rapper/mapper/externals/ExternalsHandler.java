@@ -1,8 +1,8 @@
 package com.github.jayield.rapper.mapper.externals;
 
-import com.github.jayield.rapper.mapper.DataRepository;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.DataMapper;
 import com.github.jayield.rapper.mapper.MapperSettings;
 import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.sql.SqlFunction;
@@ -60,7 +60,7 @@ public class ExternalsHandler<T extends DomainObject<K>, K> {
      * @param resultSet
      * @return
      */
-    public <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataRepository<N, V> repo, String[] foreignNames, ResultSet resultSet) {
+    public <N extends DomainObject<V>, V> Stream<CompletableFuture<N>> getExternalObjects(DataMapper<N, V> repo, String[] foreignNames, ResultSet resultSet) {
         List<V> idValues = getIds(resultSet, foreignNames)
                 .stream()
                 .map(e -> (V)e)

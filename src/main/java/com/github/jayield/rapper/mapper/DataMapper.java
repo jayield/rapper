@@ -35,18 +35,20 @@ import static com.github.jayield.rapper.sql.SqlField.*;
 
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private static final String QUERY_ERROR = "Couldn't execute {} on {} on Unit of Work {} due to {}";
-    private static final Logger log = LoggerFactory.getLogger(DataMapper.class);
+    private static final Logger logger = LoggerFactory.getLogger(DataMapper.class);
 
     private final Class<T> type;
     private final ExternalsHandler<T, K> externalsHandler;
     private final MapperSettings mapperSettings;
     private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
     private final UnitOfWork unit;
+    private final Comparator<T> comparator;
 
-    public DataMapper(Class<T> type, ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings, UnitOfWork unit) {
+    public DataMapper(Class<T> type, ExternalsHandler<T, K> externalsHandler, MapperSettings mapperSettings, Comparator<T> comparator, UnitOfWork unit) {
         this.type = type;
         this.externalsHandler = externalsHandler;
         this.mapperSettings = mapperSettings;
+        this.comparator = comparator;
         this.unit = unit;
     }
 
@@ -74,42 +76,63 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        return findWhereAux("", values);
+        CompletableFuture<List<T>> future = findWhereAux("", values);
+        return processNewObjects(future);
     }
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
-        return findWhereAux(String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems), values);
+        CompletableFuture<List<T>> future = findWhereAux(String.format(mapperSettings.getPagination(), page * numberOfItems, numberOfItems), values);
+        return processNewObjects(future);
     }
 
     @Override
     public CompletableFuture<Optional<T>> findById(K id) {
+        CompletableFuture<T> completableFuture = unit
+                .getIdentityMap(type)
+                .computeIfAbsent(id, k1 -> findByIdAux(id))
+                .thenApply(t -> (T) t);
+
+        return completableFuture
+                .thenApply(Optional::of)
+                .exceptionally(throwable -> {
+                    logger.warn("Removing CompletableFuture of {} from identityMap due to {}", type.getSimpleName(), throwable.getMessage());
+                    unit.getIdentityMap(type).remove(id);
+                    return Optional.empty();
+                });
+    }
+
+    private CompletableFuture<T> findByIdAux(K id) {
         String selectByIdQuery = mapperSettings.getSelectByIdQuery();
         return SqlUtils.query(selectByIdQuery, unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), id))
                 .thenApply(rs -> {
-                    log.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
+                    logger.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
                     Optional<T> optionalT = stream(rs).findFirst();
                     optionalT.ifPresent(t -> externalsHandler.populateExternals(t, unit));
                     return optionalT;
                 })
                 .exceptionally(throwable -> {
-                    log.warn(QUERY_ERROR, "FindById", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
+                    logger.warn(QUERY_ERROR, "FindById", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
                     throw new DataMapperException(throwable);
-                });
+                })
+                .thenApply(t -> t.orElseThrow(() -> new DataMapperException(type.getSimpleName() + " was not found")));
     }
 
     @Override
     public CompletableFuture<List<T>> findAll() {
-        return findAllAux("");
+        CompletableFuture<List<T>> future = findAllAux("");
+        return processNewObjects(future);
     }
 
     @Override
     public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
-        return findAllAux(String.format(mapperSettings.getPagination(), page*numberOfItems, numberOfItems));
+        CompletableFuture<List<T>> future = findAllAux(String.format(mapperSettings.getPagination(), page * numberOfItems, numberOfItems));
+        return processNewObjects(future);
     }
 
     @Override
     public CompletableFuture<Void> create(T obj) {
+        unit.registerNew(obj);
         Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         return parentMapper.map(parent -> parent.create(obj))
@@ -124,6 +147,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Void> update(T obj) {
+        unit.registerDirty(obj);
         Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         if (parentMapper.isPresent()) {
@@ -142,37 +166,55 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     @Override
     public CompletableFuture<Void> deleteById(K k) {
+        CompletableFuture<? extends DomainObject> future = unit.getIdentityMap(type).computeIfPresent(k, (key, tCompletableFuture) -> tCompletableFuture.thenApply(t -> {
+            unit.registerRemoved(t);
+            return t;
+        }));
+
+        return future != null ? deleteByIdAux(k) : findById(k)
+                .thenCompose(t -> {
+                    T t1 = t.orElseThrow(() -> new DataMapperException("Object to delete was not found"));
+                    unit.registerRemoved(t1);
+                    return deleteByIdAux(k);
+                });
+    }
+
+    private CompletableFuture<Void> deleteByIdAux(K k) {
         return SqlUtils.update(mapperSettings.getDeleteQuery(), unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), k))
                 .thenCompose(updateResult -> {
-                    log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), k, unit.hashCode());
+                    logger.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), k, unit.hashCode());
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.deleteById(k))
                             .orElse(CompletableFuture.completedFuture(null));
                 })
                 .exceptionally(throwable -> {
-                    log.warn("Couldn't deleteById {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    logger.warn("Couldn't deleteById {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
 
     @Override
     public CompletableFuture<Void> delete(T obj) {
+        unit.registerRemoved(obj);
         return SqlUtils.update(mapperSettings.getDeleteQuery(), unit, SqlUtils.getValuesForStatement(mapperSettings.getIds().stream(), obj))
                 .thenCompose(updateResult -> {
-                    log.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), obj.getIdentityKey(), unit.hashCode());
+                    logger.info("Deleted {} with id {} with Unit of Work {}", type.getSimpleName(), obj.getIdentityKey(), unit.hashCode());
                     return getParentMapper()
                             .map(objectDataMapper -> objectDataMapper.delete(obj))
                             .orElse(CompletableFuture.completedFuture(null));
                 })
                 .exceptionally(throwable -> {
-                    log.warn("Couldn't delete {} due to {}", type.getSimpleName(), throwable.getMessage());
+                    logger.warn("Couldn't delete {} due to {}", type.getSimpleName(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
 
     @Override
     public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
-        return reduceCompletableFutures(keys, this::deleteById);
+        List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
+        keys.forEach(k -> completableFutures.add(deleteById(k)));
+        return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
+        //return reduceCompletableFutures(keys, this::deleteById);
     }
 
     private <R> CompletableFuture<List<T>> findWhereAux(String suffix, Pair<String, R>... values){
@@ -186,7 +228,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SqlUtils.query(query, unit, prepareFindWhere(values))
                 .thenApply(resultSet -> processFindWhere(resultSet, values))
                 .exceptionally(throwable -> {
-                    log.warn(QUERY_ERROR, "FindWhere", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
+                    logger.warn(QUERY_ERROR, "FindWhere", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
@@ -199,7 +241,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             if (i + 1 < values.length) sb.append(" and ");
         }
         sb.append(" with Unit of Work ").append(unit.hashCode());
-        log.info(sb.toString());
+        logger.info(sb.toString());
         return stream(resultSet).peek(t -> externalsHandler.populateExternals(t, unit)).collect(Collectors.toList());
     }
 
@@ -210,11 +252,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private CompletableFuture<List<T>> findAllAux(String suffix) {
         return SqlUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
                 .thenApply(resultSet -> {
-                        log.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
+                        logger.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
                         return stream(resultSet).peek(t -> externalsHandler.populateExternals(t, unit)).collect(Collectors.toList());
                 })
                 .exceptionally(throwable -> {
-                    log.warn(QUERY_ERROR, "FindAll", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
+                    logger.warn(QUERY_ERROR, "FindAll", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
@@ -224,18 +266,21 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenCompose(updateResult -> processCreate(obj, updateResult))
                 .thenAccept(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
-                    log.info("Create new {}", type.getSimpleName());
+                    logger.info("Created new {}", type.getSimpleName());
                 })
                 .exceptionally(throwable -> {
-                            log.warn("Couldn't create {} due to {}", type.getSimpleName(), throwable.getMessage());
-                            throw new DataMapperException(throwable);
-                        }
-                );
+                    logger.warn("Couldn't create {} due to {}", type.getSimpleName(), throwable.getMessage());
+                    throw new DataMapperException(throwable);
+                });
     }
 
     private CompletionStage<Optional<T>> processCreate(T obj, UpdateResult ur) {
         setGeneratedKeys(obj, ur.getKeys());
-        return this.findById(obj.getIdentityKey());
+        if (mapperSettings.getVersionField() != null) {
+            unit.invalidate(type, obj.getIdentityKey());
+            return this.findById(obj.getIdentityKey());
+        }
+        return CompletableFuture.completedFuture(Optional.of(obj));
     }
 
     private JsonArray prepareCreate(T obj) {
@@ -262,10 +307,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenCompose(updateResult -> processUpdate(obj, updateResult))
                 .thenAccept(result -> {
                     result.ifPresent(item -> setVersion(obj, item.getVersion()));
-                    log.info("Updated {} with id {}", type.getSimpleName(), obj.getIdentityKey());
+                    logger.info("Updated {} with id {}", type.getSimpleName(), obj.getIdentityKey());
                 })
                 .exceptionally(throwable -> {
-                    log.warn("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
+                    logger.warn("Couldn't update {}. \nReason: {}", type.getSimpleName(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
@@ -273,7 +318,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private CompletableFuture<Optional<T>> processUpdate(T obj, UpdateResult ur) {
         int updateCount = ur.getUpdated();
         if (updateCount == 0) throw new DataMapperException("No rows affected by update, object's version might be wrong");
-        return this.findById(obj.getIdentityKey());
+        if (mapperSettings.getVersionField() != null) {
+            unit.invalidate(type, obj.getIdentityKey());
+            return this.findById(obj.getIdentityKey());
+        }
+        return CompletableFuture.completedFuture(Optional.of(obj));
     }
 
     private JsonArray prepareUpdate(T obj) {
@@ -302,6 +351,11 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         } catch ( IllegalAccessException e) {
             throw new DataMapperException(e);
         }
+    }
+
+    private CompletableFuture<List<T>> processNewObjects(CompletableFuture<List<T>> future) {
+        return future.thenApply(list -> unit.processNewObjects(type, list, comparator))
+                .thenCompose(CollectionUtils::listToCompletableFuture);
     }
 
     private <R> CompletableFuture<Void> reduceCompletableFutures(Iterable<R> r, Function<R, CompletableFuture<Void>> function) {
@@ -407,7 +461,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private Optional<Mapper<? super T, ? super K>> getParentMapper() {
         Class<? super T> aClass = type.getSuperclass();
         if (aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            Mapper<? super T, ? super K> classMapper = MapperRegistry.getRepository((Class<DomainObject>) aClass, unit).getMapper();
+            Mapper<? super T, ? super K> classMapper = MapperRegistry.getMapper((Class<DomainObject>) aClass, unit);
             return Optional.of(classMapper);
         }
         return Optional.empty();
@@ -449,7 +503,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 version.set(obj, newValue);
             }
         } catch (IllegalAccessException ignored) {
-            log.info("Version field not found on {}.", type.getSimpleName());
+            logger.info("Version field not found on {}.", type.getSimpleName());
         }
     }
 }

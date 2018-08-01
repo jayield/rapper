@@ -1,4 +1,4 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.utils;
 
 import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.Book;
@@ -32,6 +32,7 @@ public class DomainObjectComparatorTests {
     private final DomainObjectComparator<Employee> employeeComparator;
     private final Map<Class, MapperRegistry.Container> repositoryMap;
     private UnitOfWork unit;
+    private ConnectionManager connectionManager;
 
     public DomainObjectComparatorTests() throws NoSuchFieldException, IllegalAccessException {
         MapperSettings carSettings = new MapperSettings(Car.class);
@@ -51,7 +52,7 @@ public class DomainObjectComparatorTests {
     @Before
     public void start() {
         repositoryMap.clear();
-        ConnectionManager connectionManager = ConnectionManager.getConnectionManager(
+        connectionManager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:"+URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath())+"/testdb",
                 "SA", "");
         unit = new UnitOfWork(connectionManager::getConnection);
@@ -69,15 +70,20 @@ public class DomainObjectComparatorTests {
 
     @Test
     public void testCompareCars() {
-        Mapper<Car, CarKey> carMapper = MapperRegistry.getRepository(Car.class, unit).getMapper();
+        Mapper<Car, CarKey> carMapper = MapperRegistry.getMapper(Car.class, unit);
 
         Car car1 = carMapper.findById(new CarKey(2, "23we45"))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Car not found"));
+        unit.commit().join();
+
+        UnitOfWork unit1 = new UnitOfWork(connectionManager::getConnection);
+        carMapper = MapperRegistry.getMapper(Car.class, unit1);
 
         Car car2 = carMapper.findById(new CarKey(2, "23we45"))
                 .join()
                 .orElseThrow(() -> new DataMapperException("Car not found"));
+        unit1.commit().join();
 
         assertNotEquals(car1, car2);
 
@@ -86,15 +92,20 @@ public class DomainObjectComparatorTests {
 
     @Test
     public void testCompareBooks(){
-        Mapper<Book, Long> bookMapper = MapperRegistry.getRepository(Book.class, unit).getMapper();
+        Mapper<Book, Long> bookMapper = MapperRegistry.getMapper(Book.class, unit);
 
         Book book1 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
                 .join()
                 .get(0);
+        unit.commit().join();
+
+        UnitOfWork unit1 = new UnitOfWork(connectionManager::getConnection);
+        bookMapper = MapperRegistry.getMapper(Book.class, unit1);
 
         Book book2 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
                 .join()
                 .get(0);
+        unit1.commit().join();
 
         assertNotEquals(book1, book2);
 
@@ -103,15 +114,20 @@ public class DomainObjectComparatorTests {
 
     @Test
     public void testCompareEmployees() {
-        Mapper<Employee, Integer> bookMapper = MapperRegistry.getRepository(Employee.class, unit).getMapper();
+        Mapper<Employee, Integer> bookMapper = MapperRegistry.getMapper(Employee.class, unit);
 
         Employee employee1 = bookMapper.findWhere(new Pair<>("name", "Charles"))
                 .join()
                 .get(0);
+        unit.commit().join();
+
+        UnitOfWork unit1 = new UnitOfWork(connectionManager::getConnection);
+        bookMapper = MapperRegistry.getMapper(Employee.class, unit1);
 
         Employee employee2 = bookMapper.findWhere(new Pair<>("name", "Bob"))
                 .join()
                 .get(0);
+        unit1.commit().join();
 
         assertNotEquals(employee1, employee2);
 

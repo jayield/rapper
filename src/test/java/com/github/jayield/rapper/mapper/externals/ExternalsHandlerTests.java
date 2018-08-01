@@ -1,4 +1,4 @@
-package com.github.jayield.rapper;
+package com.github.jayield.rapper.mapper.externals;
 
 import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.utils.SqlUtils;

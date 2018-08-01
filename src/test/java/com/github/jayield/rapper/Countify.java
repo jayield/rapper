@@ -17,6 +17,8 @@
 
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.ICounter;
+
 import java.util.function.Function;
 
 /**

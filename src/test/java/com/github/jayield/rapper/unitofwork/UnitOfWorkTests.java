@@ -1,15 +1,14 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.unitofwork;
 
 import com.github.jayield.rapper.*;
 import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.*;
-import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
 import com.github.jayield.rapper.mapper.DataMapper;
-import com.github.jayield.rapper.mapper.DataRepository;
 import com.github.jayield.rapper.mapper.MapperRegistry;
-import com.github.jayield.rapper.mapper.MapperSettings;
 import com.github.jayield.rapper.sql.SqlSupplier;
-import com.github.jayield.rapper.unitofwork.UnitOfWork;
+import com.github.jayield.rapper.AssertUtils;
+import com.github.jayield.rapper.utils.Pair;
+import com.github.jayield.rapper.utils.SqlUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
@@ -21,8 +20,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.net.URLDecoder;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -31,35 +28,31 @@ import java.util.function.BiConsumer;
 
 import static com.github.jayield.rapper.AssertUtils.*;
 import static com.github.jayield.rapper.TestUtils.*;
-import static com.github.jayield.rapper.mapper.MapperRegistry.getRepository;
+import static com.github.jayield.rapper.mapper.MapperRegistry.getMapper;
 import static org.junit.Assert.*;
 
 public class UnitOfWorkTests {
 
     private ObjectsContainer objectsContainer;
     private final Logger logger = LoggerFactory.getLogger(UnitOfWorkTests.class);
-    private DataRepository<Employee, Integer> employeeRepo;
-    private DataRepository<Company, Company.PrimaryKey> companyRepo;
+    private DataMapper<Employee, Integer> employeeRepo;
+    private DataMapper<Company, Company.PrimaryKey> companyRepo;
     private Queue<DomainObject> newObjects;
-    private Queue<DomainObject> clonedObjects;
     private Queue<DomainObject> dirtyObjects;
     private Queue<DomainObject> removedObjects;
-    private Map<Class, DataRepository> repositoryMap;
+    private Map<Class, MapperRegistry.Container> containerMap;
     private UnitOfWork unit;
 
     public UnitOfWorkTests() throws NoSuchFieldException, IllegalAccessException {
         Field repositoryMapField = MapperRegistry.class.getDeclaredField("containerMap");
         repositoryMapField.setAccessible(true);
-        repositoryMap = (Map<Class, DataRepository>) repositoryMapField.get(null);
+        containerMap = (Map<Class, MapperRegistry.Container>) repositoryMapField.get(null);
     }
 
     private void setupLists() throws NoSuchFieldException, IllegalAccessException {
-        if(newObjects == null || clonedObjects == null || dirtyObjects == null || removedObjects == null) {
+        if(newObjects == null || dirtyObjects == null || removedObjects == null) {
             Field newObjectsField = UnitOfWork.class.getDeclaredField("newObjects");
             newObjectsField.setAccessible(true);
-
-            Field clonedObjectsField = UnitOfWork.class.getDeclaredField("clonedObjects");
-            clonedObjectsField.setAccessible(true);
 
             Field dirtyObjectsField = UnitOfWork.class.getDeclaredField("dirtyObjects");
             dirtyObjectsField.setAccessible(true);
@@ -68,7 +61,6 @@ public class UnitOfWorkTests {
             removedObjectsField.setAccessible(true);
 
             this.newObjects = (Queue<DomainObject>) newObjectsField.get(unit);
-            this.clonedObjects = (Queue<DomainObject>) clonedObjectsField.get(unit);
             this.dirtyObjects = (Queue<DomainObject>) dirtyObjectsField.get(unit);
             this.removedObjects = (Queue<DomainObject>) removedObjectsField.get(unit);
         }
@@ -78,7 +70,7 @@ public class UnitOfWorkTests {
     public void before()throws NoSuchFieldException, IllegalAccessException {
         //UnitOfWork.connectionsMap.values().forEach(array -> System.out.println(Arrays.toString(array)));
         assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
-        repositoryMap.clear();
+        containerMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
@@ -106,7 +98,7 @@ public class UnitOfWorkTests {
     public void testCommit() {
         populateIdentityMaps();
         addNewObjects();
-        addDirtyAndClonedObjects();
+        addDirtyObjects();
         addRemovedObjects();
 
         List<DomainObject> newObjects = new ArrayList<>(this.newObjects);
@@ -119,16 +111,16 @@ public class UnitOfWorkTests {
         assertDirtyObjects(true);
         assertRemovedObjects(true);
 
-        assertIdentityMaps(newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
+        /*assertIdentityMaps(newObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
         assertIdentityMaps(dirtyObjects, (identityMap, domainObject) -> assertEquals(((CompletableFuture<DomainObject>) identityMap.get(domainObject.getIdentityKey())).join(), domainObject));
-        assertIdentityMaps(removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));
+        assertIdentityMaps(removedObjects, (identityMap, domainObject) -> assertNull(identityMap.get(domainObject.getIdentityKey())));*/
     }
 
     @Test
     public void testRollback() {
         populateIdentityMaps();
         addNewObjects();
-        addDirtyAndClonedObjects();
+        addDirtyObjects();
         addRemovedObjects();
 
         List<DomainObject> newObjects = new ArrayList<>(this.newObjects);
@@ -158,7 +150,7 @@ public class UnitOfWorkTests {
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
         SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_UNCOMMITTED.getType());
 
-        employeeRepo = MapperRegistry.getRepository(Employee.class, unit);
+        employeeRepo = MapperRegistry.getMapper(Employee.class, unit);
 
         Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
         Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
@@ -166,11 +158,11 @@ public class UnitOfWorkTests {
 
         UnitOfWork unitOfWork = new UnitOfWork(connectionSqlSupplier.wrap());
 
-        DataRepository<Employee, Integer> employeeRepo2 = MapperRegistry.getRepository(Employee.class, unitOfWork);
+        DataMapper<Employee, Integer> employeeRepo2 = MapperRegistry.getMapper(Employee.class, unitOfWork);
         CompletableFuture<Void> future1 = employeeRepo2.deleteById(employee.getIdentityKey());
         CompletableFuture<Void> future = employeeRepo2.deleteById(employee2.getIdentityKey());
 
-        companyRepo = MapperRegistry.getRepository(Company.class, unitOfWork);
+        companyRepo = MapperRegistry.getMapper(Company.class, unitOfWork);
 
         CompletableFuture.allOf(future, future1)
                 .thenCompose(aVoid -> companyRepo.deleteById(new Company.PrimaryKey(1, 1)))
@@ -205,9 +197,9 @@ public class UnitOfWorkTests {
     }
 
     private void assertDirtyObjects(boolean isCommit) {
-        Person person = null;
-        Car car = null;
-        TopStudent topStudent = null;
+        Person person;
+        Car car;
+        TopStudent topStudent;
         if(isCommit) {
             person = objectsContainer.getUpdatedPerson();
             car = objectsContainer.getUpdatedCar();
@@ -252,45 +244,27 @@ public class UnitOfWorkTests {
     }
 
     private void populateIdentityMaps() {
-        DataRepository carRepo = getRepository(Car.class, unit);
         Car originalCar = objectsContainer.getOriginalCar();
         unit.validate(originalCar.getIdentityKey(), originalCar);
 
-        DataRepository employeeRepo = getRepository(Employee.class, unit);
         Employee originalEmployee = objectsContainer.getOriginalEmployee();
         unit.validate(originalEmployee.getIdentityKey(), originalEmployee);
     }
 
     private void addRemovedObjects() {
-        getRepository(Employee.class, unit).delete(objectsContainer.getOriginalEmployee()).join();
+        getMapper(Employee.class, unit).delete(objectsContainer.getOriginalEmployee()).join();
     }
 
     //Original car shall be in the identityMap
-    private void addDirtyAndClonedObjects() {
-        /*clonedObjects.add(objectsContainer.getOriginalPerson());
-        clonedObjects.add(objectsContainer.getOriginalCar());
-        clonedObjects.add(objectsContainer.getOriginalTopStudent());*/
-
-        getRepository(Person.class, unit).update(objectsContainer.getUpdatedPerson()).join();
-        getRepository(Car.class, unit).update(objectsContainer.getUpdatedCar()).join();
-        getRepository(TopStudent.class, unit).update(objectsContainer.getUpdatedTopStudent()).join();
+    private void addDirtyObjects() {
+        getMapper(Person.class, unit).update(objectsContainer.getUpdatedPerson()).join();
+        getMapper(Car.class, unit).update(objectsContainer.getUpdatedCar()).join();
+        getMapper(TopStudent.class, unit).update(objectsContainer.getUpdatedTopStudent()).join();
     }
 
     private void addNewObjects() {
-        getRepository(Person.class, unit).create(objectsContainer.getInsertedPerson()).join();
-        getRepository(Car.class, unit).create(objectsContainer.getInsertedCar()).join();
-        getRepository(TopStudent.class, unit).create(objectsContainer.getInsertedTopStudent()).join();
-    }
-
-    private <R extends DomainObject<P>, P> MapperRegistry.Container<R, P> getContainer(Class<R> rClass) {
-        MapperSettings mapperSettings = new MapperSettings(rClass);
-        ExternalsHandler<R, P> externalsHandler = new ExternalsHandler<>(mapperSettings);
-        DataMapper<R, P> dataMapper = new DataMapper<>(rClass, externalsHandler, mapperSettings, unit);
-        Mapperify<R, P> mapperify = new Mapperify<>(dataMapper);
-        Type type1 = ((ParameterizedType) rClass.getGenericInterfaces()[0]).getActualTypeArguments()[0];
-        Comparator<R> comparator = new DomainObjectComparator<>(mapperSettings);
-        DataRepository<R, P> employeeRepo = new DataRepository<>(rClass, mapperify, comparator, unit);
-
-        return new MapperRegistry.Container<>(mapperSettings, externalsHandler);
+        getMapper(Person.class, unit).create(objectsContainer.getInsertedPerson()).join();
+        getMapper(Car.class, unit).create(objectsContainer.getInsertedCar()).join();
+        getMapper(TopStudent.class, unit).create(objectsContainer.getInsertedTopStudent()).join();
     }
 }

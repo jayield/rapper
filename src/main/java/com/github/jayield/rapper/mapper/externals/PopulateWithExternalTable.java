@@ -59,7 +59,7 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
 
     private <N extends DomainObject<V>, V> CompletableFuture<List<N>> getExternal(UnitOfWork unit, T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         return SqlUtils.query(sqlFieldExternal.getSelectTableQuery(), unit, idValues.collect(CollectionUtils.toJsonArray()))
-                .thenCompose(resultSet -> externalsHandler.getExternalObjects(MapperRegistry.getRepository((Class<N>)sqlFieldExternal.getDomainObjectType(), unit), sqlFieldExternal.getExternalNames(), resultSet)
+                .thenCompose(resultSet -> externalsHandler.getExternalObjects(MapperRegistry.getMapper((Class<N>)sqlFieldExternal.getDomainObjectType(), unit), sqlFieldExternal.getExternalNames(), resultSet)
                         .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
                 )
                 .exceptionally(throwable -> {

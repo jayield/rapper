@@ -1,4 +1,4 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.unitofwork;
 
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.mapper.externals.Foreign;

@@ -23,13 +23,15 @@ public class MapperRegistry {
         });
     }
 
-    public static<T extends DomainObject<K>, K> DataRepository<T, K> getRepository(Class<T> type, UnitOfWork unit) {
+    public static<T extends DomainObject<K>, K> DataMapper<T, K> getMapper(Class<T> type, UnitOfWork unit) {
         Container<T,K> container = getContainer(type);
-        return new DataRepository<>(
+        return new DataMapper<>(
                 type,
-                new DataMapper<>(type, container.getExternalsHandler(), container.getMapperSettings(), unit),
+                container.getExternalsHandler(),
+                container.getMapperSettings(),
                 new DomainObjectComparator<>(container.getMapperSettings()),
-                unit);
+                unit
+        );
     }
 
     public static <T extends DomainObject<K>, K> ExternalsHandler<T, K> getExternal(Class<T> type){

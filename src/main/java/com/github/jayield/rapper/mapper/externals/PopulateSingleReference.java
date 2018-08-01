@@ -62,7 +62,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
             }
         }
 
-        Supplier<CompletableFuture<N>> futureSupplier = () -> MapperRegistry.getRepository((Class<N>)sqlFieldExternal.getDomainObjectType(), unit)
+        Supplier<CompletableFuture<N>> futureSupplier = () -> MapperRegistry.getMapper((Class<N>)sqlFieldExternal.getDomainObjectType(), unit)
                 .findById((V) id)
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));

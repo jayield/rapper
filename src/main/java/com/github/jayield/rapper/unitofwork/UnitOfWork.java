@@ -30,11 +30,10 @@ public class UnitOfWork {
 
     //Multiple Threads may be accessing the Queue, so it must be a ConcurrentLinkedQueue
     private final Queue<DomainObject> newObjects = new ConcurrentLinkedQueue<>();
-    private final Queue<DomainObject> clonedObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> dirtyObjects = new ConcurrentLinkedQueue<>();
     private final Queue<DomainObject> removedObjects = new ConcurrentLinkedQueue<>();
     private final CreateHelper createHelper = new CreateHelper(this, newObjects);
-    private final UpdateHelper updateHelper = new UpdateHelper(this, dirtyObjects, clonedObjects, removedObjects);
+    private final UpdateHelper updateHelper = new UpdateHelper(this, dirtyObjects, removedObjects);
     private final DeleteHelper deleteHelper = new DeleteHelper(this, removedObjects, dirtyObjects);
 
     public UnitOfWork(Supplier<CompletableFuture<SQLConnection>> connectionSupplier){
@@ -84,19 +83,8 @@ public class UnitOfWork {
         if (obj.getIdentityKey() == null) throw new AssertionError();
         if (dirtyObjects.contains(obj)) throw new AssertionError();
         if (removedObjects.contains(obj)) throw new AssertionError();
-        if (newObjects.contains(obj)) throw new AssertionError();
+        if (newObjects.contains(obj)) return;
         newObjects.add(obj);
-    }
-
-    /**
-     * It will be created a clone of obj, in case a rollback is done, we have a way to go back as it was before
-     * @param obj DomainObject to be cloned
-     */
-    public void registerClone(DomainObject obj) {
-        if (obj.getIdentityKey() == null) throw new AssertionError();
-        if (removedObjects.contains(obj)) throw new AssertionError();
-        if(!clonedObjects.contains(obj) && !newObjects.contains(obj))
-            clonedObjects.add(obj);
     }
 
     /**
@@ -124,7 +112,7 @@ public class UnitOfWork {
 
     public CompletableFuture<Void> commit() {
         try {
-            if (newObjects.isEmpty() && clonedObjects.isEmpty() && dirtyObjects.isEmpty() && removedObjects.isEmpty()) {
+            if (newObjects.isEmpty() && dirtyObjects.isEmpty() && removedObjects.isEmpty()) {
                 CompletableFuture<Void> toRet = CompletableFuture.completedFuture(null);
                 if (connection != null) {
                     toRet = connection.thenCompose(con -> SqlUtils.callbackToPromise(con::commit))
@@ -169,11 +157,11 @@ public class UnitOfWork {
             //System.out.println("connection in rollbak " + connection);
             if(connection != null) {
                 return connection.thenCompose(con -> SqlUtils.callbackToPromise(con::rollback))
-                        .thenCompose(v -> closeConnection());
+                        .thenCompose(v -> closeConnection())
+                        .thenAccept(aVoid -> iterateMultipleLists(AbstractCommitHelper::rollbackNext));
             }
 
             iterateMultipleLists(AbstractCommitHelper::rollbackNext);
-
             return CompletableFuture.completedFuture(null);
         } catch (Exception e) {
             throw new DataMapperException(e);
@@ -225,12 +213,11 @@ public class UnitOfWork {
     }
 
     private<T extends DomainObject<K>, K> CompletableFuture<T> computeNewValue(T newT, Optional<CompletableFuture<T>> actualFuture, Comparator<T> comparator) {
-
-
         return actualFuture.map(tCompletableFuture -> tCompletableFuture.thenApply(t -> {
             if(comparator.compare(t, newT) < 0) return newT;
             return t;
-        })).orElse(CompletableFuture.completedFuture(newT));
+        }))
+                .orElse(CompletableFuture.completedFuture(newT));
     }
 
     public ConcurrentHashMap<Object, CompletableFuture<? extends DomainObject>> getIdentityMap(Class<? extends DomainObject> klass) {

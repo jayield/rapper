@@ -15,7 +15,6 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final ICounter<Pair<String, Object>[], CompletableFuture<List<T>>> ifindWhere;
 
     public Mapperify(Mapper<T, K> other){
-
         this.other = other;
         ifindById = Countify.of(other::findById);
         ifindAll = Countify.of(i -> other.findAll());

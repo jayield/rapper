@@ -5,12 +5,10 @@ import com.github.jayield.rapper.DomainObject;
 import java.util.Queue;
 
 public class UpdateHelper extends AbstractCommitHelper {
-    private final Queue<DomainObject> clonedObjects;
     private final Queue<DomainObject> removedObjects;
 
-    public UpdateHelper(UnitOfWork unit, Queue<DomainObject> dirtyObjects, Queue<DomainObject> clonedObjects, Queue<DomainObject> removedObjects) {
+    public UpdateHelper(UnitOfWork unit, Queue<DomainObject> dirtyObjects, Queue<DomainObject> removedObjects) {
         super(unit, dirtyObjects);
-        this.clonedObjects = clonedObjects;
         this.removedObjects = removedObjects;
     }
 
@@ -41,10 +39,11 @@ public class UpdateHelper extends AbstractCommitHelper {
         if (objectIterator == null) objectIterator = list.iterator();
         if (objectIterator.hasNext()) {
             DomainObject obj = objectIterator.next();
-            clonedObjects.stream()
+            unit.invalidate(obj.getClass(), obj.getIdentityKey());
+            /*clonedObjects.stream()
                     .filter(domainObject -> domainObject.getIdentityKey().equals(obj.getIdentityKey()))
                     .findFirst()
-                    .ifPresent(clone -> unit.validate(clone.getIdentityKey(), clone));
+                    .ifPresent(clone -> unit.validate(clone.getIdentityKey(), clone));*/
             return true;
         }
         return null;
