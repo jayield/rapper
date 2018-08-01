@@ -4,11 +4,11 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.utils.SqlUtils;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import com.github.jayield.rapper.mapper.MapperRegistry.Container;
-import com.github.jayield.rapper.sql.SqlField.SqlFieldExternal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +30,7 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
     public Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal) {
         return mapperSettings.getIds()
                 .stream()
-                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
+                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.getField()));
     }
 
     /**
@@ -50,16 +50,16 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
         Supplier<CompletableFuture<List<N>>> completableFuture = () -> getExternal(unit, t, sqlFieldExternal, container, idValues);
 
         try {
-            sqlFieldExternal.field.setAccessible(true);
-            sqlFieldExternal.field.set(t, completableFuture);
+            sqlFieldExternal.getField().setAccessible(true);
+            sqlFieldExternal.getField().set(t, completableFuture);
         } catch (IllegalAccessException e) {
             throw new DataMapperException(e);
         }
     }
 
     private <N extends DomainObject<V>, V> CompletableFuture<List<N>> getExternal(UnitOfWork unit, T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
-        return SqlUtils.query(sqlFieldExternal.selectTableQuery, unit, idValues.collect(CollectionUtils.toJsonArray()))
-                .thenCompose(resultSet -> externalsHandler.getExternalObjects(MapperRegistry.getRepository((Class<N>)sqlFieldExternal.domainObjectType, unit), sqlFieldExternal.externalNames, resultSet)
+        return SqlUtils.query(sqlFieldExternal.getSelectTableQuery(), unit, idValues.collect(CollectionUtils.toJsonArray()))
+                .thenCompose(resultSet -> externalsHandler.getExternalObjects(MapperRegistry.getRepository((Class<N>)sqlFieldExternal.getDomainObjectType(), unit), sqlFieldExternal.getExternalNames(), resultSet)
                         .collect(Collectors.collectingAndThen(Collectors.toList(), CollectionUtils::listToCompletableFuture))
                 )
                 .exceptionally(throwable -> {

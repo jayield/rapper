@@ -5,6 +5,9 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
 import com.github.jayield.rapper.sql.SqlField;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
+import com.github.jayield.rapper.sql.SqlFieldId;
+import com.github.jayield.rapper.sql.SqlFieldVersion;
 import com.github.jayield.rapper.utils.SqlUtils;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
@@ -239,14 +242,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         Stream<SqlFieldId> ids = mapperSettings
                 .getIds()
                 .stream()
-                .filter(sqlFieldId -> !sqlFieldId.identity || sqlFieldId.isFromParent());
+                .filter(sqlFieldId -> !sqlFieldId.isIdentity() || sqlFieldId.isFromParent());
         Stream<SqlField> columns = mapperSettings
                 .getColumns()
                 .stream();
         Stream<SqlFieldExternal> externals = mapperSettings
                 .getExternals()
                 .stream()
-                .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0);
+                .filter(sqlFieldExternal -> sqlFieldExternal.getNames().length != 0);
 
         Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
                 .sorted(Comparator.comparing(SqlField::byInsert));
@@ -280,7 +283,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             Stream<SqlFieldExternal> externals = mapperSettings
                     .getExternals()
                     .stream()
-                    .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0);
+                    .filter(sqlFieldExternal -> sqlFieldExternal.getNames().length != 0);
 
             Stream<SqlField> fields = Stream.concat(Stream.concat(ids, columns), externals)
                     .sorted(Comparator.comparing(SqlField::byUpdate));
@@ -290,7 +293,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             //Since each object has its own version, we want the version from type not from the subClass
             SqlFieldVersion versionField = mapperSettings.getVersionField();
             if(versionField != null) {
-                Field f = versionField.field;
+                Field f = versionField.getField();
                 f.setAccessible(true);
                 long version = (long) f.get(obj);
                 jsonArray.add(version);
@@ -338,7 +341,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             mapperSettings.getAllFields()
                     .stream()
-                    .filter(field -> mapperSettings.getFieldPredicate().test(field.field))
+                    .filter(field -> mapperSettings.getFieldPredicate().test(field.getField()))
                     .forEach(sqlField -> setField(rs, t, primaryKey, sqlField, idValues));
 
             if(primaryKey != null) {
@@ -353,15 +356,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     private void setField(JsonObject rs, T t, Object primaryKey, SqlField sqlField, List<Object> idValues) {
-        Field field = sqlField.field;
-        String name = sqlField.name;
+        Field field = sqlField.getField();
+        String name = sqlField.getName();
         try {
             field.setAccessible(true);
             //Get the Id from foreign table if the field annotated with ColumnName has NAME defined
             if(name.equals(SQL_FIELD_EXTERNAL)){
                 SqlFieldExternal sqlFieldExternal = (SqlFieldExternal) sqlField;
 
-                String[] names = sqlFieldExternal.names;
+                String[] names = sqlFieldExternal.getNames();
                 Object[] objects = new Object[names.length];
                 for (int i = 0; i < names.length; i++) {
                     String s = names[i];
@@ -420,14 +423,14 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         mapperSettings
                 .getIds()
                 .stream()
-                .filter(f -> f.identity && !f.isFromParent())
+                .filter(f -> f.isIdentity() && !f.isFromParent())
                 .forEach(field -> {
                     try {
-                        field.field.setAccessible(true);
+                        field.getField().setAccessible(true);
                         String url = ConnectionManager.getConnectionManager().getUrl();
-                        field.field.set(obj,
+                        field.getField().set(obj,
                                 url.toLowerCase().contains("sqlserver")
-                                        ? field.field.getType() == Integer.class
+                                        ? field.getField().getType() == Integer.class
                                             ?  keys.getInteger(0) : keys.getLong(0)
                                         : keys.getValue(0) //Doesn't work on sqlServer, the type of GeneratedKey is bigDecimal always
                         );
@@ -441,7 +444,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         try {
             SqlFieldVersion versionField = mapperSettings.getVersionField();
             if(versionField != null) {
-                Field version = versionField.field;
+                Field version = versionField.getField();
                 version.setAccessible(true);
                 version.set(obj, newValue);
             }

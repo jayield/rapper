@@ -4,10 +4,10 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import com.github.jayield.rapper.mapper.MapperRegistry.Container;
-import com.github.jayield.rapper.sql.SqlField.SqlFieldExternal;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -62,14 +62,14 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
             }
         }
 
-        Supplier<CompletableFuture<N>> futureSupplier = () -> MapperRegistry.getRepository((Class<N>)sqlFieldExternal.domainObjectType, unit)
+        Supplier<CompletableFuture<N>> futureSupplier = () -> MapperRegistry.getRepository((Class<N>)sqlFieldExternal.getDomainObjectType(), unit)
                 .findById((V) id)
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
 
         try {
-            sqlFieldExternal.field.setAccessible(true);
-            sqlFieldExternal.field.set(t, new Foreign<>((V) id, futureSupplier));
+            sqlFieldExternal.getField().setAccessible(true);
+            sqlFieldExternal.getField().set(t, new Foreign<>((V) id, futureSupplier));
         } catch (IllegalAccessException e) {
             throw new DataMapperException(e);
         }

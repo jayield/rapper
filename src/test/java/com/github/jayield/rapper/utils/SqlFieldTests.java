@@ -7,6 +7,7 @@ import com.github.jayield.rapper.domainModel.Employee;
 import com.github.jayield.rapper.mapper.externals.PopulateMultiReference;
 import com.github.jayield.rapper.mapper.externals.PopulateSingleReference;
 import com.github.jayield.rapper.mapper.externals.PopulateWithExternalTable;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
@@ -35,14 +36,14 @@ public class SqlFieldTests {
     public void testToSqlFieldExternal() throws NoSuchFieldException {
         Field field = Company.class.getDeclaredField("employees");
         SqlFieldExternal external = new SqlFieldExternal(field, "");
-        assertEquals(Employee.class, external.domainObjectType);
+        assertEquals(Employee.class, external.getDomainObjectType());
 
         field = Author.class.getDeclaredField("books");
         external = new SqlFieldExternal(field, "");
-        assertEquals(Book.class, external.domainObjectType);
+        assertEquals(Book.class, external.getDomainObjectType());
 
         field = Employee.class.getDeclaredField("company");
         external = new SqlFieldExternal(field, "");
-        assertEquals(Company.class, external.domainObjectType);
+        assertEquals(Company.class, external.getDomainObjectType());
     }
 }

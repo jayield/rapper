@@ -6,6 +6,9 @@ import com.github.jayield.rapper.annotations.EmbeddedId;
 import com.github.jayield.rapper.annotations.Id;
 import com.github.jayield.rapper.annotations.Version;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
+import com.github.jayield.rapper.sql.SqlFieldId;
+import com.github.jayield.rapper.sql.SqlFieldVersion;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
 import com.github.jayield.rapper.mapper.externals.Foreign;
 import com.github.jayield.rapper.sql.SqlField;
@@ -20,8 +23,6 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import static com.github.jayield.rapper.sql.SqlField.*;
 
 public class MapperSettings {
 
@@ -44,8 +45,7 @@ public class MapperSettings {
     private Constructor<?> primaryKeyConstructor;
     private final Constructor<?> constructor;
 
-    private final Predicate<Field> fieldPredicate = field ->
-            field.getType().isPrimitive()
+    private final Predicate<Field> fieldPredicate = field -> field.getType().isPrimitive()
             || field.getType().isAssignableFrom(String.class)
             || field.getType().isAssignableFrom(Instant.class)
             || field.getType().isAssignableFrom(CompletableFuture.class)
@@ -131,15 +131,15 @@ public class MapperSettings {
     private void buildQueryStrings() {
         List<String> idName = ids
                 .stream()
-                .map(f -> f.selectQueryValue)
+                .map(SqlField::getSelectQueryValue)
                 .collect(Collectors.toList());
 
         List<String> allFieldsNames = allFields
                 .stream()
                 //We don't want the externals in our selectQuery, unless NAME from SqlFieldExternal is defined
                 .filter(sqlField -> !SqlFieldExternal.class.isAssignableFrom(sqlField.getClass())
-                        || SqlFieldExternal.class.isAssignableFrom(sqlField.getClass()) && ((SqlFieldExternal)sqlField).names.length != 0)
-                .map(sqlField -> sqlField.selectQueryValue)
+                        || SqlFieldExternal.class.isAssignableFrom(sqlField.getClass()) && ((SqlFieldExternal)sqlField).getNames().length != 0)
+                .map(SqlField::getSelectQueryValue)
                 .collect(Collectors.toList());
 
         StringBuilder suffix = new StringBuilder();
@@ -175,7 +175,7 @@ public class MapperSettings {
 
         idName = ids
                 .stream()
-                .map(f -> f.name)
+                .map(SqlField::getName)
                 .collect(Collectors.toList());
 
         pagination = " order by " + idName.stream().collect(Collectors.joining(", ")) + " offset %d rows fetch next %d rows only";
@@ -183,23 +183,23 @@ public class MapperSettings {
         List<String> columnsNames = Stream.concat(
                 columns
                         .stream()
-                        .map(f -> f.name),
+                        .map(SqlField::getName),
                 externals
                         .stream()
-                        .filter(sqlFieldExternal -> sqlFieldExternal.names.length != 0)
-                        .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.names))
+                        .filter(sqlFieldExternal -> sqlFieldExternal.getNames().length != 0)
+                        .flatMap(sqlFieldExternal -> Arrays.stream(sqlFieldExternal.getNames()))
                 ).collect(Collectors.toList());
 
         columnsNames.remove("Cversion");
-        columns.removeIf(f -> f.name.equals("Cversion"));
+        columns.removeIf(f -> f.getName().equals("Cversion"));
 
         boolean identity = ids
                 .stream()
-                .anyMatch(f -> f.identity && !f.isFromParent());
+                .anyMatch(f -> f.isIdentity() && !f.isFromParent());
 
         String updateWhereVersion = "";
         if(versionField != null) {
-            String versionColumnName = versionField.name.substring(1, versionField.name.length()); //Remove the prefix by doing the subString
+            String versionColumnName = versionField.getName().substring(1, versionField.getName().length()); //Remove the prefix by doing the subString
             updateWhereVersion = String.format(" and %s = ?", versionColumnName);
         }
 

@@ -5,7 +5,7 @@ import com.github.jayield.rapper.annotations.EmbeddedId;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
-import com.github.jayield.rapper.sql.SqlField;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 
 import java.lang.reflect.Field;
@@ -23,13 +23,13 @@ public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements 
     }
 
     @Override
-    public CompletableFuture<Void> execute(T t, SqlField.SqlFieldExternal sqlFieldExternal, UnitOfWork unitOfWork) {
-        populate(t, sqlFieldExternal, MapperRegistry.getContainer(sqlFieldExternal.domainObjectType), idValues(t, sqlFieldExternal), unitOfWork);
+    public CompletableFuture<Void> execute(T t, SqlFieldExternal sqlFieldExternal, UnitOfWork unitOfWork) {
+        populate(t, sqlFieldExternal, MapperRegistry.getContainer(sqlFieldExternal.getDomainObjectType()), idValues(t, sqlFieldExternal), unitOfWork);
         return null;
     }
 
-    public abstract Stream<Object> idValues(T t, SqlField.SqlFieldExternal sqlFieldExternal);
-    public abstract<N extends DomainObject<V>,V> void populate(T t, SqlField.SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues, UnitOfWork unitOfWork);
+    public abstract Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal);
+    public abstract<N extends DomainObject<V>,V> void populate(T t, SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues, UnitOfWork unitOfWork);
 
 
     /**

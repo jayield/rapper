@@ -4,10 +4,10 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.*;
 import com.github.jayield.rapper.mapper.MapperRegistry.Container;
-import com.github.jayield.rapper.sql.SqlField.SqlFieldExternal;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -26,7 +26,7 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     public Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal) {
         return mapperSettings.getIds()
                 .stream()
-                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.field));
+                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.getField()));
     }
 
     /**
@@ -40,15 +40,15 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     @Override
     public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues, UnitOfWork unit) {
         Iterator<Object> idValues1 = idValues.iterator();
-        Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.foreignNames)
+        Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
                 .map(str -> new Pair<>(str, idValues1.next()))
                 .toArray(Pair[]::new);
 
-        Supplier<CompletableFuture<List<N>>> objects = () -> MapperRegistry.getRepository(sqlFieldExternal.domainObjectType, unit).findWhere(pairs);
+        Supplier<CompletableFuture<List<N>>> objects = () -> MapperRegistry.getRepository(sqlFieldExternal.getDomainObjectType(), unit).findWhere(pairs);
 
         try {
-            sqlFieldExternal.field.setAccessible(true);
-            sqlFieldExternal.field.set(t, objects);
+            sqlFieldExternal.getField().setAccessible(true);
+            sqlFieldExternal.getField().set(t, objects);
         } catch (IllegalAccessException e) {
             throw new DataMapperException(e);
         }
