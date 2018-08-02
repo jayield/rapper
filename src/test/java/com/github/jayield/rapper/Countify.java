@@ -17,6 +17,8 @@
 
 package com.github.jayield.rapper;
 
+import com.github.jayield.rapper.ICounter;
+
 import java.util.function.Function;
 
 /**
@@ -45,7 +47,7 @@ public class Countify {
         }
     }
 
-    public static <T,R> ICounter of(Function<T,R> inner) {
+    public static <T,R> ICounter<T,R> of(Function<T, R> inner) {
         return new Counter<>(inner);
     }
 }

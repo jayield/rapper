@@ -1,24 +1,27 @@
 package com.github.jayield.rapper.domainModel;
 
-import com.github.jayield.rapper.ColumnName;
+import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.EmbeddedId;
-import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.annotations.EmbeddedId;
+import com.github.jayield.rapper.annotations.Version;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class Company implements DomainObject<Company.PrimaryKey> {
     @EmbeddedId
     private final PrimaryKey primaryKey;
     private final String motto;
     @ColumnName(foreignName = {"companyId", "companyCid"})
-    private final CompletableFuture<List<Employee>> employees;
+    private final Function<UnitOfWork, CompletableFuture<List<Employee>>> employees;
     @Version
     private final long version;
 
-    public Company(PrimaryKey primaryKey, String motto, CompletableFuture<List<Employee>> employees, long version) {
+    public Company(PrimaryKey primaryKey, String motto, Function<UnitOfWork, CompletableFuture<List<Employee>>> employees, long version) {
         this.primaryKey = primaryKey;
         this.motto = motto;
         this.employees = employees;
@@ -36,7 +39,7 @@ public class Company implements DomainObject<Company.PrimaryKey> {
         return motto;
     }
 
-    public CompletableFuture<List<Employee>> getEmployees() {
+    public Function<UnitOfWork, CompletableFuture<List<Employee>>> getEmployees() {
         return employees;
     }
 
@@ -73,5 +76,15 @@ public class Company implements DomainObject<Company.PrimaryKey> {
         public int getCid() {
             return cid;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "Company{" +
+                "primaryKey=" + primaryKey +
+                ", motto='" + motto + '\'' +
+                ", employees=" + employees +
+                ", version=" + version +
+                '}';
     }
 }

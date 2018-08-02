@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-Class-Path: mssql-jdbc-6.3.6.jre8-preview.jar hamcrest-core-1.3.jar sl
- f4j-api-1.7.25.jar junit-4.12.jar slf4j-simple-1.7.25.jar
-Main-Class: 
-

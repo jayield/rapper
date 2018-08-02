@@ -3,7 +3,9 @@ package com.github.jayield.rapper.utils;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 
 import java.lang.reflect.Field;
+import java.util.Arrays;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public abstract class EmbeddedIdClass {
 
@@ -47,5 +49,12 @@ public abstract class EmbeddedIdClass {
                 return false;
         }
         return true;
+    }
+
+    @Override
+    public String toString() {
+        return Arrays.stream(objects)
+                .map(o -> "" + o)
+                .collect(Collectors.joining(", ", "{", "}"));
     }
 }

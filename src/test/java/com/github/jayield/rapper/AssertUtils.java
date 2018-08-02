@@ -1,47 +1,48 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.domainModel.*;
+import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.sql.ResultSet;
+import io.vertx.ext.sql.SQLConnection;
 
 import java.lang.reflect.Field;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
 import static org.junit.Assert.*;
 
 public class AssertUtils {
+    private static SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
     //---------------------Domain Objects assertions----------------------------------
-    public static void assertPerson(Person person, ResultSet rs) {
+    public static void assertPerson(Person person, JsonObject rs) {
         try {
-            assertEquals(person.getNif(), rs.getInt("nif"));
+            assertEquals(person.getNif(), rs.getInteger("nif").intValue());
             assertEquals(person.getName(), rs.getString("name"));
-            assertEquals(person.getBirthday(), rs.getDate("birthday"));
-            assertEquals(person.getVersion(), rs.getLong("version"));
+            assertEquals(person.getBirthday(), sdf.parse(rs.getString("birthday")).toInstant());
+            assertEquals(person.getVersion(), rs.getLong("version").longValue());
             assertNotEquals(0, person.getVersion());
-        } catch (SQLException e) {
+        } catch (ParseException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static void assertCar(Car car, ResultSet rs) {
-        try {
-            assertEquals(car.getIdentityKey().getOwner(), rs.getInt("owner"));
-            assertEquals(car.getIdentityKey().getPlate(), rs.getString("plate"));
-            assertEquals(car.getBrand(), rs.getString("brand"));
-            assertEquals(car.getModel(), rs.getString("model"));
-            assertEquals(car.getVersion(), rs.getLong("version"));
-            assertNotEquals(0, car.getVersion());
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+    public static void assertCar(Car car, JsonObject rs) {
+        assertEquals(car.getIdentityKey().getOwner(), rs.getInteger("owner").intValue());
+        assertEquals(car.getIdentityKey().getPlate(), rs.getString("plate"));
+        assertEquals(car.getBrand(), rs.getString("brand"));
+        assertEquals(car.getModel(), rs.getString("model"));
+        assertEquals(car.getVersion(), rs.getLong("version").longValue());
+        assertNotEquals(0, car.getVersion());
     }
 
-    public static void assertTopStudent(TopStudent topStudent, ResultSet rs) {
+    public static void assertTopStudent(TopStudent topStudent, JsonObject rs) {
         try{
             Field studentVersion = Student.class.getDeclaredField("version");
             Field personVersion = Person.class.getDeclaredField("version");
@@ -49,201 +50,142 @@ public class AssertUtils {
             studentVersion.setAccessible(true);
             personVersion.setAccessible(true);
 
-            assertEquals(topStudent.getNif(), rs.getInt("nif"));
+            assertEquals(topStudent.getNif(), rs.getInteger("nif").intValue());
             assertEquals(topStudent.getName(), rs.getString("name"));
-            assertEquals(topStudent.getBirthday(), rs.getDate("birthday"));
-            assertEquals(topStudent.getVersion(), rs.getLong("Cversion"));
+            assertEquals(topStudent.getBirthday(), sdf.parse(rs.getString("birthday")).toInstant());
+            assertEquals(topStudent.getVersion(), rs.getLong("Cversion").longValue());
             assertNotEquals(0, topStudent.getVersion());
-            assertEquals(topStudent.getStudentNumber(), rs.getInt("studentNumber"));
-            assertEquals(topStudent.getTopGrade(), rs.getInt("topGrade"));
-            assertEquals(topStudent.getYear(), rs.getInt("year"));
+            assertEquals(topStudent.getStudentNumber(), rs.getInteger("studentNumber").intValue());
+            assertEquals(topStudent.getTopGrade(), rs.getInteger("topGrade").intValue());
+            assertEquals(topStudent.getYear(), rs.getInteger("year").intValue());
             assertEquals(studentVersion.get(topStudent), rs.getLong("P1version"));
             assertEquals(personVersion.get(topStudent), rs.getLong("P2version"));
-        } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
+        } catch ( IllegalAccessException | NoSuchFieldException | ParseException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static void assertCompanyWithExternal(Company company, ResultSet rs, Connection con) {
+    public static void assertCompanyWithExternal(Company company, JsonObject rs, UnitOfWork unit) {
+        assertEquals(company.getIdentityKey().getId(), rs.getInteger("id").intValue());
+        assertEquals(company.getIdentityKey().getCid(), rs.getInteger("cid").intValue());
+        assertEquals(company.getMotto(), rs.getString("motto"));
+        assertEquals(company.getVersion(), rs.getLong("version").longValue());
+        assertNotEquals(0, company.getVersion());
+
+        CompletableFuture<List<Employee>> completableFuture = company.getEmployees().apply(unit);
+        SQLConnection con = unit.getConnection().join();
+        if(completableFuture != null) {
+            List<Employee> employees = completableFuture.join();
+            SqlUtils.<ResultSet>callbackToPromise(ar ->
+                    con.queryWithParams("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?",
+                            new JsonArray().add(company.getIdentityKey().getId()).add(company.getIdentityKey().getCid()), ar))
+                    .thenAccept(resultSet -> resultSet.getRows(true).forEach(jo ->
+                            assertEmployeeWithExternals(employees.remove(0), jo, unit)))
+                    .join();
+        }
+        else {
+            SqlUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?",
+                    new JsonArray().add(company.getIdentityKey().getId()).add(company.getIdentityKey().getCid()), ar))
+                    .thenAccept(resultSet -> assertTrue(resultSet.getRows(true).isEmpty()))
+                    .join();
+        }
+    }
+
+    public static void assertCompany(Company company, JsonObject rs) {
+        assertEquals(company.getIdentityKey().getId(), rs.getInteger("id").intValue());
+        assertEquals(company.getIdentityKey().getCid(), rs.getInteger("cid").intValue());
+        assertEquals(company.getMotto(), rs.getString("motto"));
+        assertEquals(company.getVersion(), rs.getLong("Cversion").longValue());
+        assertNotEquals(0, company.getVersion());
+    }
+
+    public static void assertEmployeeWithExternals(Employee employee, JsonObject rs, UnitOfWork unit) {
+        assertEquals((int) employee.getIdentityKey(), rs.getInteger("id").intValue());
+        assertEquals(employee.getName(), rs.getString("name"));
+        assertEquals(employee.getVersion(), rs.getLong("version").longValue());
+        //System.out.println(rs);
+        CompletableFuture<Company> companyCompletableFuture = employee.getCompany().getForeignObject(unit);
+        if(companyCompletableFuture != null){
+            Company company = companyCompletableFuture.join();
+            assertEquals(company.getIdentityKey().getId(), rs.getInteger("companyId").intValue());
+            assertEquals(company.getIdentityKey().getCid(), rs.getInteger("companyCid").intValue());
+        }
+        else {
+            assertNull(rs.getInteger("companyId".toUpperCase()));
+            assertNull(rs.getInteger("companyCid".toUpperCase()));
+        }
+    }
+
+    public static void assertEmployee(Employee employee, JsonObject rs) {
+        assertEquals((int) employee.getIdentityKey(), rs.getInteger("id").intValue());
+        assertEquals(employee.getName(), rs.getString("name"));
+        assertEquals(employee.getVersion(), rs.getLong("version").longValue());
+    }
+
+    public static void assertBook(Book book, JsonObject rs, UnitOfWork unit){
+        assertEquals((long) book.getIdentityKey(), rs.getLong("id").longValue());
+        assertEquals(book.getName(), rs.getString("name"));
+        assertEquals(book.getVersion(), rs.getLong("version").longValue());
+
+        CompletableFuture<List<Author>> authors = book.getAuthors().apply(unit);
+        if(authors != null) {
+            Author author = authors.join().get(0);
+            SqlUtils.<ResultSet>callbackToPromise(ar ->
+                    unit.getConnection().join().queryWithParams("select id, name, CAST(version as bigint) version from Author where id = ?",
+                            new JsonArray().add(author.getIdentityKey()), ar))
+                    .thenAccept(resultSet -> assertAuthor(author, resultSet.getRows(true).get(0)))
+                    .join();
+        }
+    }
+
+    private static void assertAuthor(Author author, JsonObject rs) {
+        assertEquals((long) author.getIdentityKey(), rs.getLong("id").longValue());
+        assertEquals(author.getName(), rs.getString("name"));
+        assertEquals(author.getVersion(), rs.getLong("version").longValue());
+    }
+
+    public static void assertStudent(Student student, JsonObject rs) {
+        Field personVersion = null;
         try {
-            assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
-            assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
-            assertEquals(company.getMotto(), rs.getString("motto"));
-            assertEquals(company.getVersion(), rs.getLong("version"));
-            assertNotEquals(0, company.getVersion());
-
-            CompletableFuture<List<Employee>> completableFuture = company.getEmployees();
-            if(completableFuture != null) {
-                List<Employee> employees = completableFuture.join();
-                PreparedStatement ps = con
-                        .prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
-                ps.setInt(1, company.getIdentityKey().getId());
-                ps.setInt(2, company.getIdentityKey().getCid());
-                rs = ps.executeQuery();
-
-                while (rs.next()) {
-                    assertEmployeeWithExternals(employees.remove(0), rs);
-                }
-            }
-            else {
-                PreparedStatement ps = con.prepareStatement("select id, name, companyId, companyCid, CAST(version as bigint) version from Employee where companyId = ? and companyCid = ?");
-                ps.setInt(1, company.getIdentityKey().getId());
-                ps.setInt(2, company.getIdentityKey().getCid());
-                rs = ps.executeQuery();
-
-                assertFalse(rs.next());
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void assertCompany(Company company, ResultSet rs, Connection con) {
-        try {
-            assertEquals(company.getIdentityKey().getId(), rs.getInt("id"));
-            assertEquals(company.getIdentityKey().getCid(), rs.getInt("cid"));
-            assertEquals(company.getMotto(), rs.getString("motto"));
-            assertEquals(company.getVersion(), rs.getLong("version"));
-            assertNotEquals(0, company.getVersion());
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void assertEmployeeWithExternals(Employee employee, ResultSet rs) {
-        try {
-            assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
-            assertEquals(employee.getName(), rs.getString("name"));
-            assertEquals(employee.getVersion(), rs.getLong("version"));
-
-            CompletableFuture<Company> companyCompletableFuture = employee.getCompany();
-            if(companyCompletableFuture != null){
-                Company company = companyCompletableFuture.join();
-                assertEquals(company.getIdentityKey().getId(), rs.getInt("companyId"));
-                assertEquals(company.getIdentityKey().getCid(), rs.getInt("companyCid"));
-            }
-            else {
-                assertEquals(0, rs.getInt("companyId"));
-                assertEquals(0, rs.getInt("companyCid"));
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void assertEmployee(Employee employee, ResultSet rs) {
-        try {
-            assertEquals((int) employee.getIdentityKey(), rs.getInt("id"));
-            assertEquals(employee.getName(), rs.getString("name"));
-            assertEquals(employee.getVersion(), rs.getLong("version"));
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void assertBook(Book book, ResultSet rs, Connection con){
-        try {
-            assertEquals((long) book.getIdentityKey(), rs.getLong("id"));
-            assertEquals(book.getName(), rs.getString("name"));
-            assertEquals(book.getVersion(), rs.getLong("version"));
-
-            CompletableFuture<List<Author>> authors = book.getAuthors();
-            if(authors != null) {
-                Author author = authors.join().get(0);
-                PreparedStatement ps = con.prepareStatement("select id, name, CAST(version as bigint) version from Author where id = ?");
-                ps.setLong(1, author.getIdentityKey());
-
-                rs = ps.executeQuery();
-
-                while (rs.next())
-                    assertAuthor(author, rs);
-            }
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void assertAuthor(Author author, ResultSet rs) {
-        try {
-            assertEquals((long) author.getIdentityKey(), rs.getLong("id"));
-            assertEquals(author.getName(), rs.getString("name"));
-            assertEquals(author.getVersion(), rs.getLong("version"));
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    public static void assertStudent(Student student, ResultSet rs) {
-        try{
-            Field personVersion = Person.class.getDeclaredField("version");
-
+            personVersion = Person.class.getDeclaredField("version");
             personVersion.setAccessible(true);
-
-            assertEquals(student.getNif(), rs.getInt("nif"));
+            assertEquals(student.getNif(), rs.getInteger("nif").intValue());
             assertEquals(student.getName(), rs.getString("name"));
             //assertEquals(student.getBirthday(), rs.getDate("birthday"));
-            assertEquals(student.getVersion(), rs.getLong("Cversion"));
+            assertEquals(student.getVersion(), rs.getLong("Cversion").longValue());
             assertNotEquals(0, student.getVersion());
-            assertEquals(student.getStudentNumber(), rs.getInt("studentNumber"));
+            assertEquals(student.getStudentNumber(), rs.getInteger("studentNumber").intValue());
             assertEquals(personVersion.get(student), rs.getLong("P1version"));
-        } catch (SQLException | IllegalAccessException | NoSuchFieldException e) {
+
+        } catch (NoSuchFieldException | IllegalAccessException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public static void assertDog(Dog dog, ResultSet rs){
-        try{
-            assertEquals(dog.getIdentityKey().getName(), rs.getString("name"));
-            assertEquals(dog.getIdentityKey().getRace(), rs.getString("race"));
-            assertEquals(dog.getAge(), rs.getInt("age"));
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+    public static void assertDog(Dog dog, JsonObject rs){
+        assertEquals(dog.getIdentityKey().getName(), rs.getString("name"));
+        assertEquals(dog.getIdentityKey().getRace(), rs.getString("race"));
+        assertEquals(dog.getAge(), rs.getInteger("age").intValue());
     }
 
     //---------------------------ResultSets assertions-----------------------------------
-    public static<U> void assertSingleRow(U object, String sql, Consumer<PreparedStatement> prepareStatement, BiConsumer<U, ResultSet> assertConsumer, Connection con) {
-        try{
-            PreparedStatement ps = con.prepareStatement(sql);
-            prepareStatement.accept(ps);
-            ResultSet rs = ps.executeQuery();
-
-            if(rs.next())
-                assertConsumer.accept(object, rs);
-            else fail("Object wasn't selected from the database");
-        }
-        catch (SQLException e){
-            throw new RuntimeException(e);
-        }
+    public static<U> void assertSingleRow(U object, String sql, JsonArray jsonArray, BiConsumer<U, JsonObject> assertConsumer, SQLConnection con) {
+        ResultSet resultSet = SqlUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
+        if(resultSet.getRows(true).isEmpty())
+            throw new DataMapperException("Object wasn't selected from the database");
+        else
+            assertConsumer.accept(object, resultSet.getRows(true).get(0));
     }
 
-    public static<U> void assertMultipleRows(Connection connection, List<U> list, String sql, BiConsumer<U, ResultSet> assertConsumer, int expectedRows){
-        try {
-            PreparedStatement ps = connection.prepareStatement(sql,
-                    ResultSet.TYPE_SCROLL_INSENSITIVE,
-                    ResultSet.CONCUR_READ_ONLY);
-            ResultSet rs = ps.executeQuery();
-
-            rs.last();
-            assertEquals(expectedRows, rs.getRow());
-            rs.beforeFirst();
-
-            if (rs.next())
-                assertConsumer.accept(list.get(0), rs);
-            else fail("Objects weren't selected from the database");
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+    public static<U> void assertMultipleRows(SQLConnection connection, List<U> list, String sql, BiConsumer<U, JsonObject> assertConsumer, int expectedRows){
+        ResultSet resultSet = SqlUtils.<ResultSet>callbackToPromise(ar -> connection.query(sql, ar)).join();
+        List<JsonObject> res = resultSet.getRows(true);
+        assertEquals(expectedRows, res.size());
+        assertConsumer.accept(list.get(0), res.get(0));
     }
 
-    public static void assertNotFound(String sql, Consumer<PreparedStatement> prepareStatement, Connection con){
-        try {
-            PreparedStatement ps = con.prepareStatement(sql);
-            prepareStatement.accept(ps);
-            ResultSet rs = ps.executeQuery();
-            assertFalse(rs.next());
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
+    public static void assertNotFound(String sql, JsonArray jsonArray, SQLConnection con){
+        ResultSet resultSet = SqlUtils.<ResultSet>callbackToPromise(ar -> con.queryWithParams(sql, jsonArray, ar)).join();
+        assertTrue(resultSet.getRows(true).isEmpty());
     }
 }

@@ -1,8 +1,8 @@
 package com.github.jayield.rapper.domainModel;
 
-import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.annotations.Version;
 
-import java.sql.Date;
+import java.time.Instant;
 
 public class Student extends Person {
 
@@ -10,7 +10,7 @@ public class Student extends Person {
     @Version
     private final long version;
 
-    public Student(int nif, String name, Date birthday, long personVersion, int studentNumber, long version) {
+    public Student(int nif, String name, Instant birthday, long personVersion, int studentNumber, long version) {
         super(nif, name, birthday, personVersion);
         this.studentNumber = studentNumber;
         this.version = version;

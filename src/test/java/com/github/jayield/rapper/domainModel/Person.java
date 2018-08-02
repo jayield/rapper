@@ -1,21 +1,20 @@
 package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.Id;
-import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.annotations.Id;
+import com.github.jayield.rapper.annotations.Version;
 
-import java.sql.Date;
-import java.util.Objects;
+import java.time.Instant;
 
 public class Person implements DomainObject<Integer> {
     @Id
     private final int nif;
     private final String name;
-    private final Date birthday;
+    private final Instant birthday;
     @Version
     private final long version;
 
-    public Person(int nif, String name, Date birthday, long version) {
+    public Person(int nif, String name, Instant birthday, long version) {
         this.nif = nif;
         this.name = name;
         this.birthday = birthday;
@@ -57,7 +56,7 @@ public class Person implements DomainObject<Integer> {
         return name;
     }
 
-    public Date getBirthday() {
+    public Instant getBirthday() {
         return birthday;
     }
 }

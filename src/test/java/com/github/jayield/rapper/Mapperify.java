@@ -1,6 +1,7 @@
 package com.github.jayield.rapper;
 
-import javafx.util.Pair;
+import com.github.jayield.rapper.mapper.Mapper;
+import com.github.jayield.rapper.utils.Pair;
 
 import java.util.List;
 import java.util.Optional;
@@ -14,16 +15,30 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     private final ICounter<Pair<String, Object>[], CompletableFuture<List<T>>> ifindWhere;
 
     public Mapperify(Mapper<T, K> other){
-
         this.other = other;
         ifindById = Countify.of(other::findById);
         ifindAll = Countify.of(i -> other.findAll());
-        ifindWhere = Countify.<Pair<String, Object>[], CompletableFuture<List<T>>>of(values -> other.findWhere(values));
+        ifindWhere = Countify.of(other::findWhere);
+    }
+
+    @Override
+    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
+        return other.getNumberOfEntries(values);
+    }
+
+    @Override
+    public CompletableFuture<Long> getNumberOfEntries() {
+        return other.getNumberOfEntries();
     }
 
     @Override
     public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
         return ifindWhere.apply((Pair<String, Object>[]) values);
+    }
+
+    @Override
+    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
+        return other.findWhere(page, numberOfItems, values);
     }
 
     @Override
@@ -37,37 +52,42 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<Boolean> create(T t) {
+    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
+        return other.findAll(page, numberOfItems);
+    }
+
+    @Override
+    public CompletableFuture<Void> create(T t) {
         return other.create(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> createAll(Iterable<T> t) {
+    public CompletableFuture<Void> createAll(Iterable<T> t) {
         return other.createAll(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> update(T t) {
+    public CompletableFuture<Void> update(T t) {
         return other.update(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> updateAll(Iterable<T> t) {
+    public CompletableFuture<Void> updateAll(Iterable<T> t) {
         return other.updateAll(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteById(K k) {
+    public CompletableFuture<Void> deleteById(K k) {
         return other.deleteById(k);
     }
 
     @Override
-    public CompletableFuture<Boolean> delete(T t) {
+    public CompletableFuture<Void> delete(T t) {
         return other.delete(t);
     }
 
     @Override
-    public CompletableFuture<Boolean> deleteAll(Iterable<K> keys) {
+    public CompletableFuture<Void> deleteAll(Iterable<K> keys) {
         return other.deleteAll(keys);
     }
 

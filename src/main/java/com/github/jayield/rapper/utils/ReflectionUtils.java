@@ -13,6 +13,9 @@ import java.util.stream.StreamSupport;
 
 public class ReflectionUtils {
 
+    private ReflectionUtils() {
+    }
+
     public static Class getGenericType(Type t){
         t = ((ParameterizedType) t).getActualTypeArguments()[0];
         try {

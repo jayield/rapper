@@ -1,11 +1,10 @@
 package com.github.jayield.rapper.domainModel;
 
-import com.github.jayield.rapper.ColumnName;
+import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.Id;
-import com.github.jayield.rapper.Version;
-
-import java.util.concurrent.CompletableFuture;
+import com.github.jayield.rapper.annotations.Id;
+import com.github.jayield.rapper.annotations.Version;
+import com.github.jayield.rapper.mapper.externals.Foreign;
 
 public class Employee implements DomainObject<Integer> {
     @Id(isIdentity = true)
@@ -14,9 +13,9 @@ public class Employee implements DomainObject<Integer> {
     @Version
     private final long version;
     @ColumnName(name = {"companyId", "companyCid"})
-    private final CompletableFuture<Company> company;
+    private final Foreign<Company, Company.PrimaryKey> company;
 
-    public Employee(int id, String name, long version, CompletableFuture<Company> company) {
+    public Employee(int id, String name, long version, Foreign<Company, Company.PrimaryKey> company) {
         this.id = id;
         this.name = name;
         this.version = version;
@@ -34,7 +33,7 @@ public class Employee implements DomainObject<Integer> {
         return name;
     }
 
-    public CompletableFuture<Company> getCompany() {
+    public Foreign<Company, Company.PrimaryKey> getCompany() {
         return company;
     }
 

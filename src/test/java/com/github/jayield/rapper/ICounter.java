@@ -23,6 +23,6 @@ import java.util.function.Function;
  * @author Miguel Gamboa
  *         created on 24-03-2017
  */
-public interface ICounter<T,R> extends Function<T,R> {
+public interface ICounter<T, R> extends Function<T, R> {
     int getCount();
 }

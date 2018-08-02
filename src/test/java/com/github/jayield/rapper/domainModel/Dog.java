@@ -1,7 +1,7 @@
 package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.EmbeddedId;
+import com.github.jayield.rapper.annotations.EmbeddedId;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 public class Dog implements DomainObject<Dog.DogPK> {

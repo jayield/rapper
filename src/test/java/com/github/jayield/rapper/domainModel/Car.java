@@ -1,8 +1,8 @@
 package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.EmbeddedId;
-import com.github.jayield.rapper.Version;
+import com.github.jayield.rapper.annotations.EmbeddedId;
+import com.github.jayield.rapper.annotations.Version;
 
 public class Car implements DomainObject<CarKey> {
     @EmbeddedId

@@ -95,11 +95,21 @@ begin atomic
   insert into TopStudent (nif, topGrade, year) values (454, 20, 2017);
 
   insert into Company (id, cid, motto) values (1, 1, 'Living la vida loca');
-  insert into Company (id, cid, motto) values (1, 2, 'Living vida loca');
+  insert into Company (id, cid, motto) values (1, 2, 'Living vida loca2');
+  insert into Company (id, cid, motto) values (1, 3, 'Living vida loca3');
+  insert into Company (id, cid, motto) values (1, 4, 'Living vida loca4');
+  insert into Company (id, cid, motto) values (1, 5, 'Living vida loca5');
+  insert into Company (id, cid, motto) values (1, 6, 'Living vida loca6');
+  insert into Company (id, cid, motto) values (1, 7, 'Living vida loca7');
+  insert into Company (id, cid, motto) values (1, 8, 'Living vida loca8');
+  insert into Company (id, cid, motto) values (1, 9, 'Living vida loca9');
+  insert into Company (id, cid, motto) values (1, 10, 'Living vida loca10');
+  insert into Company (id, cid, motto) values (1, 11, 'Living vida loca11');
 
   insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1);
   insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1);
 
+  insert into Author(name) values ('Manel');
   insert into Author(name) values ('Ze');
   insert into Book(name) values ('1001 noites');
 
