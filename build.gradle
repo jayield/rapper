@@ -3,7 +3,7 @@ plugins {
 }
 
 group 'com.github.jayield'
-version '1.0.3'
+version '1.0.4'
 
 apply plugin: 'maven-publish'
 apply plugin: 'java'
@@ -51,7 +51,7 @@ publishing {
             customizePom(pom)
             groupId 'com.github.jayield'
             artifactId 'rapper'
-            version '1.0.3'
+            version '1.0.4'
 
             from components.java
 
