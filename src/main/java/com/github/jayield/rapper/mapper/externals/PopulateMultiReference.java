@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -38,13 +39,13 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
      * @param idValues
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues, UnitOfWork unit) {
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         Iterator<Object> idValues1 = idValues.iterator();
         Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
                 .map(str -> new Pair<>(str, idValues1.next()))
                 .toArray(Pair[]::new);
 
-        Supplier<CompletableFuture<List<N>>> objects = () -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).findWhere(pairs);
+        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).findWhere(pairs);
 
         try {
             sqlFieldExternal.getField().setAccessible(true);

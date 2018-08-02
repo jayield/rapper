@@ -23,13 +23,13 @@ public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements 
     }
 
     @Override
-    public CompletableFuture<Void> execute(T t, SqlFieldExternal sqlFieldExternal, UnitOfWork unitOfWork) {
-        populate(t, sqlFieldExternal, MapperRegistry.getContainer(sqlFieldExternal.getDomainObjectType()), idValues(t, sqlFieldExternal), unitOfWork);
+    public CompletableFuture<Void> execute(T t, SqlFieldExternal sqlFieldExternal) {
+        populate(t, sqlFieldExternal, MapperRegistry.getContainer(sqlFieldExternal.getDomainObjectType()), idValues(t, sqlFieldExternal));
         return null;
     }
 
     public abstract Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal);
-    public abstract<N extends DomainObject<V>,V> void populate(T t, SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues, UnitOfWork unitOfWork);
+    public abstract<N extends DomainObject<V>,V> void populate(T t, SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues);
 
     /**
      * It will get the value of the primary key from t

@@ -212,7 +212,7 @@ public class UnitOfWork {
                 .collect(Collectors.toList());
     }
 
-    public  <T extends DomainObject<K>, K> CompletableFuture<T> processNewObject(Class<T> type, T t, Comparator<T> comparator) {
+    private <T extends DomainObject<K>, K> CompletableFuture<T> processNewObject(Class<T> type, T t, Comparator<T> comparator) {
         return getIdentityMap(type)
                 .compute(t.getIdentityKey(), (k, tCompletableFuture) ->
                         Optional.ofNullable(tCompletableFuture)

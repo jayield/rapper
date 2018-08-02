@@ -108,7 +108,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(rs -> {
                     logger.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
                     Optional<T> optionalT = stream(rs).findFirst();
-                    optionalT.ifPresent(t -> externalsHandler.populateExternals(t, unit));
+                    optionalT.ifPresent(externalsHandler::populateExternals);
                     return optionalT;
                 })
                 .exceptionally(throwable -> {
@@ -241,7 +241,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         }
         sb.append(" with Unit of Work ").append(unit.hashCode());
         logger.info(sb.toString());
-        return stream(resultSet).peek(t -> externalsHandler.populateExternals(t, unit)).collect(Collectors.toList());
+        return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
     }
 
     private <R> JsonArray prepareFindWhere(Pair<String, R>[] values) {
@@ -252,7 +252,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return SqlUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
                 .thenApply(resultSet -> {
                         logger.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
-                        return stream(resultSet).peek(t -> externalsHandler.populateExternals(t, unit)).collect(Collectors.toList());
+                    return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
                 })
                 .exceptionally(throwable -> {
                     logger.warn(QUERY_ERROR, "FindAll", type.getSimpleName(), unit.hashCode(), throwable.getMessage());

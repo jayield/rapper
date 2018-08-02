@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -47,8 +48,8 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
      * @param idValues
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues, UnitOfWork unit) {
-        Supplier<CompletableFuture<List<N>>> completableFuture = () -> getExternal(unit, t, sqlFieldExternal, idValues);
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
+        Function<UnitOfWork, CompletableFuture<List<N>>> completableFuture = unit -> getExternal(unit, t, sqlFieldExternal, idValues);
 
         try {
             sqlFieldExternal.getField().setAccessible(true);

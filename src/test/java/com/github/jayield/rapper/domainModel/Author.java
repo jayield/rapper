@@ -4,9 +4,11 @@ import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.annotations.Id;
 import com.github.jayield.rapper.annotations.Version;
+import com.github.jayield.rapper.unitofwork.UnitOfWork;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 public class Author implements DomainObject<Long> {
@@ -17,13 +19,13 @@ public class Author implements DomainObject<Long> {
     @Version
     private long version;
     @ColumnName(foreignName = "authorId", table = "BookAuthor", externalName = "bookId")
-    private Supplier<CompletableFuture<List<Book>>> books;
+    private Function<UnitOfWork, CompletableFuture<List<Book>>> books;
 
     public String getName() {
         return name;
     }
 
-    public Supplier<CompletableFuture<List<Book>>> getBooks() {
+    public Function<UnitOfWork, CompletableFuture<List<Book>>> getBooks() {
         return books;
     }
 

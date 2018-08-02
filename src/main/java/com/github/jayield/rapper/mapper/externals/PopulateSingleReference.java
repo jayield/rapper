@@ -14,6 +14,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
@@ -38,7 +39,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
      * @param <V>
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues, UnitOfWork unit) {
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         Object id;
         Constructor<?> externalPrimaryKeyConstructor = container.getMapperSettings().getPrimaryKeyConstructor();
         if (externalPrimaryKeyConstructor == null){
@@ -62,7 +63,7 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
             }
         }
 
-        Supplier<CompletableFuture<N>> futureSupplier = () -> MapperRegistry.getMapper((Class<N>)sqlFieldExternal.getDomainObjectType(), unit)
+        Function<UnitOfWork, CompletableFuture<N>> futureSupplier = unit -> MapperRegistry.getMapper((Class<N>)sqlFieldExternal.getDomainObjectType(), unit)
                 .findById((V) id)
                 .thenApply(domainObject -> domainObject
                         .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
