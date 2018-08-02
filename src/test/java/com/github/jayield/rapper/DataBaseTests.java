@@ -29,6 +29,7 @@ public class DataBaseTests {
         );
 
         assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.connectionsMap.size());
     }
 
     @After

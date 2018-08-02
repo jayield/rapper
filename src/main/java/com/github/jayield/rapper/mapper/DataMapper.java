@@ -1,6 +1,5 @@
 package com.github.jayield.rapper.mapper;
 
-import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
@@ -31,6 +30,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static com.github.jayield.rapper.connections.ConnectionManager.getConnectionManager;
 import static com.github.jayield.rapper.sql.SqlField.*;
 
 public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
@@ -214,7 +214,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         List<CompletableFuture<Void>> completableFutures = new ArrayList<>();
         keys.forEach(k -> completableFutures.add(deleteById(k)));
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
-        //return reduceCompletableFutures(keys, this::deleteById);
     }
 
     private <R> CompletableFuture<List<T>> findWhereAux(String suffix, Pair<String, R>... values){
@@ -370,7 +369,6 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private T mapper(JsonObject rs) {
         try {
-
             T t = (T) mapperSettings.getConstructor().newInstance();
             Constructor primaryKeyConstructor = mapperSettings.getPrimaryKeyConstructor();
             Object primaryKey = primaryKeyConstructor != null ? primaryKeyConstructor.newInstance() : null;
@@ -467,27 +465,22 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return Optional.empty();
     }
 
-    /**
-     *
-     *
-     * @param obj
-     * @param keys
-     */
     private void setGeneratedKeys(T obj, JsonArray keys) {
-        mapperSettings
-                .getIds()
+        mapperSettings.getIds()
                 .stream()
                 .filter(f -> f.isIdentity() && !f.isFromParent())
                 .forEach(field -> {
                     try {
                         field.getField().setAccessible(true);
-                        String url = ConnectionManager.getConnectionManager().getUrl();
-                        field.getField().set(obj,
-                                url.toLowerCase().contains("sqlserver")
-                                        ? field.getField().getType() == Integer.class
-                                            ?  keys.getInteger(0) : keys.getLong(0)
-                                        : keys.getValue(0) //Doesn't work on sqlServer, the type of GeneratedKey is bigDecimal always
-                        );
+
+                        String url = getConnectionManager().getUrl();
+                        Object value;
+                        if (url.toLowerCase().contains("sqlserver"))
+                            value = field.getField().getType() == Integer.class ? (Object) keys.getInteger(0) : keys.getLong(0);
+                        else
+                            value = keys.getValue(0); //Doesn't work on sqlServer, the type of GeneratedKey is always bigDecimal
+
+                        field.getField().set(obj, value);
                     } catch (IllegalAccessException e) {
                         throw new DataMapperException(e);
                     }

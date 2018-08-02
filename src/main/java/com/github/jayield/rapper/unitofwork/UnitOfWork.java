@@ -2,6 +2,8 @@ package com.github.jayield.rapper.unitofwork;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
+import com.github.jayield.rapper.utils.Pair;
 import com.github.jayield.rapper.utils.SqlUtils;
 import com.github.jayield.rapper.connections.ConnectionManager;
 import io.vertx.ext.sql.SQLConnection;
@@ -154,7 +156,6 @@ public class UnitOfWork {
      */
     public CompletableFuture<Void> rollback() {
         try {
-            //System.out.println("connection in rollbak " + connection);
             if(connection != null) {
                 return connection.thenCompose(con -> SqlUtils.callbackToPromise(con::rollback))
                         .thenCompose(v -> closeConnection())
@@ -207,20 +208,25 @@ public class UnitOfWork {
 
     public<T extends DomainObject<K>, K> List<CompletableFuture<T>> processNewObjects(Class<T> type, List<T> tList, Comparator<T> comparator) {
         return tList.stream()
-                .map(t -> getIdentityMap(type).compute(t.getIdentityKey(), (k, tCompletableFuture) ->
-                        computeNewValue(t, Optional.ofNullable(tCompletableFuture).map(completableFuture -> completableFuture.thenApply(t1 -> (T) t1)), comparator)).thenApply(obj -> (T)obj))
+                .map(t -> processNewObject(type, t, comparator))
                 .collect(Collectors.toList());
     }
 
-    private<T extends DomainObject<K>, K> CompletableFuture<T> computeNewValue(T newT, Optional<CompletableFuture<T>> actualFuture, Comparator<T> comparator) {
-        return actualFuture.map(tCompletableFuture -> tCompletableFuture.thenApply(t -> {
-            if(comparator.compare(t, newT) < 0) return newT;
-            return t;
-        }))
-                .orElse(CompletableFuture.completedFuture(newT));
+    public  <T extends DomainObject<K>, K> CompletableFuture<T> processNewObject(Class<T> type, T t, Comparator<T> comparator) {
+        return getIdentityMap(type)
+                .compute(t.getIdentityKey(), (k, tCompletableFuture) ->
+                        Optional.ofNullable(tCompletableFuture)
+                                .map(completableFuture -> completableFuture.thenApply(t1 -> (T) t1))
+                                .map(completableFuture -> completableFuture.thenApply(t1 -> {
+                                    if (comparator.compare(t1, t) < 0) return t;
+                                    return t1;
+                                }))
+                                .orElse(CompletableFuture.completedFuture(t))
+                )
+                .thenApply(obj -> (T) obj);
     }
 
-    public ConcurrentHashMap<Object, CompletableFuture<? extends DomainObject>> getIdentityMap(Class<? extends DomainObject> klass) {
+    public ConcurrentMap<Object, CompletableFuture<? extends DomainObject>> getIdentityMap(Class<? extends DomainObject> klass) {
         return identityMap.computeIfAbsent(klass, aClass -> new ConcurrentHashMap<>());
     }
 }

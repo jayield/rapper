@@ -42,10 +42,6 @@ public class MapperRegistry {
         return getContainer(type).getMapperSettings();
     }
 
-//    public static <T extends DomainObject<K>, K> Mapper<T, K> getMapper(Class<T> type){
-//        return getContainer(type).getMapper();
-//    }
-
     public static class Container<T extends DomainObject<K>, K>{
         private final MapperSettings mapperSettings;
         private final ExternalsHandler<T, K> externalsHandler;

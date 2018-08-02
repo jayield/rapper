@@ -20,8 +20,6 @@ public class SqlUtils {
     private SqlUtils() {
     }
 
-    private static final Logger logger = LoggerFactory.getLogger(SqlUtils.class);
-
     public static CompletableFuture<ResultSet> query(String sql, UnitOfWork unit, JsonArray params){
         CompletableFuture<SQLConnection> con = unit.getConnection();
         return con.thenCompose(connection -> callbackToPromise(ar -> connection.queryWithParams(sql, params, ar)));

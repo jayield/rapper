@@ -11,7 +11,7 @@ public interface SqlFunction<T,R> {
     default Function<T,R> wrap(){
         return t -> {
             try{ return this.apply(t); }
-            catch (Exception e){//TODO
+            catch (Exception e){
                 throw new DataMapperException(e);
             }
         };

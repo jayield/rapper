@@ -70,9 +70,6 @@ public class SqlFieldExternal extends SqlField{
         else {
             Type[] typeArguments = ((ParameterizedType) field.getGenericType()).getActualTypeArguments();
 
-//                if(typeArguments[0] != UnitOfWork.class)
-//                    throw new DataMapperException("The field annotated with @ColumnName must be a Function<UnitOfWork, CompletableFuture>");
-
             Type genericType = typeArguments[0];
             if(((ParameterizedType) genericType).getRawType() != CompletableFuture.class)
                 throw new DataMapperException("The field annotated with @ColumnName must be a Supplier<CompletableFuture>");

@@ -31,25 +31,6 @@ public abstract class AbstractPopulate<T extends DomainObject<K>, K> implements 
     public abstract Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal);
     public abstract<N extends DomainObject<V>,V> void populate(T t, SqlFieldExternal sqlFieldExternal, MapperRegistry.Container<N, V> container, Stream<Object> idValues, UnitOfWork unitOfWork);
 
-
-    /**
-     * Sets the field of T with the List passed in the parameters
-     * The field must be a collection or a Supplier
-     *
-     * @param t
-     * @param futureSupplier
-     * @param field
-     * @throws DataMapperException
-     */
-    /*protected <R> void setExternal(T t, Function<UnitOfWork, CompletableFuture<R>> futureSupplier, Field field) {
-        try {
-            field.setAccessible(true);
-            field.set(t, futureSupplier);
-        } catch (IllegalAccessException e) {
-            throw new DataMapperException(e);
-        }
-    }
-*/
     /**
      * It will get the value of the primary key from t
      *

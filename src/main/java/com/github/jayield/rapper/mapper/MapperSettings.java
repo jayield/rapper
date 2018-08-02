@@ -340,7 +340,7 @@ public class MapperSettings {
         return versionField;
     }
 
-    public Constructor<?> getConstructor() {
+    public Constructor getConstructor() {
         return constructor;
     }
 }
