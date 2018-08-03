@@ -18,7 +18,7 @@ public class ExternalsHandlerTests {
 
     @Before
     public void before() {
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
                 "SA",
@@ -34,7 +34,7 @@ public class ExternalsHandlerTests {
 
     @After
     public void after() {
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
     }
 
     /*@Test

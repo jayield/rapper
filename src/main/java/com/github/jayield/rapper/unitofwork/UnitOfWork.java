@@ -23,8 +23,16 @@ import java.util.stream.Collectors;
 public class UnitOfWork {
     private static final String UNSUCCESSFUL_COMMIT_MESSAGE = "{} - Rolling back changes due to {}";
     private static final Logger logger = LoggerFactory.getLogger(UnitOfWork.class);
-    public static final AtomicInteger numberOfOpenConnections = new AtomicInteger(0);
-    public static final ConcurrentMap<SQLConnection, StackTraceElement[]> connectionsMap = new ConcurrentHashMap<>();
+    private static final AtomicInteger numberOfOpenConnections = new AtomicInteger(0);
+    private static final ConcurrentMap<SQLConnection, StackTraceElement[]> connectionsMap = new ConcurrentHashMap<>();
+
+    public static AtomicInteger getNumberOfOpenConnections() {
+        return numberOfOpenConnections;
+    }
+
+    public static ConcurrentMap<SQLConnection, StackTraceElement[]> getConnectionsMap() {
+        return connectionsMap;
+    }
 
     private CompletableFuture<SQLConnection> connection = null;
     private final Supplier<CompletableFuture<SQLConnection>> connectionSupplier;
