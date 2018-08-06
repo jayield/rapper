@@ -42,7 +42,7 @@ public class DataMapperTests {
 
     @Before
     public void start() {
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
         ConnectionManager manager = ConnectionManager.getConnectionManager(
                 "jdbc:hsqldb:file:" + URLDecoder.decode(this.getClass().getClassLoader().getResource("testdb").getPath()) + "/testdb",
                 "SA", "");
@@ -69,7 +69,7 @@ public class DataMapperTests {
     @After
     public void after() {
         unit.rollback().join();
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
     }
 
     @Test

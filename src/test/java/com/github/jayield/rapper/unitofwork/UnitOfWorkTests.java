@@ -69,7 +69,7 @@ public class UnitOfWorkTests {
     @Before
     public void before()throws NoSuchFieldException, IllegalAccessException {
         //UnitOfWork.connectionsMap.values().forEach(array -> System.out.println(Arrays.toString(array)));
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
         containerMap.clear();
 
         ConnectionManager manager = ConnectionManager.getConnectionManager(
@@ -91,7 +91,7 @@ public class UnitOfWorkTests {
 
     @After
     public void after() {
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
     }
 
     @Test
@@ -146,7 +146,7 @@ public class UnitOfWorkTests {
 
     @Test
     public void testTransaction() {
-        logger.info("Number of Openned connections - {}", UnitOfWork.numberOfOpenConnections.get());
+        logger.info("Number of Openned connections - {}", UnitOfWork.getNumberOfOpenConnections().get());
         ConnectionManager connectionManager = ConnectionManager.getConnectionManager();
         SqlSupplier<CompletableFuture<SQLConnection>> connectionSqlSupplier = () -> connectionManager.getConnection(TransactionIsolation.READ_UNCOMMITTED.getType());
 

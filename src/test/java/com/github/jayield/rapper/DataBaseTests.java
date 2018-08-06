@@ -28,13 +28,13 @@ public class DataBaseTests {
                 ""
         );
 
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
-        assertEquals(0, UnitOfWork.connectionsMap.size());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
+        assertEquals(0, UnitOfWork.getConnectionsMap().size());
     }
 
     @After
     public void after() {
-        assertEquals(0, UnitOfWork.numberOfOpenConnections.get());
+        assertEquals(0, UnitOfWork.getNumberOfOpenConnections().get());
     }
 
     @Test
