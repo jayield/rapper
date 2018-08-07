@@ -1,6 +1,7 @@
 package com.github.jayield.rapper;
 
 import com.github.jayield.rapper.mapper.Mapper;
+import com.github.jayield.rapper.utils.Condition;
 import com.github.jayield.rapper.utils.Pair;
 
 import java.util.List;
@@ -10,19 +11,17 @@ import java.util.concurrent.CompletableFuture;
 public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private final Mapper<T, K> other;
-    private final ICounter<Void, CompletableFuture<List<T>>> ifindAll;
     private final ICounter<K, CompletableFuture<Optional<T>>> ifindById;
-    private final ICounter<Pair<String, Object>[], CompletableFuture<List<T>>> ifindWhere;
+    private final ICounter<Condition<?>[], CompletableFuture<List<T>>> ifind;
 
     public Mapperify(Mapper<T, K> other){
         this.other = other;
         ifindById = Countify.of(other::findById);
-        ifindAll = Countify.of(i -> other.findAll());
-        ifindWhere = Countify.of(other::findWhere);
+        ifind = Countify.of(other::find);
     }
 
     @Override
-    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
+    public CompletableFuture<Long> getNumberOfEntries(Condition<?>... values) {
         return other.getNumberOfEntries(values);
     }
 
@@ -32,28 +31,18 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        return ifindWhere.apply((Pair<String, Object>[]) values);
+    public CompletableFuture<List<T>> find(Condition<?>... values) {
+        return ifind.apply(values);
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
-        return other.findWhere(page, numberOfItems, values);
+    public CompletableFuture<List<T>> find(int page, int numberOfItems, Condition<?>... values) {
+        return other.find(page, numberOfItems, values);
     }
 
     @Override
     public CompletableFuture<Optional<T>> findById(K k) {
         return ifindById.apply(k);
-    }
-
-    @Override
-    public CompletableFuture<List<T>> findAll() {
-        return ifindAll.apply(null);
-    }
-
-    @Override
-    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
-        return other.findAll(page, numberOfItems);
     }
 
     @Override
@@ -91,15 +80,11 @@ public class Mapperify<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return other.deleteAll(keys);
     }
 
-    public ICounter<Void, CompletableFuture<List<T>>> getIfindAll() {
-        return ifindAll;
-    }
-
     public ICounter<K, CompletableFuture<Optional<T>>> getIfindById() {
         return ifindById;
     }
 
-    public ICounter<Pair<String, Object>[], CompletableFuture<List<T>>> getIfindWhere() {
-        return ifindWhere;
+    public ICounter<Condition<?>[], CompletableFuture<List<T>>> getIfind() {
+        return ifind;
     }
 }

@@ -68,7 +68,7 @@ public class ExternalsHandlerTests {
         //-------------------N-N Relation-------------------//
         //Arrange
         DataRepository<Author, Long> authorRepo = MapperRegistry.getRepository(Author.class);
-        List<Author> authors = authorRepo.findWhere(unit, new Pair<>("name", "Ze")).join();
+        List<Author> authors = authorRepo.find(unit, new Pair<>("name", "Ze")).join();
         assertEquals(1, authors.size());
         Author author = authors.get(0);
 
@@ -76,7 +76,7 @@ public class ExternalsHandlerTests {
         DataRepository<Book, Long> bookRepo = MapperRegistry.getRepository(Book.class);
         ExternalsHandler<Book, Long> bookEH = MapperRegistry.getExternal(Book.class);
 
-        List<Book> books = bookRepo.findWhere(unit, new Pair<>("name", "1001 noites")).join();
+        List<Book> books = bookRepo.find(unit, new Pair<>("name", "1001 noites")).join();
         assertEquals(1, books.size());
 
         Book book = books.get(0);
@@ -101,7 +101,7 @@ public class ExternalsHandlerTests {
         ExternalsHandler<Employee, Integer> employeeEH = MapperRegistry.getExternal(Employee.class);
 
         DataRepository<Employee, Integer> employeeRepo = MapperRegistry.getRepository(Employee.class);
-        List<Employee> employees = employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join();
+        List<Employee> employees = employeeRepo.find(unit, new Pair<>("name", "Bob")).join();
         assertEquals(1, employees.size());
 
         Employee employee = employees.get(0);
@@ -119,7 +119,7 @@ public class ExternalsHandlerTests {
         //-------------------N-N Relation-------------------//
         //Arrange
         DataRepository<Author, Long> authorRepo = MapperRegistry.getRepository(Author.class);
-        List<Author> authors = authorRepo.findWhere(unit, new Pair<>("name", "Ze")).join();
+        List<Author> authors = authorRepo.find(unit, new Pair<>("name", "Ze")).join();
         assertEquals(1, authors.size());
         Author author = authors.get(0);
 
@@ -176,7 +176,7 @@ public class ExternalsHandlerTests {
                 .thenApply(company1 -> company1.orElseThrow(object_not_found));
 
         DataRepository<Employee, Integer> employeeRepo = MapperRegistry.getRepository(Employee.class);
-        List<Employee> employees = employeeRepo.findWhere(unit, new Pair<>("name", "Bob")).join();
+        List<Employee> employees = employeeRepo.find(unit, new Pair<>("name", "Bob")).join();
         assertEquals(1, employees.size());
 
         Employee oldEmployee = employees.get(0);
@@ -196,10 +196,10 @@ public class ExternalsHandlerTests {
         //-------------------N-N Relation-------------------//
         //Arrange
         DataRepository<Author, Long> authorRepo = MapperRegistry.getRepository(Author.class);
-        List<Author> authors = authorRepo.findWhere(unit, new Pair<>("name", "Ze")).join();
+        List<Author> authors = authorRepo.find(unit, new Pair<>("name", "Ze")).join();
         assertEquals(1, authors.size());
         Author authorZe = authors.get(0);
-        authors = authorRepo.findWhere(unit, new Pair<>("name", "Manel")).join();
+        authors = authorRepo.find(unit, new Pair<>("name", "Manel")).join();
         assertEquals(1, authors.size());
         Author authorManel = authors.get(0);
 
@@ -210,7 +210,7 @@ public class ExternalsHandlerTests {
                 .thenApply(author1 -> author1.orElseThrow(object_not_found))
                 .thenApply(Arrays::asList);
 
-        List<Book> books = bookRepo.findWhere(unit, new Pair<>("name", "1001 noites")).join();
+        List<Book> books = bookRepo.find(unit, new Pair<>("name", "1001 noites")).join();
         assertEquals(1, books.size());
 
         Book oldBook = books.get(0);

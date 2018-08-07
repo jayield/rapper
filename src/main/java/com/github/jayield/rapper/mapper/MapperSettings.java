@@ -179,7 +179,7 @@ public class MapperSettings {
                 .map(SqlField::getName)
                 .collect(Collectors.toList());
 
-        pagination = " order by " + idName.stream().collect(Collectors.joining(", ")) + " offset %d rows fetch next %d rows only";
+        pagination = " order by " + idName.stream().collect(Collectors.joining(", "));
 
         List<String> columnsNames = Stream.concat(
                 columns

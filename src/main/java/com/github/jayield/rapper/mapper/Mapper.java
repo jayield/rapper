@@ -1,6 +1,7 @@
 package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.DomainObject;
+import com.github.jayield.rapper.utils.Condition;
 import com.github.jayield.rapper.utils.Pair;
 
 import java.util.List;
@@ -13,7 +14,7 @@ public interface Mapper<T extends DomainObject<K>, K> {
      * It will query the DB for how many entries does the table have where the condition matches.
      * @return number of entries that the table currently has.
      */
-    <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values);
+    CompletableFuture<Long> getNumberOfEntries(Condition<?>... values);
 
     /**
      * It will query the DB for how many entries does the table have.
@@ -24,19 +25,17 @@ public interface Mapper<T extends DomainObject<K>, K> {
     /**
      * It will try to locate T with the given properties passed in values
      * @param values a pair containing the properties to search T, the key must be the name of the column and the value the expected value of the column
-     * @param <R> The type of the column
      * @return a list of T's which match with the properties passed
      */
-    <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values);
+    CompletableFuture<List<T>> find(Condition<?>... values);
 
     /**
      * It will try to locate T with the given properties passed in values
      * @param page page to locate the T's
      * @param values a pair containing the properties to search T, the key must be the name of the column and the value the expected value of the column
-     * @param <R> The type of the column
      * @return a list of T's which match with the properties passed
      */
-    <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values);
+    CompletableFuture<List<T>> find(int page, int numberOfItems, Condition<?>... values);
 
     /**
      * Tries to locate T with the given key K
@@ -44,19 +43,6 @@ public interface Mapper<T extends DomainObject<K>, K> {
      * @return Optional of T
      */
     CompletableFuture<Optional<T>> findById(K k);
-
-    /**
-     * Returns all T present in the database
-     * @return List of all T present in the database
-     */
-    CompletableFuture<List<T>> findAll();
-
-    /**
-     * Returns all T present in from the correspondent page passed
-     * @param page page to locate the T's
-     * @return List of T's
-     */
-    CompletableFuture<List<T>> findAll(int page, int numberOfItems);
 
     /**
      * It will insert t into the database

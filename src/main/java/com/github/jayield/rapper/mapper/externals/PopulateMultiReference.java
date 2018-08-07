@@ -31,7 +31,7 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     }
 
     /**
-     * Will call the external object's mapper's findWhere with T's ids to find the external objects who are referenced by T
+     * Will call the external object's mapper's find with T's ids to find the external objects who are referenced by T
      *
      * @param t
      * @param sqlFieldExternal
@@ -41,11 +41,11 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     @Override
     public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         Iterator<Object> idValues1 = idValues.iterator();
-        Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
-                .map(str -> new Pair<>(str, idValues1.next()))
-                .toArray(Pair[]::new);
+        EqualCondition<Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
+                .map(str -> new EqualCondition<>(str, idValues1.next()))
+                .toArray(EqualCondition[]::new);
 
-        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).findWhere(pairs);
+        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).find(pairs);
 
         try {
             sqlFieldExternal.getField().setAccessible(true);
