@@ -2,6 +2,9 @@ package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.conditions.Condition;
+import com.github.jayield.rapper.mapper.conditions.EqualCondition;
+import com.github.jayield.rapper.mapper.conditions.OrderCondition;
 import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
 import com.github.jayield.rapper.sql.SqlField;
 import com.github.jayield.rapper.sql.SqlFieldExternal;

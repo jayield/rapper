@@ -9,6 +9,7 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.Mapper;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.mapper.conditions.EqualCondition;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;

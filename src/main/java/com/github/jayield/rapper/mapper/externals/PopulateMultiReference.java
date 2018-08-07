@@ -4,9 +4,9 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.mapper.conditions.EqualCondition;
 import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
-import com.github.jayield.rapper.utils.*;
 import com.github.jayield.rapper.mapper.MapperRegistry.Container;
 
 import java.util.Arrays;
@@ -14,7 +14,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class PopulateMultiReference<T extends DomainObject<K>, K> extends AbstractPopulate<T, K> {

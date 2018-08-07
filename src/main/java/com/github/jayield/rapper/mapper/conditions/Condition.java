@@ -1,4 +1,4 @@
-package com.github.jayield.rapper.utils;
+package com.github.jayield.rapper.mapper.conditions;
 
 public class Condition<T> {
     private final String columnName;

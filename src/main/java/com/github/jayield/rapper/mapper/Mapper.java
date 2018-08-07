@@ -1,8 +1,7 @@
 package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.DomainObject;
-import com.github.jayield.rapper.utils.Condition;
-import com.github.jayield.rapper.utils.Pair;
+import com.github.jayield.rapper.mapper.conditions.Condition;
 
 import java.util.List;
 import java.util.Optional;
