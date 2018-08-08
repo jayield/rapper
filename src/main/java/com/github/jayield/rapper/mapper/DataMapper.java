@@ -111,7 +111,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(rs -> {
                     logger.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
                     Optional<T> optionalT = stream(rs).findFirst();
-                    optionalT.ifPresent(externalsHandler::populateExternals);
+                    optionalT.ifPresent(this::handleExternals);
                     return optionalT;
                 })
                 .exceptionally(throwable -> {
@@ -124,7 +124,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Void> create(T obj) {
         unit.registerNew(obj);
-        Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
+        Optional<DataMapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         return parentMapper.map(parent -> parent.create(obj))
                 .orElse(CompletableFuture.completedFuture(null))
@@ -139,7 +139,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Void> update(T obj) {
         unit.registerDirty(obj);
-        Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
+        Optional<DataMapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         if (parentMapper.isPresent()) {
             return parentMapper
@@ -207,6 +207,12 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
+    private void handleExternals(T t) {
+        Optional<DataMapper<? super T, ? super K>> parentMapper = getParentMapper();
+        parentMapper.ifPresent(mapper -> mapper.handleExternals(t));
+        externalsHandler.populateExternals(t);
+    }
+
     private CompletableFuture<List<T>> findAux(Query query, Condition<?>[] values) {
         return SqlUtils.query(query.getQueryString(), unit, prepareFind(values))
                 .thenApply(resultSet -> processFind(resultSet, query.getConditions()))
@@ -222,7 +228,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
     private List<T> processFind(ResultSet resultSet, String conditions) {
         logger.info("Queried database for {} {} with Unit of Work {}", type.getSimpleName(), conditions, unit.hashCode());
-        return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
+        return stream(resultSet).peek(this::handleExternals).collect(Collectors.toList());
     }
 
     private CompletableFuture<Void> createAux(T obj) {
@@ -421,10 +427,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
      *
      * @return Optional of DataMapper or empty Optional
      */
-    private Optional<Mapper<? super T, ? super K>> getParentMapper() {
+    private Optional<DataMapper<? super T, ? super K>> getParentMapper() {
         Class<? super T> aClass = type.getSuperclass();
         if (aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            Mapper<? super T, ? super K> classMapper = MapperRegistry.getMapper((Class<DomainObject>) aClass, unit);
+            DataMapper<? super T, ? super K> classMapper = MapperRegistry.getMapper((Class<DomainObject>) aClass, unit);
             return Optional.of(classMapper);
         }
         return Optional.empty();
