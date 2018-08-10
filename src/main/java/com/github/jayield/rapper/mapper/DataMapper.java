@@ -4,6 +4,7 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.conditions.Condition;
 import com.github.jayield.rapper.mapper.conditions.EqualCondition;
+import com.github.jayield.rapper.mapper.conditions.LikeCondition;
 import com.github.jayield.rapper.mapper.conditions.OrderCondition;
 import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
 import com.github.jayield.rapper.sql.SqlField;
@@ -214,8 +215,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     private CompletableFuture<List<T>> findAux(Query query, Condition<?>[] values) {
-        return SqlUtils.query(query.getQueryString(), unit, prepareFind(values))
-                .thenApply(resultSet -> processFind(resultSet, query.getConditions()))
+        JsonArray params = prepareFind(values);
+        return SqlUtils.query(query.getQueryString(), unit, params)
+                .thenApply(resultSet -> processFind(resultSet, query.getConditions(), params))
                 .exceptionally(throwable -> {
                     logger.warn(QUERY_ERROR, "Find", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
                     throw new DataMapperException(throwable);
@@ -226,8 +228,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return Arrays.stream(values).map(Condition::getValue).filter(Objects::nonNull).collect(CollectionUtils.toJsonArray());
     }
 
-    private List<T> processFind(ResultSet resultSet, String conditions) {
-        logger.info("Queried database for {} {} with Unit of Work {}", type.getSimpleName(), conditions, unit.hashCode());
+    private List<T> processFind(ResultSet resultSet, String conditions, JsonArray params) {
+        for (int i = 0; i < params.size(); i++) conditions = conditions.replaceFirst("\\?", params.getValue(i).toString());
+        logger.info("Queried database for {}{} with Unit of Work {}", type.getSimpleName(), conditions, unit.hashCode());
         return stream(resultSet).peek(this::handleExternals).collect(Collectors.toList());
     }
 
@@ -493,6 +496,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             //Where
             List<Condition<?>> conditionList = conditionsMap.getOrDefault(Condition.class, new ArrayList<>());
             conditionList.addAll(conditionsMap.getOrDefault(EqualCondition.class, new ArrayList<>()));
+            conditionList.addAll(conditionsMap.getOrDefault(LikeCondition.class, new ArrayList<>()));
             sb.append(conditionList.isEmpty() ? "" : getWhereCondition(conditionList));
 
             //Order By
