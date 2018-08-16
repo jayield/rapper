@@ -4,7 +4,7 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
-import com.github.jayield.rapper.mapper.conditions.EqualCondition;
+import com.github.jayield.rapper.mapper.conditions.EqualAndCondition;
 import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
 import com.github.jayield.rapper.mapper.MapperRegistry.Container;
@@ -40,9 +40,9 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     @Override
     public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         Iterator<Object> idValues1 = idValues.iterator();
-        EqualCondition<Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
-                .map(str -> new EqualCondition<>(str, idValues1.next()))
-                .toArray(EqualCondition[]::new);
+        EqualAndCondition<Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
+                .map(str -> new EqualAndCondition<>(str, idValues1.next()))
+                .toArray(EqualAndCondition[]::new);
 
         Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).find(pairs);
 

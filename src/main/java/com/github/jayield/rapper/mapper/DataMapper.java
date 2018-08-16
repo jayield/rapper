@@ -2,10 +2,7 @@ package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
-import com.github.jayield.rapper.mapper.conditions.Condition;
-import com.github.jayield.rapper.mapper.conditions.EqualCondition;
-import com.github.jayield.rapper.mapper.conditions.LikeCondition;
-import com.github.jayield.rapper.mapper.conditions.OrderCondition;
+import com.github.jayield.rapper.mapper.conditions.*;
 import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
 import com.github.jayield.rapper.sql.SqlField;
 import com.github.jayield.rapper.sql.SqlFieldExternal;
@@ -493,15 +490,20 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
 
             StringBuilder sb = new StringBuilder();
 
-            //Where
-            List<Condition<?>> conditionList = conditionsMap.getOrDefault(Condition.class, new ArrayList<>());
-            conditionList.addAll(conditionsMap.getOrDefault(EqualCondition.class, new ArrayList<>()));
-            conditionList.addAll(conditionsMap.getOrDefault(LikeCondition.class, new ArrayList<>()));
-            sb.append(conditionList.isEmpty() ? "" : getWhereCondition(conditionList));
+            //Where AND
+            List<Condition<?>> whereConditionList = conditionsMap.getOrDefault(Condition.class, new ArrayList<>());
+            whereConditionList.addAll(conditionsMap.getOrDefault(EqualAndCondition.class, new ArrayList<>()));
+            whereConditionList.addAll(conditionsMap.getOrDefault(LikeCondition.class, new ArrayList<>()));
+            sb.append(whereConditionList.isEmpty() ? "" : getWhereCondition(whereConditionList, " AND "));
+
+            //Where OR
+            List<Condition<?>> orConditionList = conditionsMap.getOrDefault(EqualOrCondition.class, new ArrayList<>());
+            sb.append(orConditionList.isEmpty() ? "" : getWhereCondition(orConditionList, " OR "));
 
             //Order By
             List<Condition<?>> orderConditionList = conditionsMap.getOrDefault(OrderCondition.class, new ArrayList<>());
             sb.append(orderConditionList.isEmpty() ? pagination : getOrderByCondition(orderConditionList));
+
 
             conditions = sb.toString();
             queryString = selectQuery + conditions + suffix;
@@ -513,10 +515,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                     .collect(Collectors.joining(", ", " ORDER BY ", ""));
         }
 
-        private String getWhereCondition(List<Condition<?>> conditionList) {
+        private String getWhereCondition(List<Condition<?>> conditionList, String delimeter) {
             return conditionList.stream()
                     .map(condition -> String.format("%s %s ?", condition.getColumnName(), condition.getComparand()))
-                    .collect(Collectors.joining(" AND ", " WHERE ", ""));
+                    .collect(Collectors.joining(delimeter, " WHERE ", ""));
         }
 
         public String getConditions() {
