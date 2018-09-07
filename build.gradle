@@ -5,6 +5,12 @@ plugins {
 group 'com.github.jayield'
 version '1.0.4'
 
+tasks.whenTaskAdded {task ->
+    if(task.name.contains("signArchives")) {
+        task.enabled = false
+    }
+}
+
 apply plugin: 'maven-publish'
 apply plugin: 'java'
 apply plugin: 'signing'
