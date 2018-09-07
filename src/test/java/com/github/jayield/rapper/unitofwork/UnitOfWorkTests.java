@@ -7,7 +7,7 @@ import com.github.jayield.rapper.mapper.DataMapper;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.sql.SqlSupplier;
 import com.github.jayield.rapper.AssertUtils;
-import com.github.jayield.rapper.utils.Pair;
+import com.github.jayield.rapper.mapper.conditions.EqualAndCondition;
 import com.github.jayield.rapper.utils.SqlUtils;
 import io.vertx.core.json.JsonArray;
 import io.vertx.ext.sql.ResultSet;
@@ -152,8 +152,8 @@ public class UnitOfWorkTests {
 
         employeeRepo = MapperRegistry.getMapper(Employee.class, unit);
 
-        Employee employee = employeeRepo.findWhere(new Pair<>("name", "Bob")).join().get(0);
-        Employee employee2 = employeeRepo.findWhere(new Pair<>("name", "Charles")).join().get(0);
+        Employee employee = employeeRepo.find(new EqualAndCondition<>("name", "Bob")).join().get(0);
+        Employee employee2 = employeeRepo.find(new EqualAndCondition<>("name", "Charles")).join().get(0);
         unit.commit().join();
 
         UnitOfWork unitOfWork = new UnitOfWork(connectionSqlSupplier.wrap());
@@ -169,8 +169,8 @@ public class UnitOfWorkTests {
                 .thenCompose(voidCompletableFuture -> unitOfWork.commit())
                 .join();
 
-        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Bob")).join().isEmpty());
-        assertTrue(employeeRepo.findWhere(new Pair<>("name", "Charles")).join().isEmpty());
+        assertTrue(employeeRepo.find(new EqualAndCondition<>("name", "Bob")).join().isEmpty());
+        assertTrue(employeeRepo.find(new EqualAndCondition<>("name", "Charles")).join().isEmpty());
         assertTrue(!companyRepo.findById(new Company.PrimaryKey(1, 1)).join().isPresent());
         unit.rollback().join();
         unitOfWork.rollback().join();

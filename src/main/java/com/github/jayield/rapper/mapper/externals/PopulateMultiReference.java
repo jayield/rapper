@@ -4,9 +4,9 @@ import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
+import com.github.jayield.rapper.mapper.conditions.EqualAndCondition;
 import com.github.jayield.rapper.sql.SqlFieldExternal;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
-import com.github.jayield.rapper.utils.*;
 import com.github.jayield.rapper.mapper.MapperRegistry.Container;
 
 import java.util.Arrays;
@@ -14,7 +14,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class PopulateMultiReference<T extends DomainObject<K>, K> extends AbstractPopulate<T, K> {
@@ -31,7 +30,7 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     }
 
     /**
-     * Will call the external object's mapper's findWhere with T's ids to find the external objects who are referenced by T
+     * Will call the external object's mapper's find with T's ids to find the external objects who are referenced by T
      *
      * @param t
      * @param sqlFieldExternal
@@ -41,11 +40,11 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
     @Override
     public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
         Iterator<Object> idValues1 = idValues.iterator();
-        Pair<String, Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
-                .map(str -> new Pair<>(str, idValues1.next()))
-                .toArray(Pair[]::new);
+        EqualAndCondition<Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
+                .map(str -> new EqualAndCondition<>(str, idValues1.next()))
+                .toArray(EqualAndCondition[]::new);
 
-        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).findWhere(pairs);
+        Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).find(pairs);
 
         try {
             sqlFieldExternal.getField().setAccessible(true);

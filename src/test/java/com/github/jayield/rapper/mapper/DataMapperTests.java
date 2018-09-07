@@ -4,10 +4,13 @@ import com.github.jayield.rapper.AssertUtils;
 import com.github.jayield.rapper.connections.ConnectionManager;
 import com.github.jayield.rapper.domainModel.*;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.conditions.Condition;
+import com.github.jayield.rapper.mapper.conditions.EqualAndCondition;
+import com.github.jayield.rapper.mapper.conditions.EqualOrCondition;
+import com.github.jayield.rapper.mapper.conditions.OrderCondition;
 import com.github.jayield.rapper.mapper.externals.Foreign;
 import com.github.jayield.rapper.utils.SqlUtils;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
-import com.github.jayield.rapper.utils.*;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.sql.ResultSet;
@@ -74,7 +77,7 @@ public class DataMapperTests {
 
     @Test
     public void testGetNumberOfEntriesWhere(){
-        long numberOfEntries = companyMapper.getNumberOfEntries(new Pair<>("id", 1)).join();
+        long numberOfEntries = companyMapper.getNumberOfEntries(new EqualAndCondition<>("id", 1)).join();
         assertEquals(11, numberOfEntries);
     }
 
@@ -87,7 +90,7 @@ public class DataMapperTests {
     //-----------------------------------FindWhere-----------------------------------//
     @Test
     public void testSimpleFindWhere() {
-        List<Person> people = personMapper.findWhere(new Pair<>("name", "Jose")).join();
+        List<Person> people = personMapper.find(new EqualAndCondition<>("name", "Jose")).join();
 
         SQLConnection con = unit.getConnection().join();
         SqlUtils.<ResultSet>callbackToPromise(ar ->
@@ -102,8 +105,60 @@ public class DataMapperTests {
     }
 
     @Test
+    public void testSimpleFindWhereWithOrAsDelimiter(){
+        List<Person> people = personMapper.find(new EqualOrCondition<>("name", "Jose"), new EqualOrCondition<>("name", "Nuno")).join();
+
+        JsonArray jsonArray = new JsonArray();
+        jsonArray.add("Jose");
+        jsonArray.add("Nuno");
+
+        SQLConnection con = unit.getConnection().join();
+        SqlUtils.<ResultSet>callbackToPromise(ar ->
+                con.queryWithParams("select nif, name, birthday, CAST(version as bigint) version from Person where name = ? OR name = ?",
+                        jsonArray, ar))
+                .thenAccept(resultSet -> {
+                    if(resultSet.getRows(true).isEmpty())
+                        fail("Database has no data");
+                    assertPerson(people.get(0), resultSet.getRows(true).get(0));
+                    assertPerson(people.get(1), resultSet.getRows(true).get(1));
+                })
+                .join();
+    }
+
+    @Test
+    public void testSimpleFindWhereWithComparand() {
+        List<Person> people = personMapper.find(new Condition<>("nif", "<", 454)).join();
+
+        SQLConnection con = unit.getConnection().join();
+        SqlUtils.<ResultSet>callbackToPromise(ar ->
+                con.queryWithParams("select nif, name, birthday, CAST(version as bigint) version from Person where name = ?",
+                        new JsonArray().add("Jose"), ar))
+                .thenAccept(resultSet -> {
+                    if(resultSet.getRows(true).isEmpty())
+                        fail("Database has no data");
+                    assertPerson(people.remove(0), resultSet.getRows(true).get(0));
+                })
+                .join();
+    }
+
+    @Test
+    public void testSimpleFindWhereWithOrderBy() {
+        List<Company> companies = companyMapper.find(OrderCondition.desc("cid")).join();
+
+        SQLConnection con = unit.getConnection().join();
+        SqlUtils.<ResultSet>callbackToPromise(ar ->
+                con.queryWithParams(companySelectQuery, new JsonArray().add("1").add(11), ar))
+                .thenAccept(resultSet -> {
+                    if(resultSet.getRows(true).isEmpty())
+                        fail("Database has no data");
+                    assertCompany(companies.remove(0), resultSet.getRows(true).get(0));
+                })
+                .join();
+    }
+
+    @Test
     public void testEmbeddedIdFindWhere() {
-        List<Car> cars = carMapper.findWhere(new Pair<>("brand", "Mitsubishi")).join();
+        List<Car> cars = carMapper.find(new EqualAndCondition<>("brand", "Mitsubishi")).join();
 
         SQLConnection con = unit.getConnection().join();
 
@@ -121,26 +176,26 @@ public class DataMapperTests {
 
     @Test
     public void testNNExternalFindWhere(){
-        Book book = bookMapper.findWhere(new Pair<>("name", "1001 noites")).join().get(0);
+        Book book = bookMapper.find(new EqualAndCondition<>("name", "1001 noites")).join().get(0);
 
         assertSingleRow(book, bookSelectQuery, new JsonArray().add(book.getName()), (book1, rs) -> AssertUtils.assertBook(book1, rs, unit), unit.getConnection().join());
     }
 
     @Test
     public void testParentExternalFindWhere(){
-        Employee employee = employeeMapper.findWhere(new Pair<>("name", "Bob")).join().get(0);
+        Employee employee = employeeMapper.find(new EqualAndCondition<>("name", "Bob")).join().get(0);
         assertSingleRow(employee, employeeSelectQuery, new JsonArray().add("Bob"), AssertUtils::assertEmployee, unit.getConnection().join());
     }
 
     @Test
     public void testPaginationFindWhere() {
-        List<Company> companies = companyMapper.findWhere(0, 10, new Pair<>("id", 1)).join();
+        List<Company> companies = companyMapper.find(0, 10, new EqualAndCondition<>("id", 1)).join();
         assertMultipleRows(unit.getConnection().join(), companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
     }
 
     @Test
     public void testSecondPageFindWhere() {
-        List<Company> companies = companyMapper.findWhere(1, 10, new Pair<>("id", 1)).join();
+        List<Company> companies = companyMapper.find(1, 10, new EqualAndCondition<>("id", 1)).join();
         assertEquals(1, companies.size());
         assertSingleRow(companies.get(0), companySelectQuery, new JsonArray().add(1).add(11), AssertUtils::assertCompany, unit.getConnection().join());
     }
@@ -192,27 +247,27 @@ public class DataMapperTests {
     //-----------------------------------FindAll-----------------------------------//
     @Test
     public void testSimpleFindAll(){
-        List<Person> people = personMapper.findAll().join();
+        List<Person> people = personMapper.find().join();
         assertMultipleRows(unit.getConnection().join(), people, "select nif, name, birthday, CAST(version as bigint) version from Person", AssertUtils::assertPerson, 2);
     }
 
     @Test
     public void testEmbeddedIdFindAll() {
         SQLConnection con = unit.getConnection().join();
-        List<Car> cars = carMapper.findAll().join();
+        List<Car> cars = carMapper.find().join();
         assertMultipleRows(con, cars, "select owner, plate, brand, model, CAST(version as bigint) version from Car", AssertUtils::assertCar, 1);
     }
 
     @Test
     public void testHierarchyFindAll(){
-        List<TopStudent> topStudents = topStudentMapper.findAll().join();
+        List<TopStudent> topStudents = topStudentMapper.find().join();
         assertMultipleRows(unit.getConnection().join(), topStudents, topStudentSelectQuery.substring(0, topStudentSelectQuery.length() - 15), AssertUtils::assertTopStudent, 1);
     }
 
     @Test
     public void testPaginationFindAll() {
         SQLConnection con = unit.getConnection().join();
-        List<Company> companies = companyMapper.findAll(0, 10).join();
+        List<Company> companies = companyMapper.find(0, 10).join();
         assertMultipleRows(con, companies, companySelectTop10Query, AssertUtils::assertCompany, 10);
     }
 

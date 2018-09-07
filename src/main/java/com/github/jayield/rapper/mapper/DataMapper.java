@@ -2,6 +2,7 @@ package com.github.jayield.rapper.mapper;
 
 import com.github.jayield.rapper.DomainObject;
 import com.github.jayield.rapper.exceptions.DataMapperException;
+import com.github.jayield.rapper.mapper.conditions.*;
 import com.github.jayield.rapper.mapper.externals.ExternalsHandler;
 import com.github.jayield.rapper.sql.SqlField;
 import com.github.jayield.rapper.sql.SqlFieldExternal;
@@ -53,14 +54,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public <R> CompletableFuture<Long> getNumberOfEntries(Pair<String, R>... values) {
-        String whereCondition = "";
-        if (values.length > 0)
-            whereCondition = Arrays.stream(values)
-                    .map(pair -> pair.getKey() + " = ?")
-                    .collect(Collectors.joining(" and ", " where ", ""));
+    public CompletableFuture<Long> getNumberOfEntries(Condition<?>... values) {
+        Query query = new Query(mapperSettings.getSelectCountQuery(), values);
 
-        return SqlUtils.query(mapperSettings.getSelectCountQuery() + whereCondition, unit, prepareFindWhere(values))
+        return SqlUtils.query(query.getQueryString(), unit, prepareFind(values))
                 .thenApply(this::getNumberOfEntries);
     }
 
@@ -75,14 +72,18 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(Pair<String, R>... values) {
-        CompletableFuture<List<T>> future = findWhereAux("", values);
+    public CompletableFuture<List<T>> find(Condition<?>... values) {
+        Query query = new Query(mapperSettings.getSelectQuery(), values);
+
+        CompletableFuture<List<T>> future = findAux(query, values);
         return processNewObjects(future);
     }
 
     @Override
-    public <R> CompletableFuture<List<T>> findWhere(int page, int numberOfItems, Pair<String, R>... values) {
-        CompletableFuture<List<T>> future = findWhereAux(String.format(mapperSettings.getPagination(), page * numberOfItems, numberOfItems), values);
+    public CompletableFuture<List<T>> find(int page, int numberOfItems, Condition<?>... values) {
+        Query query = new Query(mapperSettings.getSelectQuery(), page, numberOfItems, values);
+
+        CompletableFuture<List<T>> future = findAux(query, values);
         return processNewObjects(future);
     }
 
@@ -108,7 +109,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 .thenApply(rs -> {
                     logger.info("Queried database for {} with id {} with Unit of Work {}", type.getSimpleName(), id, unit.hashCode());
                     Optional<T> optionalT = stream(rs).findFirst();
-                    optionalT.ifPresent(externalsHandler::populateExternals);
+                    optionalT.ifPresent(this::handleExternals);
                     return optionalT;
                 })
                 .exceptionally(throwable -> {
@@ -119,21 +120,9 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     }
 
     @Override
-    public CompletableFuture<List<T>> findAll() {
-        CompletableFuture<List<T>> future = findAllAux("");
-        return processNewObjects(future);
-    }
-
-    @Override
-    public CompletableFuture<List<T>> findAll(int page, int numberOfItems) {
-        CompletableFuture<List<T>> future = findAllAux(String.format(mapperSettings.getPagination(), page * numberOfItems, numberOfItems));
-        return processNewObjects(future);
-    }
-
-    @Override
     public CompletableFuture<Void> create(T obj) {
         unit.registerNew(obj);
-        Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
+        Optional<DataMapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         return parentMapper.map(parent -> parent.create(obj))
                 .orElse(CompletableFuture.completedFuture(null))
@@ -148,7 +137,7 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
     @Override
     public CompletableFuture<Void> update(T obj) {
         unit.registerDirty(obj);
-        Optional<Mapper<? super T, ? super K>> parentMapper = getParentMapper();
+        Optional<DataMapper<? super T, ? super K>> parentMapper = getParentMapper();
 
         if (parentMapper.isPresent()) {
             return parentMapper
@@ -216,48 +205,30 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
         return CompletableFuture.allOf(completableFutures.toArray(new CompletableFuture[completableFutures.size()]));
     }
 
-    private <R> CompletableFuture<List<T>> findWhereAux(String suffix, Pair<String, R>... values){
-        String query;
-        if (values.length > 0)
-            query = Arrays.stream(values)
-                .map(p -> p.getKey() + " = ? ")
-                .collect(Collectors.joining(" AND ", mapperSettings.getSelectQuery() + " WHERE ", suffix));
-        else query = mapperSettings.getSelectQuery() + suffix;
+    private void handleExternals(T t) {
+        Optional<DataMapper<? super T, ? super K>> parentMapper = getParentMapper();
+        parentMapper.ifPresent(mapper -> mapper.handleExternals(t));
+        externalsHandler.populateExternals(t);
+    }
 
-        return SqlUtils.query(query, unit, prepareFindWhere(values))
-                .thenApply(resultSet -> processFindWhere(resultSet, values))
+    private CompletableFuture<List<T>> findAux(Query query, Condition<?>[] values) {
+        JsonArray params = prepareFind(values);
+        return SqlUtils.query(query.getQueryString(), unit, params)
+                .thenApply(resultSet -> processFind(resultSet, query.getConditions(), params))
                 .exceptionally(throwable -> {
-                    logger.warn(QUERY_ERROR, "FindWhere", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
+                    logger.warn(QUERY_ERROR, "Find", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
                     throw new DataMapperException(throwable);
                 });
     }
 
-    private <R> List<T> processFindWhere(ResultSet resultSet, Pair<String, R>[] values) {
-        StringBuilder sb = new StringBuilder("Queried database for ");
-        sb.append(type.getSimpleName()).append(" where ");
-        for (int i = 0; i < values.length; i++) {
-            sb.append(values[i].getKey()).append(" = ").append(values[i].getValue());
-            if (i + 1 < values.length) sb.append(" and ");
-        }
-        sb.append(" with Unit of Work ").append(unit.hashCode());
-        logger.info(sb.toString());
-        return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
+    private JsonArray prepareFind(Condition<?>[] values) {
+        return Arrays.stream(values).map(Condition::getValue).filter(Objects::nonNull).collect(CollectionUtils.toJsonArray());
     }
 
-    private <R> JsonArray prepareFindWhere(Pair<String, R>[] values) {
-        return Arrays.stream(values).map(Pair::getValue).collect(CollectionUtils.toJsonArray());
-    }
-
-    private CompletableFuture<List<T>> findAllAux(String suffix) {
-        return SqlUtils.query(mapperSettings.getSelectQuery() + suffix, unit, new JsonArray())
-                .thenApply(resultSet -> {
-                        logger.info("Queried database for all objects of type {} with Unit of Work {}", type.getSimpleName(), unit.hashCode());
-                    return stream(resultSet).peek(externalsHandler::populateExternals).collect(Collectors.toList());
-                })
-                .exceptionally(throwable -> {
-                    logger.warn(QUERY_ERROR, "FindAll", type.getSimpleName(), unit.hashCode(), throwable.getMessage());
-                    throw new DataMapperException(throwable);
-                });
+    private List<T> processFind(ResultSet resultSet, String conditions, JsonArray params) {
+        for (int i = 0; i < params.size(); i++) conditions = conditions.replaceFirst("\\?", params.getValue(i).toString());
+        logger.info("Queried database for {}{} with Unit of Work {}", type.getSimpleName(), conditions, unit.hashCode());
+        return stream(resultSet).peek(this::handleExternals).collect(Collectors.toList());
     }
 
     private CompletableFuture<Void> createAux(T obj) {
@@ -456,10 +427,10 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
      *
      * @return Optional of DataMapper or empty Optional
      */
-    private Optional<Mapper<? super T, ? super K>> getParentMapper() {
+    private Optional<DataMapper<? super T, ? super K>> getParentMapper() {
         Class<? super T> aClass = type.getSuperclass();
         if (aClass != Object.class && DomainObject.class.isAssignableFrom(aClass)) {
-            Mapper<? super T, ? super K> classMapper = MapperRegistry.getMapper((Class<DomainObject>) aClass, unit);
+            DataMapper<? super T, ? super K> classMapper = MapperRegistry.getMapper((Class<DomainObject>) aClass, unit);
             return Optional.of(classMapper);
         }
         return Optional.empty();
@@ -497,6 +468,65 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
             }
         } catch (IllegalAccessException ignored) {
             logger.info("Version field not found on {}.", type.getSimpleName());
+        }
+    }
+
+    private class Query {
+        private String conditions;
+        private String queryString;
+
+        public Query(String selectQuery, int page, int numberOfItems, Condition<?>... values) {
+            String suffix = String.format(" offset %d rows fetch next %d rows only", page * numberOfItems, numberOfItems);
+            buildQueryString(values, mapperSettings.getPagination(), suffix, selectQuery);
+        }
+
+        public Query(String selectQuery, Condition<?>... values) {
+            buildQueryString(values, "", "", selectQuery);
+        }
+
+        private void buildQueryString(Condition<?>[] values, String pagination, String suffix, String selectQuery) {
+            Map<Class<? extends Condition>, List<Condition<?>>> conditionsMap = Arrays.stream(values)
+                    .collect(Collectors.groupingBy(Condition::getClass));
+
+            StringBuilder sb = new StringBuilder();
+
+            //Where AND
+            List<Condition<?>> whereConditionList = conditionsMap.getOrDefault(Condition.class, new ArrayList<>());
+            whereConditionList.addAll(conditionsMap.getOrDefault(EqualAndCondition.class, new ArrayList<>()));
+            whereConditionList.addAll(conditionsMap.getOrDefault(LikeCondition.class, new ArrayList<>()));
+            sb.append(whereConditionList.isEmpty() ? "" : getWhereCondition(whereConditionList, " AND "));
+
+            //Where OR
+            List<Condition<?>> orConditionList = conditionsMap.getOrDefault(EqualOrCondition.class, new ArrayList<>());
+            sb.append(orConditionList.isEmpty() ? "" : getWhereCondition(orConditionList, " OR "));
+
+            //Order By
+            List<Condition<?>> orderConditionList = conditionsMap.getOrDefault(OrderCondition.class, new ArrayList<>());
+            sb.append(orderConditionList.isEmpty() ? pagination : getOrderByCondition(orderConditionList));
+
+
+            conditions = sb.toString();
+            queryString = selectQuery + conditions + suffix;
+        }
+
+        private String getOrderByCondition(List<Condition<?>> orderConditionList) {
+            return orderConditionList.stream()
+                    .map(condition -> String.format("%s %s", condition.getColumnName(), condition.getComparand()))
+                    .collect(Collectors.joining(", ", " ORDER BY ", ""));
+        }
+
+        private String getWhereCondition(List<Condition<?>> conditionList, String delimeter) {
+            return conditionList.stream()
+                    .map(condition -> String.format("%s %s ?", condition.getColumnName(), condition.getComparand()))
+                    .collect(Collectors.joining(delimeter, " WHERE ", ""));
+        }
+
+        public String getConditions() {
+            return conditions;
+        }
+
+        public String getQueryString() {
+            return queryString;
         }
     }
 }

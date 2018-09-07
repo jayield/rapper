@@ -9,9 +9,8 @@ import com.github.jayield.rapper.exceptions.DataMapperException;
 import com.github.jayield.rapper.mapper.Mapper;
 import com.github.jayield.rapper.mapper.MapperRegistry;
 import com.github.jayield.rapper.mapper.MapperSettings;
-import com.github.jayield.rapper.utils.SqlUtils;
+import com.github.jayield.rapper.mapper.conditions.EqualAndCondition;
 import com.github.jayield.rapper.unitofwork.UnitOfWork;
-import com.github.jayield.rapper.utils.*;
 import io.vertx.ext.sql.ResultSet;
 import io.vertx.ext.sql.SQLConnection;
 import org.junit.After;
@@ -94,7 +93,7 @@ public class DomainObjectComparatorTests {
     public void testCompareBooks(){
         Mapper<Book, Long> bookMapper = MapperRegistry.getMapper(Book.class, unit);
 
-        Book book1 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
+        Book book1 = bookMapper.find(new EqualAndCondition<>("name", "1001 noites"))
                 .join()
                 .get(0);
         unit.commit().join();
@@ -102,7 +101,7 @@ public class DomainObjectComparatorTests {
         UnitOfWork unit1 = new UnitOfWork(connectionManager::getConnection);
         bookMapper = MapperRegistry.getMapper(Book.class, unit1);
 
-        Book book2 = bookMapper.findWhere(new Pair<>("name", "1001 noites"))
+        Book book2 = bookMapper.find(new EqualAndCondition<>("name", "1001 noites"))
                 .join()
                 .get(0);
         unit1.commit().join();
@@ -116,7 +115,7 @@ public class DomainObjectComparatorTests {
     public void testCompareEmployees() {
         Mapper<Employee, Integer> bookMapper = MapperRegistry.getMapper(Employee.class, unit);
 
-        Employee employee1 = bookMapper.findWhere(new Pair<>("name", "Charles"))
+        Employee employee1 = bookMapper.find(new EqualAndCondition<>("name", "Charles"))
                 .join()
                 .get(0);
         unit.commit().join();
@@ -124,7 +123,7 @@ public class DomainObjectComparatorTests {
         UnitOfWork unit1 = new UnitOfWork(connectionManager::getConnection);
         bookMapper = MapperRegistry.getMapper(Employee.class, unit1);
 
-        Employee employee2 = bookMapper.findWhere(new Pair<>("name", "Bob"))
+        Employee employee2 = bookMapper.find(new EqualAndCondition<>("name", "Bob"))
                 .join()
                 .get(0);
         unit1.commit().join();
