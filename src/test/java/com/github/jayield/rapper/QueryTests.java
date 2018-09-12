@@ -61,9 +61,9 @@ public class QueryTests {
     public void shouldObtainQueriesForEntitiesWithoutVersion(){
         MapperSettings dogSettings = new MapperSettings(Dog.class);
 
-        assertEquals("select C.name, C.race, C.age from Dog C ", dogSettings.getSelectQuery());
+        assertEquals("select C.name, C.race, C.age, C.personId from Dog C ", dogSettings.getSelectQuery());
         assertEquals("delete from Dog where name = ? and race = ?", dogSettings.getDeleteQuery());
-        assertEquals("insert into Dog ( name, race, age ) values ( ?, ?, ? )", dogSettings.getInsertQuery());
-        assertEquals("update Dog set age = ? where name = ? and race = ?", dogSettings.getUpdateQuery());
+        assertEquals("insert into Dog ( name, race, age, personId ) values ( ?, ?, ?, ? )", dogSettings.getInsertQuery());
+        assertEquals("update Dog set age = ?, personId = ? where name = ? and race = ?", dogSettings.getUpdateQuery());
     }
 }

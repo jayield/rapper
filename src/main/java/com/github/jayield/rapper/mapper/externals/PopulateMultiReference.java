@@ -22,26 +22,22 @@ public class PopulateMultiReference<T extends DomainObject<K>, K> extends Abstra
         super(externalsHandler, mapperSettings);
     }
 
-    @Override
-    public Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal) {
-        return mapperSettings.getIds()
-                .stream()
-                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.getField()));
-    }
-
     /**
      * Will call the external object's mapper's find with T's ids to find the external objects who are referenced by T
      *
      * @param t
      * @param sqlFieldExternal
      * @param container
-     * @param idValues
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
-        Iterator<Object> idValues1 = idValues.iterator();
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container) {
+        Iterator<Object> idValues = mapperSettings.getIds()
+                .stream()
+                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.getField()))
+                .iterator();
+
         EqualAndCondition<Object>[] pairs = Arrays.stream(sqlFieldExternal.getForeignNames())
-                .map(str -> new EqualAndCondition<>(str, idValues1.next()))
+                .map(str -> new EqualAndCondition<>(str, idValues.next()))
                 .toArray(EqualAndCondition[]::new);
 
         Function<UnitOfWork, CompletableFuture<List<N>>> objects = unit -> MapperRegistry.getMapper(sqlFieldExternal.getDomainObjectType(), unit).find(pairs);

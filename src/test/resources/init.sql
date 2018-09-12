@@ -76,8 +76,10 @@ create table Dog (
   name varchar(40),
   race varchar(20),
   age int,
+  personId int,
 
-  PRIMARY KEY (name, race)
+  PRIMARY KEY (name, race),
+  FOREIGN KEY (personId) references Person
 );
 
 CREATE PROCEDURE populateDB()
@@ -108,6 +110,7 @@ begin atomic
 
   insert into Employee (name, companyId, companyCid) VALUES ('Bob', 1, 1);
   insert into Employee (name, companyId, companyCid) VALUES ('Charles', 1, 1);
+  insert into Employee (name) VALUES ('Maria');
 
   insert into Author(name) values ('Manel');
   insert into Author(name) values ('Ze');

@@ -13,6 +13,7 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -23,11 +24,6 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
         super(externalsHandler, mapperSettings);
     }
 
-    @Override
-    public Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal) {
-        return Arrays.stream(sqlFieldExternal.getForeignKey());
-    }
-
     /**
      * This method will populate the CompletableFuture<DomainObject> belonging to T. This shall be called only when T has a single reference to the external.
      * This method will call th external's mapper findById. The id value(s) will be given by when making a query on T, when converting it to in-memory object (mapper method in DataMapper), it will
@@ -35,42 +31,47 @@ public class PopulateSingleReference<T extends DomainObject<K>, K> extends Abstr
      *
      * @param sqlFieldExternal
      * @param container
-     * @param idValues
      * @param <V>
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container) {
         Object id;
         Constructor<?> externalPrimaryKeyConstructor = container.getMapperSettings().getPrimaryKeyConstructor();
-        if (externalPrimaryKeyConstructor == null){
-            id = idValues.findFirst().orElse(null);
-        }
+
+        Object[] idValues = sqlFieldExternal.getForeignKey();
+        if(idValues == null)
+            id = null;
+        else if (externalPrimaryKeyConstructor == null) 
+            id = idValues[0];
         else {
             try {
                 id = externalPrimaryKeyConstructor.newInstance();
-                Object[] idValues1 = sqlFieldExternal.getForeignKey();
                 Field[] declaredFields = container.getMapperSettings()
                         .getPrimaryKeyType()
                         .getDeclaredFields();
-                for (int i = 0; i < idValues1.length; i++) {
+                for (int i = 0; i < idValues.length; i++) {
                     declaredFields[i].setAccessible(true);
-                    declaredFields[i].set(id, idValues1[i]);
+                    declaredFields[i].set(id, idValues[i]);
                 }
                 //!! DON'T FORGET TO SET VALUES ON "objects" FIELD ON EMBEDDEDIDCLASS !!
-                EmbeddedIdClass.getObjectsField().set(id, idValues1);
+                EmbeddedIdClass.getObjectsField().set(id, idValues);
             } catch (IllegalAccessException | InstantiationException | InvocationTargetException e) {
                 throw new DataMapperException(e);
             }
         }
 
-        Function<UnitOfWork, CompletableFuture<N>> futureSupplier = unit -> MapperRegistry.getMapper((Class<N>)sqlFieldExternal.getDomainObjectType(), unit)
-                .findById((V) id)
-                .thenApply(domainObject -> domainObject
-                        .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
+        Foreign<N, V> value = null;
+        if (id != null) {
+            Function<UnitOfWork, CompletableFuture<N>> futureSupplier = unit -> MapperRegistry.getMapper((Class<N>) sqlFieldExternal.getDomainObjectType(), unit)
+                    .findById((V) id)
+                    .thenApply(domainObject -> domainObject
+                            .orElseThrow(() -> new DataMapperException("Couldn't populate externals of " + t.getClass().getSimpleName() + ". The object wasn't found in the DB")));
+            value = new Foreign<>((V) id, futureSupplier);
+        }
 
         try {
             sqlFieldExternal.getField().setAccessible(true);
-            sqlFieldExternal.getField().set(t, new Foreign<>((V) id, futureSupplier));
+            sqlFieldExternal.getField().set(t, value);
         } catch (IllegalAccessException e) {
             throw new DataMapperException(e);
         }

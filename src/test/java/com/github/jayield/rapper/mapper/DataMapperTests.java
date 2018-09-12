@@ -60,13 +60,13 @@ public class DataMapperTests {
                 .thenCompose(v -> unit.commit())
         ).join();
 
-        personMapper =(DataMapper<Person, Integer>) MapperRegistry.getMapper(Person.class, unit);
-        carMapper = (DataMapper<Car, CarKey>) MapperRegistry.getMapper(Car.class, unit);
-        topStudentMapper = (DataMapper<TopStudent, Integer>) MapperRegistry.getMapper(TopStudent.class, unit);
-        companyMapper = (DataMapper<Company, Company.PrimaryKey>) MapperRegistry.getMapper(Company.class, unit);
-        bookMapper = (DataMapper<Book, Long>) MapperRegistry.getMapper(Book.class, unit);
-        employeeMapper = (DataMapper<Employee, Integer>) MapperRegistry.getMapper(Employee.class, unit);
-        dogMapper = (DataMapper<Dog, Dog.DogPK>) MapperRegistry.getMapper(Dog.class, unit);
+        personMapper = MapperRegistry.getMapper(Person.class, unit);
+        carMapper = MapperRegistry.getMapper(Car.class, unit);
+        topStudentMapper = MapperRegistry.getMapper(TopStudent.class, unit);
+        companyMapper = MapperRegistry.getMapper(Company.class, unit);
+        bookMapper = MapperRegistry.getMapper(Book.class, unit);
+        employeeMapper = MapperRegistry.getMapper(Employee.class, unit);
+        dogMapper = MapperRegistry.getMapper(Dog.class, unit);
     }
 
     @After

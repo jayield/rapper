@@ -388,13 +388,15 @@ public class DataMapper<T extends DomainObject<K>, K> implements Mapper<T, K> {
                 SqlFieldExternal sqlFieldExternal = (SqlFieldExternal) sqlField;
 
                 String[] names = sqlFieldExternal.getNames();
+                boolean allNull = true;
                 Object[] objects = new Object[names.length];
                 for (int i = 0; i < names.length; i++) {
                     String s = names[i];
                     objects[i] = rs.getValue(s);
+                    if (objects[i] != null) allNull = false;
                 }
 
-                sqlFieldExternal.setForeignKey(objects);
+                sqlFieldExternal.setForeignKey(allNull ? null : objects);
             }
             else
                 field.set(t, rs.getValue(name));

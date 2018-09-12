@@ -28,13 +28,6 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
         super(externalsHandler, mapperSettings);
     }
 
-    @Override
-    public Stream<Object> idValues(T t, SqlFieldExternal sqlFieldExternal) {
-        return mapperSettings.getIds()
-                .stream()
-                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.getField()));
-    }
-
     /**
      * Used when it's a N-N relation.
      * This method will get the generated selectQuery in SqlFieldExternal, to get from the relation table the ids of the external objects.
@@ -45,10 +38,13 @@ public class PopulateWithExternalTable<T extends DomainObject<K>, K> extends Abs
      * @param t
      * @param sqlFieldExternal
      * @param container
-     * @param idValues
      */
     @Override
-    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container, Stream<Object> idValues) {
+    public <N extends DomainObject<V>, V> void populate(T t, SqlFieldExternal sqlFieldExternal, Container<N, V> container) {
+        Stream<Object> idValues = mapperSettings.getIds()
+                .stream()
+                .map(sqlFieldId -> getPrimaryKeyValue(t, sqlFieldId.getField()));
+
         Function<UnitOfWork, CompletableFuture<List<N>>> completableFuture = unit -> getExternal(unit, t, sqlFieldExternal, idValues);
 
         try {

@@ -1,7 +1,9 @@
 package com.github.jayield.rapper.domainModel;
 
 import com.github.jayield.rapper.DomainObject;
+import com.github.jayield.rapper.annotations.ColumnName;
 import com.github.jayield.rapper.annotations.EmbeddedId;
+import com.github.jayield.rapper.mapper.externals.Foreign;
 import com.github.jayield.rapper.utils.EmbeddedIdClass;
 
 public class Dog implements DomainObject<Dog.DogPK> {
@@ -9,6 +11,8 @@ public class Dog implements DomainObject<Dog.DogPK> {
     @EmbeddedId
     private DogPK pk;
     private int age;
+    @ColumnName(name = "personId")
+    private Foreign<Person, Integer> person;
 
     public Dog(DogPK pk, int age) {
         this.pk = pk;
